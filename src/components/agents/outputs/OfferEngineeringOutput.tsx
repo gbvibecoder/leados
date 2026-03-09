@@ -126,7 +126,7 @@ export function OfferEngineeringOutput({ data }: Props) {
         expanded={expandedSection === 'pricing'}
         onToggle={() => setExpandedSection(expandedSection === 'pricing' ? null : 'pricing')}
       >
-        <div className="space-y-3 sm:space-y-0 sm:grid sm:grid-cols-3 sm:gap-3">
+        <div className="space-y-3">
           {offer.pricingTiers.map((tier, idx) => (
             <PricingCard key={idx} tier={tier} isPopular={idx === 1} />
           ))}
@@ -239,28 +239,33 @@ function InfoCard({ label, value }: { label: string; value: string }) {
 
 function PricingCard({ tier, isPopular }: { tier: PricingTier; isPopular: boolean }) {
   return (
-    <div className={`relative p-3 sm:p-4 rounded-lg border ${
+    <div className={`relative p-3 rounded-lg border ${
       isPopular ? 'border-blue-500/50 bg-blue-500/5' : 'border-border bg-muted/20'
     }`}>
       {isPopular && (
-        <div className="absolute -top-2 sm:-top-2.5 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-blue-500 text-white text-xs rounded-full">
+        <span className="absolute -top-2 left-3 px-2 py-0.5 bg-blue-500 text-white text-xs rounded-full">
           Popular
-        </div>
+        </span>
       )}
-      <div className="text-center mb-3 sm:mb-4 pt-1">
-        <h4 className="font-semibold text-sm sm:text-base">{tier.name}</h4>
-        <div className="mt-1.5 sm:mt-2">
-          <span className="text-xl sm:text-2xl font-bold">${tier.price.toLocaleString()}</span>
-          <span className="text-xs sm:text-sm text-muted-foreground">/{tier.billingCycle}</span>
+      <div className="flex items-center justify-between mb-2 pt-1">
+        <h4 className="font-semibold text-sm">{tier.name}</h4>
+        <div>
+          <span className="text-lg font-bold">${tier.price.toLocaleString()}</span>
+          <span className="text-xs text-muted-foreground">/{tier.billingCycle}</span>
         </div>
       </div>
-      <ul className="space-y-1.5 sm:space-y-2">
-        {tier.features.map((feature, idx) => (
-          <li key={idx} className="flex items-start gap-1.5 sm:gap-2 text-xs sm:text-sm">
-            <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-400 shrink-0 mt-0.5" />
-            <span className="text-muted-foreground leading-snug">{feature}</span>
+      <ul className="space-y-1">
+        {tier.features.slice(0, 4).map((feature, idx) => (
+          <li key={idx} className="flex items-start gap-1.5 text-xs">
+            <CheckCircle2 className="w-3 h-3 text-green-400 shrink-0 mt-0.5" />
+            <span className="text-muted-foreground leading-tight line-clamp-1">{feature}</span>
           </li>
         ))}
+        {tier.features.length > 4 && (
+          <li className="text-xs text-muted-foreground pl-4">
+            +{tier.features.length - 4} more features
+          </li>
+        )}
       </ul>
     </div>
   );

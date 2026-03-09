@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nFix pricing cards overflow in narrow panel\n\n- Stack pricing tiers vertically instead of horizontal grid\n- Compact card layout with horizontal header \\(name + price\\)\n- Limit visible features to 4 with \"+N more\" indicator\n- Remove absolute positioning that caused overflow\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
+    ]
+  }
+}
