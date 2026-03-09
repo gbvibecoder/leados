@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { Users, Search, Filter, ChevronDown, ChevronRight, Mail, Phone as PhoneIcon, Calendar, Bot, ArrowUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { leados } from '@/lib/api';
@@ -131,9 +131,8 @@ function LeadsPageInner() {
             ) : filtered.length === 0 ? (
               <tr><td colSpan={6} className="px-4 py-8 text-center text-zinc-500">No leads found</td></tr>
             ) : filtered.map((lead) => (
-              <>
+              <Fragment key={lead.id}>
                 <tr
-                  key={lead.id}
                   onClick={() => setExpandedLead(expandedLead === lead.id ? null : lead.id)}
                   className="cursor-pointer transition-colors hover:bg-zinc-800/30"
                 >
@@ -190,7 +189,7 @@ function LeadsPageInner() {
                     </td>
                   </tr>
                 )}
-              </>
+              </Fragment>
             ))}
           </tbody>
         </table>
