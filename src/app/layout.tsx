@@ -6,8 +6,8 @@ import { ClientLayout } from './client-layout';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'LeadOS + ECOS — Unified Autonomous Agent Platform',
-  description: 'Multi-agent AI platform for autonomous lead generation and e-commerce product launch',
+  title: 'LeadOS — Autonomous Lead Generation Platform',
+  description: 'Multi-agent AI platform for autonomous B2B service lead generation',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
