@@ -179,7 +179,7 @@ export function ServiceResearchOutput({ data, isLive = false }: Props) {
           Ranked Service Opportunities
         </h4>
 
-        {displayData.opportunities.map((opp, idx) => (
+        {displayData.opportunities.map((opp: ServiceOpportunity, idx: number) => (
           <div
             key={idx}
             className={`rounded-lg border transition-all ${
