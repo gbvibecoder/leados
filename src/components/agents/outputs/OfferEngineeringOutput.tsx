@@ -45,14 +45,14 @@ interface OfferData {
 }
 
 interface Props {
-  data: OfferData;
+  data: OfferData | { data: OfferData } | any;
 }
 
 export function OfferEngineeringOutput({ data }: Props) {
   const [expandedSection, setExpandedSection] = useState<string | null>('pricing');
 
   // Handle nested data structure from API (data might be wrapped in { data: {...} })
-  const offerData = data?.data || data;
+  const offerData: OfferData = data?.data || data;
 
   if (!offerData?.offer) {
     return <div className="p-4 text-muted-foreground">No offer data available</div>;

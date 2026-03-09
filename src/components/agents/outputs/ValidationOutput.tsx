@@ -37,12 +37,12 @@ interface ValidationData {
 }
 
 interface Props {
-  data: ValidationData;
+  data: ValidationData | { data: ValidationData } | any;
 }
 
 export function ValidationOutput({ data }: Props) {
   // Handle nested data structure from API (data might be wrapped in { data: {...} })
-  const validationData = data?.data || data;
+  const validationData: ValidationData = data?.data || data;
 
   if (!validationData || !validationData.scores) {
     return <div className="p-4 text-muted-foreground">No validation data available</div>;
