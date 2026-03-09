@@ -50,7 +50,7 @@ interface TrendResearchResult {
 }
 
 interface Props {
-  data?: TrendResearchResult;
+  data?: TrendResearchResult | { data: TrendResearchResult } | any;
   isLive?: boolean;
 }
 
