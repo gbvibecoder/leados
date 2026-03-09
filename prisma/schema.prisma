@@ -1,0 +1,123 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  name         String?
+  passwordHash String?
+  settings     String?    // JSON stored as string for SQLite
+  apiKeys      String?    // JSON stored as string for SQLite (encrypted)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  pipelines    Pipeline[]
+  Setting      Setting?
+}
+
+model Pipeline {
+  id                String     @id @default(cuid())
+  userId            String?
+  type              String     // 'leados'
+  status            String     @default("idle") // idle | running | completed | error | paused
+  config            String?    // JSON
+  currentAgentIndex Int        @default(0)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  user              User?      @relation(fields: [userId], references: [id])
+  agentRuns         AgentRun[]
+}
+
+model AgentRun {
+  id          String    @id @default(cuid())
+  pipelineId  String
+  agentId     String
+  agentName   String
+  status      String    @default("idle") // idle | running | done | error
+  inputsJson  String?   // JSON
+  outputsJson String?   // JSON
+  error       String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  pipeline    Pipeline  @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+
+  @@index([pipelineId])
+  @@index([agentId])
+}
+
+model Lead {
+  id                   String        @id @default(cuid())
+  pipelineId           String?
+  name                 String
+  email                String?
+  company              String?
+  phone                String?
+  source               String
+  channel              String?
+  score                Int           @default(0)
+  stage                String        @default("new") // new | contacted | qualified | booked | won | lost
+  segment              String?
+  utmSource            String?
+  utmMedium            String?
+  utmCampaign          String?
+  qualificationScore   Int?
+  qualificationOutcome String?
+  routingDecision      String?
+  notes                String?
+  enrichmentData       String?       // JSON
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  interactions         Interaction[]
+}
+
+model Interaction {
+  id        String   @id @default(cuid())
+  leadId    String
+  type      String
+  content   String
+  metadata  String?  // JSON
+  timestamp DateTime @default(now())
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+}
+
+model Campaign {
+  id         String   @id @default(cuid())
+  pipelineId String?
+  channel    String
+  type       String
+  budget     Float?
+  spend      Float    @default(0)
+  status     String   @default("draft") // draft | active | paused | completed
+  metrics    String?  // JSON
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model CreativeAsset {
+  id             String   @id @default(cuid())
+  pipelineId     String?
+  type           String
+  channel        String?
+  content        String
+  performanceTag String?
+  metadata       String?  // JSON
+  createdAt      DateTime @default(now())
+}
+
+model Setting {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  integrations  String?  // JSON
+  notifications String?  // JSON
+  agentDefaults String?  // JSON
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id])
+}
