@@ -1,4 +1,5 @@
 import { BaseAgent, AgentInput, AgentOutput } from '../base-agent';
+import * as webflow from '../../integrations/webflow';
 
 const SYSTEM_PROMPT = `You are the Funnel Builder Agent for LeadOS — the Service Acquisition Machine. Your job is to build the entire acquisition infrastructure: landing page, lead capture forms, booking calendar integration, and CRM pipeline setup.
 
@@ -265,52 +266,26 @@ export class FunnelBuilderAgent extends BaseAgent {
       };
     }
 
+    const meetingName = offerData.serviceName
+      ? `${offerData.serviceName} — Strategy Call`
+      : 'LeadOS Strategy Call';
+
+    const crmStages = [
+      'New Lead', 'Form Submitted', 'Call Booked', 'AI Qualified',
+      'Strategy Call Completed', 'Proposal Sent', 'Negotiation', 'Closed Won', 'Closed Lost',
+    ];
+
+    const contactProperties = [
+      'Lead Source', 'Monthly Marketing Budget', 'Current Monthly Leads',
+      'Lead Score', 'Qualification Outcome', 'UTM Source', 'UTM Medium', 'UTM Campaign',
+    ];
+
+    const pipelineName = offerData.serviceName
+      ? `${offerData.serviceName} — Acquisition Pipeline`
+      : 'LeadOS — New Client Acquisition';
+
     try {
-      // Step 1: Set up integrations in parallel
-      await this.log('integrations_starting', { phase: 'Setting up Calendly + HubSpot' });
-
-      const meetingName = offerData.serviceName
-        ? `${offerData.serviceName} — Strategy Call`
-        : 'LeadOS Strategy Call';
-
-      const crmStages = [
-        'New Lead',
-        'Form Submitted',
-        'Call Booked',
-        'AI Qualified',
-        'Strategy Call Completed',
-        'Proposal Sent',
-        'Negotiation',
-        'Closed Won',
-        'Closed Lost',
-      ];
-
-      const contactProperties = [
-        'Lead Source',
-        'Monthly Marketing Budget',
-        'Current Monthly Leads',
-        'Lead Score',
-        'Qualification Outcome',
-        'UTM Source',
-        'UTM Medium',
-        'UTM Campaign',
-      ];
-
-      const pipelineName = offerData.serviceName
-        ? `${offerData.serviceName} — Acquisition Pipeline`
-        : 'LeadOS — New Client Acquisition';
-
-      const [calendlyResult, hubspotResult] = await Promise.all([
-        createCalendlyEventType({ name: meetingName, duration: 30 }),
-        setupHubSpotPipeline({ pipelineName, stages: crmStages, contactProperties }),
-      ]);
-
-      // Also create contact properties (non-blocking)
-      createHubSpotContactProperties(contactProperties).catch(() => {});
-
-      await this.log('integrations_complete', { calendly: calendlyResult, hubspot: hubspotResult });
-
-      // Step 2: Call Claude to generate landing page copy and funnel structure
+      // Step 1: Generate landing page copy and funnel structure via AI FIRST
       await this.log('llm_generating', { phase: 'Generating landing page copy and funnel structure' });
 
       const enrichedInput = {
@@ -321,15 +296,24 @@ export class FunnelBuilderAgent extends BaseAgent {
           riskFactors: validationData.riskFactors,
           trendAnalysis: validationData.trendAnalysis,
         },
-        integrations: {
-          calendly: { url: calendlyResult.url, eventTypeId: calendlyResult.eventTypeId },
-          hubspot: { pipelineId: hubspotResult.pipelineId, stageIds: hubspotResult.stageIds },
-        },
         config: inputs.config,
       };
 
       const response = await this.callClaude(SYSTEM_PROMPT, JSON.stringify(enrichedInput));
-      const parsed = this.parseLLMJson<any>(response);
+      const parsed = this.safeParseLLMJson<any>(response, ['landingPage', 'leadForm']);
+
+      // Step 2: AI succeeded — NOW set up integrations
+      await this.log('integrations_starting', { phase: 'Setting up Calendly + HubSpot' });
+
+      const [calendlyResult, hubspotResult] = await Promise.all([
+        createCalendlyEventType({ name: meetingName, duration: 30 }),
+        setupHubSpotPipeline({ pipelineName, stages: crmStages, contactProperties }),
+      ]);
+
+      // Create contact properties (non-blocking)
+      createHubSpotContactProperties(contactProperties).catch(() => {});
+
+      await this.log('integrations_complete', { calendly: calendlyResult, hubspot: hubspotResult });
 
       // Merge real integration URLs into the LLM output
       if (parsed.bookingCalendar) {
@@ -337,6 +321,35 @@ export class FunnelBuilderAgent extends BaseAgent {
       }
       if (parsed.crmIntegration) {
         parsed.crmIntegration._pipelineId = hubspotResult.pipelineId;
+      }
+
+      // Step 3: Deploy to Webflow if available
+      if (webflow.isWebflowAvailable()) {
+        try {
+          await this.log('webflow_deploying', { phase: 'Deploying landing page to Webflow' });
+          const slug = (parsed.landingPage?.headline || 'leados')
+            .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').substring(0, 50);
+
+          const pageResult = await webflow.createPage({
+            title: parsed.landingPage?.headline || 'LeadOS Landing Page',
+            slug,
+            seoTitle: parsed.landingPage?.seoMeta?.title,
+            seoDescription: parsed.landingPage?.seoMeta?.description,
+          });
+
+          if (pageResult.url) {
+            parsed.landingPage.url = pageResult.url;
+            parsed.landingPage._webflowPageId = pageResult.pageId;
+            parsed.landingPage.deployedToWebflow = true;
+          }
+
+          // Publish the site to make changes live
+          await webflow.publishSite();
+          await this.log('webflow_deployed', { url: pageResult.url, pageId: pageResult.pageId });
+        } catch (webflowError: any) {
+          await this.log('webflow_failed', { error: webflowError.message });
+          // Continue without Webflow — page URL stays as LLM-generated placeholder
+        }
       }
 
       this.status = 'done';

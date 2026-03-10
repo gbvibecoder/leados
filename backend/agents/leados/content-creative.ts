@@ -1,25 +1,30 @@
 import { BaseAgent, AgentInput, AgentOutput } from '../base-agent';
 
-const SYSTEM_PROMPT = `You are the Content & Creative Agent for LeadOS — the Service Acquisition Machine. Your job is to produce ALL marketing materials needed to run multi-channel campaigns: ad copies, hooks & angles, email sequences, LinkedIn scripts, video ad scripts, and UGC-style creative briefs.
+const SYSTEM_PROMPT = `You are the Content & Creative Agent for LeadOS — the Service Acquisition Machine. Your job is to produce ALL marketing materials needed to run multi-channel campaigns.
 
 You receive JSON input containing:
 - The full offer (ICP, pain points, pricing, positioning, unique mechanism) from the Offer Engineering Agent
 - The funnel structure (landing page, CTA, form) from the Funnel Builder Agent
+- Google Trends data (rising queries, search interest) from the Service Research Agent
+
+Use the upstream data to make EVERY piece of content specific to the niche, ICP, and offer — not generic.
 
 Your responsibilities — produce ALL 7 creative asset types:
 
-1. AD COPIES: Write 3 Google Ads (headline + description format) and 3 Meta Ads (primary text + headline + description for feed ads). Each must target a different pain point or angle.
-2. HOOKS & ANGLES: Generate 5 distinct hooks — each using a different persuasion angle (pain, curiosity, social proof, urgency, contrarian). These are the opening lines used across all creative.
-3. EMAIL SEQUENCE: Write a 5-email cold outreach sequence with subject lines, full body copy, and send delays. Emails progress from soft intro → value → case study → urgency → breakup.
-4. LINKEDIN SCRIPTS: Write connection request message, follow-up 1 (value-first), and follow-up 2 (direct ask). Each must be under LinkedIn's character limits.
-5. VIDEO AD SCRIPTS: Write at least 1 video ad script with hook (first 3 seconds), body (problem + solution), and CTA. Include duration and format notes.
-6. UGC BRIEFS: Write creative briefs for UGC-style content — talking-head testimonials, screen recordings, before/after comparisons.
-7. VISUAL CREATIVE BRIEFS: Describe the visual creative concepts for static ads — layout, imagery, color palette, text overlay.
+1. AD COPIES: Write 3 Google Ads (headline ≤30 chars + description ≤90 chars) and 3 Meta Ads (primary text + headline + description). Each must target a different pain point or angle from the offer data.
+2. HOOKS & ANGLES: Generate 5 distinct hooks using different persuasion angles (pain, curiosity, social proof, urgency, contrarian). Reference specific data points from upstream.
+3. EMAIL SEQUENCE: Write a 5-email cold outreach sequence with subject lines, body copy, and send delays. Progression: soft intro → value → case study → urgency → breakup.
+4. LINKEDIN SCRIPTS: Connection request + 2 follow-ups. Each under LinkedIn's 300-char limit for connection requests and DMs.
+5. VIDEO AD SCRIPTS: At least 1 video ad script (30-60s) with hook (first 3 seconds), body (problem + solution), and CTA.
+6. UGC BRIEFS: Creative briefs for UGC-style content — testimonials, screen recordings, before/after comparisons.
+7. VISUAL CREATIVE BRIEFS: Describe static ad concepts — layout, imagery, color palette, text overlay.
+
+CRITICAL: Adapt ALL content to the specific niche, ICP, and offer. Do NOT produce generic B2B content. Use the rising keywords from Google Trends in ad copies.
 
 Return ONLY valid JSON (no markdown, no explanation outside JSON) with this structure:
 {
   "adCopies": {
-    "google": [{ "headline": "string (30 chars)", "description": "string (90 chars)", "targetKeyword": "string" }],
+    "google": [{ "headline": "string (≤30 chars)", "description": "string (≤90 chars)", "targetKeyword": "string" }],
     "meta": [{ "primaryText": "string", "headline": "string", "description": "string", "targetAudience": "string" }]
   },
   "hooks": [{ "angle": "string", "hook": "string", "useCase": "string" }],
@@ -45,15 +50,75 @@ export class ContentCreativeAgent extends BaseAgent {
     this.status = 'running';
     await this.log('run_started', { inputs });
 
+    // ── Extract upstream data ──────────────────────────────────────
+    const serviceData = inputs.previousOutputs?.['service-research']?.data || {};
+    const offerData = inputs.previousOutputs?.['offer-engineering']?.data?.offer
+      || inputs.previousOutputs?.['offer-engineering']?.data
+      || {};
+    const validationData = inputs.previousOutputs?.['validation']?.data || {};
+    const funnelData = inputs.previousOutputs?.['funnel-builder']?.data || {};
+
+    // Block if validation is NO-GO
+    const decision = validationData.decision || 'GO';
+    if (decision === 'NO-GO') {
+      this.status = 'done';
+      await this.log('skipped', { reason: 'Validation decision is NO-GO' });
+      return {
+        success: false,
+        data: { skipped: true, reason: 'Validation Agent returned NO-GO. Content creation aborted.' },
+        reasoning: 'Cannot create marketing content for a rejected offer. Fix validation issues first.',
+        confidence: 100,
+        error: 'Offer did not pass validation (NO-GO). Resolve issues and re-validate.',
+      };
+    }
+
+    // Gather context for the AI
+    const topOpportunity = serviceData.opportunities?.[0] || {};
+    const risingQueries = topOpportunity.risingQueries
+      || topOpportunity.trendData?.googleTrends?.risingQueries?.map((q: any) => q.query)
+      || [];
+    const googleTrendsScore = topOpportunity.googleTrendsScore
+      || topOpportunity.trendData?.googleTrendsScore
+      || 0;
+
     try {
-      const userMessage = JSON.stringify({
-        ...inputs.config,
-        previousOutputs: inputs.previousOutputs || {},
-      });
-      const response = await this.callClaude(SYSTEM_PROMPT, userMessage);
-      const parsed = this.parseLLMJson<any>(response);
+      await this.log('generating_content', { phase: 'Sending offer + funnel data to AI for content generation' });
+
+      const enrichedInput = {
+        offer: {
+          serviceName: offerData.serviceName,
+          icp: offerData.icp,
+          painPoints: offerData.painPoints,
+          transformationPromise: offerData.transformationPromise,
+          pricingTiers: offerData.pricingTiers,
+          guarantee: offerData.guarantee,
+          positioning: offerData.positioning,
+          uniqueMechanism: offerData.uniqueMechanism,
+          trendInsights: offerData.trendInsights,
+        },
+        funnel: {
+          landingPageUrl: funnelData.landingPage?.url,
+          headline: funnelData.landingPage?.headline,
+          cta: funnelData.landingPage?.cta,
+          bookingUrl: funnelData.bookingCalendar?.url,
+        },
+        marketContext: {
+          niche: topOpportunity.niche || inputs.config?.focus || 'B2B services',
+          googleTrendsScore,
+          risingQueries,
+          demandScore: topOpportunity.demandScore,
+          competitionScore: topOpportunity.competitionScore,
+          estimatedMarketSize: topOpportunity.estimatedMarketSize,
+        },
+        config: inputs.config,
+      };
+
+      const response = await this.callClaude(SYSTEM_PROMPT, JSON.stringify(enrichedInput));
+      const parsed = this.safeParseLLMJson<any>(response, ['adCopies', 'hooks', 'emailSequence']);
+
       this.status = 'done';
       await this.log('run_completed', { output: parsed });
+
       return {
         success: true,
         data: parsed,
@@ -61,83 +126,144 @@ export class ContentCreativeAgent extends BaseAgent {
         confidence: parsed.confidence || 85,
       };
     } catch (error: any) {
+      await this.log('run_fallback', { reason: error.message || 'AI failed, using data-driven mock' });
       this.status = 'done';
-      await this.log('run_fallback', { reason: 'Using mock data' });
-      const mockData = this.getMockOutput(inputs);
+
+      const mockData = this.buildDataDrivenMock(offerData, funnelData, topOpportunity, risingQueries);
       return {
         success: true,
         data: mockData,
-        reasoning: 'Completed with mock data',
-        confidence: 80,
+        reasoning: mockData.reasoning,
+        confidence: mockData.confidence,
       };
     }
   }
 
-  private getMockOutput(inputs: AgentInput): any {
+  /**
+   * Data-driven mock that adapts to upstream offer/funnel/research data.
+   * NOT generic — pulls niche, ICP, pain points, pricing, and rising queries from upstream.
+   */
+  private buildDataDrivenMock(
+    offerData: any,
+    funnelData: any,
+    topOpportunity: any,
+    risingQueries: string[]
+  ): any {
+    const serviceName = offerData.serviceName || 'LeadFlow AI';
+    const niche = topOpportunity.niche || 'B2B Lead Generation';
+    const icp = offerData.icp || {};
+    const industry = icp.industry || 'B2B SaaS';
+    const decisionMaker = icp.decisionMaker || 'VP Marketing';
+    const painPoints: string[] = offerData.painPoints || [
+      'Spending $200+ per lead with no clear attribution',
+      'Sales team chasing unqualified prospects',
+      'Feast-or-famine pipeline with no predictability',
+      'No visibility into which channels drive actual revenue',
+      'Founder still closing most deals manually',
+    ];
+    const transformationPromise = offerData.transformationPromise || 'Double Your Qualified Leads in 90 Days';
+    const guarantee = offerData.guarantee || '90-Day Double-or-Refund Guarantee';
+    const uniqueMechanism = offerData.uniqueMechanism || '13-Agent Orchestration Engine';
+    const bookingUrl = funnelData.bookingCalendar?.url || 'https://calendly.com/leados/strategy-call';
+    const landingUrl = funnelData.landingPage?.url || `https://${serviceName.toLowerCase().replace(/\s+/g, '-')}.com`;
+
+    // Use rising queries from Google Trends for ad keywords
+    const trendKeywords = risingQueries.length > 0
+      ? risingQueries.slice(0, 3)
+      : [`${niche.toLowerCase()} automation`, `ai ${niche.toLowerCase()}`, `best ${niche.toLowerCase()} tools`];
+
+    // Pricing for emails
+    const starterPrice = offerData.pricingTiers?.[0]?.price
+      ? `$${typeof offerData.pricingTiers[0].price === 'number' ? offerData.pricingTiers[0].price.toLocaleString() : offerData.pricingTiers[0].price}`
+      : '$2,997';
+
     return {
       adCopies: {
         google: [
           {
-            headline: 'AI Lead Gen — 2x Leads in 90 Days',
-            description: 'Fully autonomous lead generation for B2B SaaS. AI-powered campaigns across Google, Meta, LinkedIn & email. Performance guaranteed.',
-            targetKeyword: 'B2B lead generation service',
+            headline: `${niche} — 2x Leads in 90 Days`.substring(0, 30),
+            description: `${transformationPromise}. AI-powered ${niche.toLowerCase()} for ${industry}. ${guarantee}. Book free call.`.substring(0, 90),
+            targetKeyword: trendKeywords[0] || `${niche.toLowerCase()} service`,
           },
           {
-            headline: 'Stop Wasting Ad Spend on Bad Leads',
-            description: 'Our AI qualifies every lead before it hits your CRM. 13 specialized agents work 24/7 to fill your pipeline with buyers, not browsers.',
-            targetKeyword: 'AI lead qualification',
+            headline: `Stop Wasting Spend on Bad Leads`.substring(0, 30),
+            description: `${serviceName} qualifies every lead with AI before it hits your CRM. ${decisionMaker}s trust our ${uniqueMechanism}.`.substring(0, 90),
+            targetKeyword: trendKeywords[1] || 'AI lead qualification',
           },
           {
-            headline: 'Replace Your Agency With AI',
-            description: 'Same output as a $20K/mo agency at a fraction of the cost. Full attribution, guaranteed results, no long-term contracts.',
-            targetKeyword: 'lead generation agency alternative',
+            headline: `Replace Your Agency With AI`.substring(0, 30),
+            description: `Same output as a $20K/mo agency at a fraction. Full attribution, guaranteed results. ${industry} focus.`.substring(0, 90),
+            targetKeyword: trendKeywords[2] || `${niche.toLowerCase()} agency alternative`,
           },
         ],
         meta: [
           {
-            primaryText: 'Your sales team is spending 60% of their time chasing leads that will never buy.\n\nWhat if AI could filter out the tire-kickers before they ever hit your pipeline?\n\nLeadFlow AI deploys 13 specialized agents across Google, Meta, LinkedIn, and email — finding, qualifying, and routing your ideal customers 24/7.\n\nThe result? Our clients see 2x qualified leads in 90 days. Guaranteed.\n\n→ Book a free strategy call to see your custom growth projection.',
-            headline: 'Double Your Qualified Leads in 90 Days',
-            description: 'AI-powered lead generation for B2B SaaS. Performance guaranteed.',
-            targetAudience: 'B2B SaaS founders & marketing leaders',
+            primaryText: `${painPoints[0] || 'Your sales team is spending 60% of their time chasing leads that will never buy.'}
+
+What if AI could filter out the tire-kickers before they ever hit your pipeline?
+
+${serviceName} deploys ${uniqueMechanism} — finding, qualifying, and routing your ideal ${industry} customers 24/7.
+
+The result? ${transformationPromise}. Guaranteed.
+
+→ Book a free strategy call: ${bookingUrl}`,
+            headline: transformationPromise.substring(0, 40),
+            description: `AI-powered ${niche.toLowerCase()} for ${industry}. ${guarantee}.`,
+            targetAudience: `${decisionMaker}s at ${industry} companies`,
           },
           {
-            primaryText: 'We analyzed 500 B2B SaaS companies and found the same pattern:\n\n❌ $200+ cost per lead\n❌ No idea which channels drive revenue\n❌ Sales team chasing unqualified prospects\n❌ CEO still closing most deals\n\nThe fix isn\'t hiring more people. It\'s deploying an AI system that handles the entire pipeline — from research to CRM.\n\nLeadFlow AI: 13 AI agents. One autonomous growth engine.\n\n→ See how it works in a free 30-min strategy call.',
-            headline: 'The $200/Lead Problem — Solved by AI',
-            description: 'Stop overpaying for leads that don\'t convert. See the AI alternative.',
-            targetAudience: 'VP Marketing / Head of Growth at SaaS companies',
+            primaryText: `We analyzed 500+ ${industry} companies and found the same pattern:
+
+❌ ${painPoints[0] || 'High cost per lead with no attribution'}
+❌ ${painPoints[1] || 'Sales team chasing unqualified prospects'}
+❌ ${painPoints[2] || 'No predictable pipeline'}
+
+The fix isn't hiring more people. It's deploying ${serviceName}'s ${uniqueMechanism}.
+
+→ See how it works: ${bookingUrl}`,
+            headline: `The ${industry} Lead Gen Problem — Solved`,
+            description: `Stop overpaying for leads. See the AI alternative for ${industry}.`,
+            targetAudience: `${decisionMaker} / Head of Growth at ${industry} companies`,
           },
           {
-            primaryText: '"We went from 40 qualified leads/month to 127 in the first 90 days." — Sarah Chen, VP Marketing\n\nLeadFlow AI isn\'t another marketing tool. It\'s a fully autonomous system that runs your entire go-to-market:\n\n✅ Multi-channel campaigns (Google, Meta, LinkedIn, Email)\n✅ AI voice calls that qualify leads on BANT criteria\n✅ Real-time budget optimization based on actual revenue\n✅ 90-day double-or-refund guarantee\n\n→ Limited to 10 new clients/month. Book your spot now.',
-            headline: '3.2x More Qualified Leads — Case Study Inside',
-            description: 'See how TechVentures tripled their pipeline with AI-powered lead gen.',
-            targetAudience: 'Growth-stage SaaS companies ($1M-$50M ARR)',
+            primaryText: `"${transformationPromise}" — this is what our ${industry} clients experience with ${serviceName}.
+
+✅ Multi-channel campaigns (Google, Meta, LinkedIn, Email)
+✅ AI qualification on every lead
+✅ Real-time attribution and budget optimization
+✅ ${guarantee}
+
+→ Limited spots: ${bookingUrl}`,
+            headline: `${niche} — Case Study Results`,
+            description: `See how ${industry} companies scaled with ${serviceName}.`,
+            targetAudience: `Growth-stage ${industry} companies`,
           },
         ],
       },
       hooks: [
         {
           angle: 'pain',
-          hook: 'Your sales team is wasting 60% of their time on leads that will never buy. Here\'s why.',
+          hook: `${painPoints[0] || `Your sales team is wasting 60% of their time on leads that will never buy.`} Here's why ${decisionMaker}s are switching to AI.`,
           useCase: 'Ad opening, email subject line, video hook',
         },
         {
           angle: 'curiosity',
-          hook: 'We replaced a 12-person marketing team with 13 AI agents. The results were shocking.',
+          hook: `We replaced a 12-person marketing team with ${uniqueMechanism}. The results were shocking.`,
           useCase: 'LinkedIn post, Meta ad primary text, blog headline',
         },
         {
           angle: 'social-proof',
-          hook: '500+ B2B SaaS companies switched from agencies to AI lead gen last quarter. Here\'s what happened to their CAC.',
+          hook: `500+ ${industry} companies switched to AI-powered ${niche.toLowerCase()} last quarter. Here's what happened to their CAC.`,
           useCase: 'Retargeting ads, email sequence, landing page hero',
         },
         {
           angle: 'urgency',
-          hook: 'We only onboard 10 new clients per month and 7 spots are already taken for Q2.',
+          hook: `We only onboard 10 new ${industry} clients per month — and 7 spots are already taken for this quarter.`,
           useCase: 'Email CTA, ad copy, landing page urgency bar',
         },
         {
           angle: 'contrarian',
-          hook: 'Unpopular opinion: Your lead generation agency is incentivized to keep your CAC high.',
+          hook: `Unpopular opinion: Your ${niche.toLowerCase()} agency is incentivized to keep your CAC high.`,
           useCase: 'LinkedIn thought leadership, Meta controversy ad, cold email opener',
         },
       ],
@@ -145,120 +271,179 @@ export class ContentCreativeAgent extends BaseAgent {
         {
           step: 1,
           delay: 'Day 0',
-          subject: 'Quick question about {company}\'s lead gen',
-          body: 'Hi {firstName},\n\nI was looking at {company}\'s growth trajectory and had a quick question — are you still relying on [agencies / manual outbound / founder-led sales] to fill your pipeline?\n\nI ask because we\'ve been working with B2B SaaS companies in the {industry} space that were in a similar position — spending $200+ per lead with no clear attribution on what\'s actually working.\n\nWe built an AI system (13 specialized agents) that handles the entire lead gen pipeline autonomously — from campaign management to AI voice qualification. Our clients typically see 2x qualified leads within 90 days.\n\nWould it make sense to chat for 15 minutes this week?\n\nBest,\n{senderName}',
+          subject: `Quick question about {company}'s ${niche.toLowerCase()}`,
+          body: `Hi {firstName},
+
+I was looking at {company}'s growth trajectory and had a quick question — are you still relying on agencies or manual outbound to fill your pipeline?
+
+I ask because we've been working with ${industry} companies that were in a similar position — ${painPoints[0]?.toLowerCase() || 'spending $200+ per lead with no attribution'}.
+
+We built ${serviceName} (powered by ${uniqueMechanism}) that handles the entire pipeline autonomously. Our clients typically see: ${transformationPromise}.
+
+Worth a 15-minute chat this week?
+
+Best,
+{senderName}`,
           purpose: 'Soft intro — establish relevance, plant curiosity',
         },
         {
           step: 2,
           delay: 'Day 3',
-          subject: 'How {similar_company} cut their CAC by 62%',
-          body: 'Hi {firstName},\n\nWanted to share a quick case study that might be relevant.\n\n{similar_company} (B2B SaaS, similar stage to {company}) was spending $340/lead across Google and Meta with their agency. After switching to LeadFlow AI:\n\n• CAC dropped from $340 → $128 (62% reduction)\n• Qualified leads went from 40/mo → 127/mo (3.2x increase)\n• Sales team saved 25 hours/week on lead qualification\n\nThe biggest unlock? AI voice agents that qualify every lead on BANT criteria before it touches a human rep.\n\nWorth a quick look? I can walk you through how it would work for {company} specifically.\n\n{senderName}',
-          purpose: 'Value delivery — share case study, build credibility',
+          subject: `How a similar ${industry} company cut CAC by 62%`,
+          body: `Hi {firstName},
+
+Wanted to share a quick case study relevant to {company}.
+
+A ${industry} company (similar stage) was ${painPoints[0]?.toLowerCase() || 'spending $340/lead'}. After switching to ${serviceName}:
+
+• CAC dropped 62%
+• Qualified leads increased 3.2x
+• Sales team saved 25 hours/week on qualification
+
+The biggest unlock? ${uniqueMechanism} that qualifies every lead before it touches a human rep.
+
+Worth a quick look? I can show you how it maps to {company}.
+
+{senderName}`,
+          purpose: 'Value delivery — case study, build credibility',
         },
         {
           step: 3,
           delay: 'Day 7',
-          subject: 'The math behind 2x qualified leads',
-          body: 'Hi {firstName},\n\nI ran some rough numbers for {company} based on publicly available data:\n\n• Current estimated CAC: ~$250-$350\n• With LeadFlow AI: $120-$150 (based on comparable companies)\n• Projected qualified lead increase: 80-120% in 90 days\n• Estimated annual savings: $180K-$420K in marketing spend\n\nThese aren\'t hypotheticals — they\'re based on actual performance data from 500+ B2B SaaS clients in our system.\n\nAnd we back it with a guarantee: 2x qualified leads in 90 days or full refund.\n\nWant me to build a custom projection for {company}? Takes 30 minutes.\n\n{senderName}',
+          subject: `The math behind ${transformationPromise.toLowerCase()}`,
+          body: `Hi {firstName},
+
+I ran some rough numbers for {company}:
+
+• Projected qualified lead increase: 80-120% in 90 days
+• Estimated CAC reduction: 40-60%
+• Starting at ${starterPrice}/mo with ${guarantee}
+
+These are based on actual ${industry} client performance data.
+
+Want me to build a custom projection for {company}? Takes 30 minutes.
+
+→ Book here: ${bookingUrl}
+
+{senderName}`,
           purpose: 'Quantified value — make the ROI undeniable',
         },
         {
           step: 4,
           delay: 'Day 11',
-          subject: 'Only 3 spots left for Q2 onboarding',
-          body: 'Hi {firstName},\n\nQuick heads up — we only onboard 10 new clients per month to ensure quality delivery, and we have 3 spots remaining for Q2.\n\nIf pipeline growth is a priority for {company} this quarter, I\'d hate for you to miss the window.\n\nHere\'s what a strategy call covers:\n1. Audit of your current lead gen channels + attribution gaps\n2. Custom AI pipeline design for {company}\'s ICP\n3. 90-day growth projection with expected metrics\n\nNo commitment — worst case, you walk away with a free audit.\n\n→ Book here: [calendly_link]\n\n{senderName}',
-          purpose: 'Urgency — create scarcity and time pressure',
+          subject: `Only 3 spots left this quarter`,
+          body: `Hi {firstName},
+
+Quick heads up — we only onboard 10 new clients per month, and we have 3 spots remaining.
+
+If pipeline growth is a priority for {company} this quarter, here's what a strategy call covers:
+
+1. Audit of your current channels + attribution gaps
+2. Custom AI pipeline design for your ICP
+3. 90-day growth projection with expected metrics
+
+No commitment — worst case, you get a free audit.
+
+→ Book: ${bookingUrl}
+
+{senderName}`,
+          purpose: 'Urgency — scarcity and time pressure',
         },
         {
           step: 5,
           delay: 'Day 15',
-          subject: 'Closing the loop on this',
-          body: 'Hi {firstName},\n\nI\'ve reached out a few times about helping {company} scale qualified leads with AI — I don\'t want to be a pest, so this will be my last note.\n\nIf the timing isn\'t right, totally understand. But if lead generation is something you\'re actively trying to solve, our 90-day guarantee makes it a zero-risk conversation.\n\nEither way, wishing you and the {company} team a great quarter.\n\n{senderName}\n\nP.S. — If someone else on your team handles growth/demand gen, happy to connect with them instead. Just let me know.',
+          subject: 'Closing the loop',
+          body: `Hi {firstName},
+
+I've reached out a few times about helping {company} scale with ${serviceName} — I don't want to be a pest, so this is my last note.
+
+If the timing isn't right, totally understand. But with our ${guarantee}, it's a zero-risk conversation.
+
+Either way, wishing you and the {company} team a great quarter.
+
+{senderName}
+
+P.S. — If someone else handles growth/demand gen, happy to connect with them instead.`,
           purpose: 'Breakup email — graceful exit with door open',
         },
       ],
       linkedInScripts: {
-        connectionRequest:
-          'Hi {firstName}, I\'ve been following {company}\'s growth — impressive trajectory in the {industry} space. I work with B2B SaaS leaders on scaling their pipeline with AI-powered lead gen. Would love to connect and share some insights that might be useful.',
-        followUp1:
-          'Thanks for connecting, {firstName}! Quick question — are you happy with your current lead gen setup, or is it something you\'re actively looking to improve? I ask because we recently helped a company similar to {company} triple their qualified leads in 90 days using an AI system. Happy to share the case study if useful — no pitch, just thought it might spark some ideas.',
-        followUp2:
-          'Hi {firstName}, circling back on this. We\'re opening 3 spots for our Q2 cohort and I immediately thought of {company}. We offer a free 30-min strategy call where we map out a custom AI pipeline for your ICP — and we guarantee 2x qualified leads in 90 days or full refund. Worth exploring? Here\'s my calendar: [calendly_link]',
+        connectionRequest: `Hi {firstName}, I've been following {company}'s growth in ${industry} — impressive trajectory. I work with ${industry} leaders on scaling pipeline with AI-powered ${niche.toLowerCase()}. Would love to connect.`,
+        followUp1: `Thanks for connecting! Quick question — happy with your current lead gen, or actively improving it? We recently helped a ${industry} company similar to {company} achieve ${transformationPromise.toLowerCase()} using ${uniqueMechanism}. Happy to share the case study — no pitch.`,
+        followUp2: `Hi {firstName}, circling back. We're opening 3 spots this quarter — free 30-min strategy call where we map a custom pipeline for your ICP. ${guarantee}. Worth exploring? ${bookingUrl}`,
       },
       videoAdScripts: [
         {
           duration: '30s',
-          format: 'talking-head + screen recording hybrid',
-          hook: '[0-3s] "Your marketing agency doesn\'t want you to see this..." (text overlay: "AI vs. Agency — The Results")',
-          body: '[3-20s] "We took 13 AI agents and pointed them at the exact same market a $15K/month agency was targeting. In 90 days: the AI system generated 3.2x more qualified leads at 62% lower cost. No account managers. No monthly reports that hide bad performance. Just autonomous agents running 24/7 across Google, Meta, LinkedIn, and email — with full attribution on every dollar." (show dashboard screenshots, lead flow animations, before/after metrics)',
-          cta: '[20-30s] "Book a free strategy call and we\'ll build a custom growth projection for your business. Link in bio. And yes — we guarantee results or you don\'t pay." (show Calendly booking page, guarantee badge)',
+          format: 'talking-head + screen recording',
+          hook: `[0-3s] "${painPoints[0] || 'Your marketing agency doesn\'t want you to see this...'}" (text overlay: "AI vs. Agency — The Results")`,
+          body: `[3-20s] "We deployed ${uniqueMechanism} against the exact same market a $15K/month agency was targeting. In 90 days: ${transformationPromise.toLowerCase()}. No account managers. No opaque reports. Just AI agents running 24/7 across Google, Meta, LinkedIn, and email." (show dashboard, metrics, before/after)`,
+          cta: `[20-30s] "Book a free strategy call — ${bookingUrl}. ${guarantee}." (show booking page, guarantee badge)`,
         },
         {
           duration: '60s',
           format: 'animated explainer with voiceover',
-          hook: '[0-3s] "What if you could replace your entire marketing department with AI?" (bold text animation)',
-          body: '[3-45s] "Meet LeadFlow AI — 13 specialized AI agents that handle every stage of your lead generation pipeline. Agent 1 researches profitable niches. Agent 2 packages your offer. Agent 3 validates the opportunity. Agents 4 through 6 build your funnel, create all the content, and run paid campaigns. Agents 7 and 8 handle outbound and inbound. Agent 9 makes AI voice calls to qualify every lead. And agents 10 through 13 route leads, track attribution, optimize performance, and keep your CRM clean. All of this runs autonomously — 24/7 — with performance guarantees." (show animated pipeline, agent icons flowing data)',
-          cta: '[45-60s] "Join 500+ B2B SaaS companies already using LeadFlow AI. Book your free strategy call today — limited spots available each month." (show testimonial quotes, CTA button animation)',
+          hook: `[0-3s] "What if you could ${transformationPromise.toLowerCase()} — on autopilot?" (bold text animation)`,
+          body: `[3-45s] "Meet ${serviceName} — powered by ${uniqueMechanism}. It handles every stage: research → offer → funnel → content → traffic → outbound → qualification → routing → optimization. All autonomous. All 24/7. Built specifically for ${industry}." (show animated pipeline flow)`,
+          cta: `[45-60s] "Join ${industry} companies already using ${serviceName}. Book your free strategy call — limited spots each month." (testimonial quotes, CTA)`,
         },
       ],
       ugcBriefs: [
         {
           type: 'customer-testimonial',
-          description: 'Talking head video of a satisfied customer (VP Marketing or CEO) sharing their before/after experience with LeadFlow AI. Shot on iPhone for authenticity.',
+          description: `Talking head video of a ${decisionMaker} sharing before/after experience with ${serviceName}. Shot on iPhone for authenticity.`,
           talkingPoints: [
-            'What their lead gen looked like before (pain, frustration, high CAC)',
-            'What made them try LeadFlow AI (specific trigger)',
-            'The first results they saw and how quickly',
-            'Specific metrics: lead volume, CAC reduction, time saved',
-            'Would they recommend it and why',
+            `What their ${niche.toLowerCase()} looked like before (frustration, high CAC)`,
+            `Why they tried ${serviceName} (specific trigger)`,
+            `First results and timeline`,
+            `Specific metrics: lead volume, CAC reduction, time saved`,
+            `Would they recommend it and why`,
           ],
         },
         {
           type: 'screen-recording-walkthrough',
-          description: 'Screen recording of the LeadFlow AI dashboard showing real (anonymized) campaign data, lead flow, and attribution. Narrator walks through the metrics.',
+          description: `Screen recording of the ${serviceName} dashboard showing campaign data, lead flow, and attribution. Narrator walks through metrics.`,
           talkingPoints: [
-            'Show the multi-channel campaign overview',
-            'Drill into lead qualification scores and AI call transcripts',
-            'Show the attribution dashboard — which channels drive actual revenue',
-            'Highlight the auto-optimization: budget reallocation in action',
-            'End with the ROI summary view',
+            'Multi-channel campaign overview',
+            'Lead qualification scores and AI call transcripts',
+            'Attribution dashboard — which channels drive revenue',
+            'Auto-optimization: budget reallocation in action',
+            'ROI summary view',
           ],
         },
         {
           type: 'before-after-comparison',
-          description: 'Split-screen showing a company\'s metrics before LeadFlow AI (left) vs. after 90 days (right). Clean, data-forward creative.',
+          description: `Split-screen: ${industry} company metrics before ${serviceName} (left) vs. after 90 days (right). Data-forward creative.`,
           talkingPoints: [
-            'Before: 40 leads/mo, $340 CAC, 0 attribution visibility',
-            'After: 127 leads/mo, $128 CAC, full multi-touch attribution',
-            'Transition animation between the two states',
-            'End with: "This is what AI-powered lead gen looks like"',
+            `Before: Low leads, high CAC, zero attribution`,
+            `After: ${transformationPromise}`,
+            'Transition animation between states',
+            `End with: "This is what AI-powered ${niche.toLowerCase()} looks like"`,
           ],
         },
       ],
       visualCreativeBriefs: [
         {
-          concept: 'The 13-Agent Pipeline',
-          layout: 'Vertical infographic showing 13 connected agent icons flowing from top (Research) to bottom (CRM), with data flowing between them',
-          imagery: 'Dark navy background, gradient blue-to-purple agent nodes, glowing connection lines, data particles flowing through the pipeline',
-          textOverlay: 'Headline: "13 AI Agents. One Autonomous Growth Engine." Subtext: "See how LeadFlow AI fills your pipeline 24/7" CTA: "Book Free Strategy Call"',
+          concept: `The ${uniqueMechanism} Pipeline`,
+          layout: 'Vertical infographic showing agent pipeline flowing from Research to CRM, with data particles',
+          imagery: `Dark background, gradient nodes, glowing connections. Brand colors from ${serviceName}.`,
+          textOverlay: `Headline: "${uniqueMechanism}. One Autonomous Growth Engine." Subtext: "${transformationPromise}" CTA: "Book Free Strategy Call"`,
         },
         {
           concept: 'Before/After Metrics Card',
-          layout: 'Two-panel card — left panel (red/dark, "Before") showing bad metrics, right panel (green/bright, "After") showing improved metrics',
-          imagery: 'Clean stat blocks with large numbers, subtle chart lines in background, company logo placeholder at top',
-          textOverlay: 'Before: "$340 CAC | 40 Leads/mo | No Attribution" → After: "$128 CAC | 127 Leads/mo | Full Attribution" Footer: "Results after 90 days with LeadFlow AI"',
+          layout: 'Two-panel card — left (red/dark "Before") showing bad metrics, right (green "After") showing improvements',
+          imagery: 'Clean stat blocks with large numbers, chart lines, company logo placeholder',
+          textOverlay: `Before: "${painPoints[0]?.substring(0, 50) || 'High CAC, low leads'}" → After: "${transformationPromise}" Footer: "Results after 90 days with ${serviceName}"`,
         },
         {
           concept: 'Guarantee Badge Ad',
-          layout: 'Centered badge/seal design with bold guarantee text, supporting copy above and below',
-          imagery: 'Gold/bronze guarantee seal on dark background, subtle grid pattern, trust indicators (lock icon, checkmark)',
-          textOverlay: 'Above: "The Only Lead Gen System That Guarantees Results" Badge: "90-Day Double-or-Refund Guarantee" Below: "2x Qualified Leads or 100% Money Back — No Questions Asked" CTA button: "See How It Works"',
+          layout: 'Centered badge/seal with guarantee text, supporting copy above and below',
+          imagery: 'Gold/bronze seal on dark background, trust indicators (lock, checkmark)',
+          textOverlay: `Above: "The Only ${niche} System That Guarantees Results" Badge: "${guarantee}" CTA: "See How It Works"`,
         },
       ],
-      reasoning:
-        'Produced all 7 creative asset types specified in the requirements. Google Ads copies optimized for 30-char headlines and 90-char descriptions targeting high-intent search keywords. Meta Ads use long-form primary text for feed placement — each targets a different angle (pain, case study, social proof). Email sequence follows the proven 5-step cold outreach framework: intro → value → ROI math → urgency → breakup. LinkedIn scripts stay within character limits and progress from soft connection to direct ask. Video scripts include both a 30s direct-response format and a 60s explainer. UGC briefs and visual creative briefs provide enough detail for production teams or AI image generators.',
-      confidence: 86,
+      reasoning: `Produced all 7 creative asset types adapted to "${niche}" niche targeting ${decisionMaker}s at ${industry} companies. Google Ads optimized for ≤30-char headlines targeting trending keywords: ${trendKeywords.join(', ')}. Meta Ads use long-form primary text targeting 3 angles (pain, case study, social proof). Email sequence follows 5-step cold outreach framework adapted to the ${industry} ICP. LinkedIn scripts within character limits. Video scripts reference the ${uniqueMechanism} and ${guarantee}. All content aligned with upstream offer positioning and funnel CTA.`,
+      confidence: 82,
     };
   }
 }

@@ -65,7 +65,7 @@ export class ValidationAgent extends BaseAgent {
         previousOutputs: inputs.previousOutputs || {},
       });
       const response = await this.callClaude(SYSTEM_PROMPT, userMessage);
-      const parsed = this.parseLLMJson<any>(response);
+      const parsed = this.safeParseLLMJson<any>(response, ['decision', 'scores']);
       this.status = 'done';
       await this.log('run_completed', { output: parsed });
       return {
@@ -89,56 +89,107 @@ export class ValidationAgent extends BaseAgent {
 
   private getMockOutput(inputs: AgentInput): any {
     const offerData = inputs.previousOutputs?.['offer-engineering'];
+    const serviceResearch = inputs.previousOutputs?.['service-research'];
     const serviceName = offerData?.data?.offer?.serviceName || 'LeadFlow AI';
 
+    // Extract upstream scores to make a data-driven decision
+    const topOpp = serviceResearch?.data?.opportunities?.[0];
+    const demandScore = topOpp?.demandScore ?? 75;
+    const competitionScore = topOpp?.competitionScore ?? 50;
+    const monetizationScore = topOpp?.monetizationScore ?? 70;
+    const trendsScore = topOpp?.googleTrendsScore ?? 60;
+
+    const starterPrice = offerData?.data?.offer?.pricingTiers?.[0]?.price ?? 2997;
+    const growthPrice = offerData?.data?.offer?.pricingTiers?.[1]?.price ?? 5997;
+
+    // Calculate realistic CAC and LTV from upstream data
+    const cacEstimate = Math.round(starterPrice * 0.04 * (1 + competitionScore / 100));
+    const avgMonthlyRevenue = (starterPrice + growthPrice) / 2;
+    const retentionMonths = demandScore > 80 ? 12 : demandScore > 60 ? 9 : 6;
+    const ltvEstimate = Math.round(avgMonthlyRevenue * retentionMonths * 0.7);
+    const ltvCacRatio = Math.round((ltvEstimate / cacEstimate) * 10) / 10;
+
+    // Score calculations
+    const marketDemand = Math.round((demandScore * 0.6 + trendsScore * 0.4));
+    const pricingFeasibility = monetizationScore > 80 && demandScore > 70 ? 90 : monetizationScore > 60 ? 75 : 55;
+    const cacVsLtvScore = ltvCacRatio > 10 ? 95 : ltvCacRatio > 5 ? 85 : ltvCacRatio > 3 ? 70 : 40;
+    const riskScore = Math.round(competitionScore * 0.4 + (100 - demandScore) * 0.3 + (100 - monetizationScore) * 0.3);
+
+    // Data-driven GO/NO-GO decision
+    let decision: 'GO' | 'NO-GO' | 'CONDITIONAL' = 'GO';
+    const reasons: string[] = [];
+
+    if (ltvCacRatio < 3) {
+      decision = 'NO-GO';
+      reasons.push(`LTV/CAC ratio of ${ltvCacRatio}x is below the 3x minimum threshold`);
+    }
+    if (demandScore < 50) {
+      decision = decision === 'NO-GO' ? 'NO-GO' : 'CONDITIONAL';
+      reasons.push(`Market demand score of ${demandScore} indicates weak demand`);
+    }
+    if (competitionScore > 80) {
+      decision = decision === 'NO-GO' ? 'NO-GO' : 'CONDITIONAL';
+      reasons.push(`Competition score of ${competitionScore} indicates oversaturated market`);
+    }
+    if (riskScore > 60) {
+      decision = decision === 'GO' ? 'CONDITIONAL' : decision;
+      reasons.push(`Risk score of ${riskScore} is above acceptable threshold`);
+    }
+
+    const riskFactors = [
+      {
+        factor: `${topOpp?.niche || 'This market'} is an emerging category — buyer education may be required`,
+        severity: demandScore > 80 ? 'low' as const : 'medium' as const,
+        mitigation: 'Lead with case studies and ROI calculators in the funnel. Use comparison pages against traditional agencies.',
+      },
+      {
+        factor: `Pricing at $${starterPrice.toLocaleString()}/mo Starter may exclude smaller companies`,
+        severity: starterPrice > 5000 ? 'high' as const : starterPrice > 2000 ? 'low' as const : 'low' as const,
+        mitigation: 'Higher price filters for serious buyers with budget, improving lead quality and reducing churn.',
+      },
+      {
+        factor: 'Dependence on third-party APIs (Google Ads, Meta, Instantly) introduces platform risk',
+        severity: 'medium' as const,
+        mitigation: 'Abstraction layer already built into LeadOS architecture. Can swap providers without business logic changes.',
+      },
+      {
+        factor: 'Money-back guarantee creates cash flow risk if early cohorts underperform',
+        severity: 'high' as const,
+        mitigation: 'Set aside 20% reserve fund for first 6 months. Monitor guarantee claim rate weekly — if >15%, pause acquisition and fix delivery.',
+      },
+      {
+        factor: `Competition score of ${competitionScore} — ${competitionScore > 60 ? 'market is moderately crowded' : 'manageable competition level'}`,
+        severity: competitionScore > 70 ? 'high' as const : competitionScore > 50 ? 'medium' as const : 'low' as const,
+        mitigation: 'Differentiate through automation depth and performance guarantees that manual agencies cannot match.',
+      },
+    ];
+
+    const trendDirection = trendsScore > 70 ? 'rising' : trendsScore > 50 ? 'stable' : 'declining';
+
     return {
-      decision: 'GO',
-      scores: {
-        marketDemand: 88,
-        competitiveSaturation: 35,
-        pricingFeasibility: 92,
-        cacVsLtv: 95,
-      },
-      cacEstimate: 127.80,
-      ltvEstimate: 4500,
-      ltvCacRatio: 35.2,
-      riskScore: 22,
-      riskFactors: [
-        {
-          factor: 'AI lead generation is an emerging category — buyer education may be required',
-          severity: 'medium',
-          mitigation: 'Lead with case studies and ROI calculators in the funnel. Use comparison pages against traditional agencies.',
-        },
-        {
-          factor: 'Pricing at $2,997/mo Starter may exclude early-stage startups',
-          severity: 'low',
-          mitigation: 'Accepted trade-off: higher price filters for serious buyers with budget, improving lead quality and reducing churn.',
-        },
-        {
-          factor: 'Dependence on third-party APIs (Google Ads, Meta, Instantly) introduces platform risk',
-          severity: 'medium',
-          mitigation: 'Abstraction layer already built into LeadOS architecture. Can swap providers without business logic changes.',
-        },
-        {
-          factor: '90-day money-back guarantee creates cash flow risk if early cohorts underperform',
-          severity: 'high',
-          mitigation: 'Set aside 20% reserve fund for first 6 months. Monitor guarantee claim rate weekly — if >15%, pause acquisition and fix delivery.',
-        },
-        {
-          factor: 'B2B SaaS market has seasonal budget cycles (Q1 planning, Q4 freeze)',
-          severity: 'low',
-          mitigation: 'Adjust campaign intensity by quarter. Run "New Year planning" campaigns in Q4 targeting Q1 budgets.',
-        },
-      ],
+      decision,
+      scores: { marketDemand, competitiveSaturation: competitionScore, pricingFeasibility, cacVsLtv: cacVsLtvScore },
+      cacEstimate,
+      ltvEstimate,
+      ltvCacRatio,
+      riskScore,
+      riskFactors,
       trendAnalysis: {
-        googleTrendsScore: 78,
-        trendDirection: 'rising',
-        risingQueriesCount: 4,
-        marketMomentum: 'Strong upward momentum with breakout queries like "AI SDR" and "automated outbound" showing +250% growth. Search interest sustained above 70/100 for 6+ months indicates durable demand.',
+        googleTrendsScore: trendsScore,
+        trendDirection,
+        risingQueriesCount: topOpp?.risingQueries?.length ?? 3,
+        marketMomentum: trendDirection === 'rising'
+          ? `Strong upward momentum. Search interest at ${trendsScore}/100 with ${topOpp?.risingQueries?.length ?? 0} rising breakout queries.`
+          : trendDirection === 'stable'
+          ? `Stable market demand at ${trendsScore}/100. Mature market with consistent search interest.`
+          : `Declining search interest at ${trendsScore}/100. Consider pivoting to adjacent niche.`,
       },
-      reasoning:
-        `${serviceName} passes all validation gates. Market demand score of 88 reflects strong and growing interest in AI-powered lead generation (Google Trends +340% YoY for "AI lead generation"). Competitive saturation is low at 35 — most agencies still rely on manual processes, creating a clear technology moat. Pricing feasibility is excellent at 92: B2B SaaS companies routinely spend $3K-$10K/mo on marketing tools and agencies, and the performance guarantee de-risks the purchase decision. The LTV/CAC ratio of 35.2x is exceptional (threshold is 3x), driven by low estimated CAC of $127.80 (blended across paid + outbound channels) and high LTV of $4,500 (based on 12-month average retention at Growth tier pricing). Google Trends confirms 78/100 search interest with 4 rising breakout queries. Risk score of 22 is well within acceptable range. Recommendation: PROCEED to funnel build and campaign launch.`,
-      confidence: 91,
+      reasoning: decision === 'GO'
+        ? `${serviceName} passes all validation gates. Market demand: ${marketDemand}, LTV/CAC: ${ltvCacRatio}x (threshold: 3x), risk score: ${riskScore}. Google Trends confirms ${trendDirection} interest at ${trendsScore}/100. Recommendation: PROCEED.`
+        : decision === 'CONDITIONAL'
+        ? `${serviceName} shows potential but has concerns: ${reasons.join('; ')}. LTV/CAC: ${ltvCacRatio}x, risk score: ${riskScore}. Recommendation: PROCEED WITH CAUTION — address flagged issues before scaling.`
+        : `${serviceName} does NOT pass validation. Blockers: ${reasons.join('; ')}. LTV/CAC: ${ltvCacRatio}x is below 3x minimum. Recommendation: DO NOT PROCEED — revisit offer engineering.`,
+      confidence: decision === 'GO' ? 91 : decision === 'CONDITIONAL' ? 72 : 88,
     };
   }
 }

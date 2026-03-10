@@ -1,14 +1,20 @@
 import { BaseAgent, AgentInput, AgentOutput } from '../base-agent';
+import { fetchRealTrends, type TrendResearchResult } from '../../../src/lib/real-trends';
 
-const SYSTEM_PROMPT = `You are the Service Research Agent for LeadOS. Your job is to discover high-demand service opportunities by analyzing market signals from multiple data sources.
+const SYSTEM_PROMPT = `You are the Service Research Agent for LeadOS. Your job is to analyze REAL market data and rank the best service opportunities.
 
-You analyze data from:
-- Google Trends (via SerpAPI) — search interest, rising queries, regional demand
-- Reddit — community discussions, pain points, engagement metrics
-- Hacker News — tech-savvy audience signals, startup trends
-- LinkedIn/Upwork — professional demand indicators
+You will receive REAL live data from these sources:
+- Google Trends (via SerpAPI) — real search interest scores, rising queries, timeline data
+- Reddit — real post counts, engagement metrics, pain point discussions
+- LinkedIn — professional demand indicators and engagement data
+- Upwork — freelance job postings showing paid demand
 
-Accept JSON input with trend data, platforms to scan, and market parameters.
+Your job is NOT to make up data. You receive real data and must:
+1. Analyze the real signals to identify the strongest service opportunities
+2. Adjust scores based on the actual data quality and cross-platform validation
+3. Provide reasoning that references the specific real data points
+4. Rank by composite score: (demandScore * 0.4) + ((100 - competitionScore) * 0.3) + (monetizationScore * 0.3)
+
 Return ONLY valid JSON output (no markdown, no explanation outside JSON) with this structure:
 {
   "opportunities": [
@@ -17,18 +23,25 @@ Return ONLY valid JSON output (no markdown, no explanation outside JSON) with th
       "demandScore": "number 0-100",
       "competitionScore": "number 0-100 (lower is better)",
       "monetizationScore": "number 0-100",
-      "googleTrendsScore": "number 0-100 - Google Trends interest level",
-      "reasoning": "string - why this opportunity is ranked here",
+      "googleTrendsScore": "number 0-100 - from real Google Trends data",
+      "reasoning": "string - reference actual data points from the input",
       "estimatedMarketSize": "string",
       "targetPlatforms": ["string"],
-      "risingQueries": ["string - breakout search terms from Google Trends"]
+      "risingQueries": ["string - actual breakout search terms from Google Trends data"]
     }
   ],
-  "reasoning": "string - overall analysis reasoning",
+  "dataSourcesSummary": {
+    "redditPostsAnalyzed": "number",
+    "linkedinPostsAnalyzed": "number",
+    "upworkJobsAnalyzed": "number",
+    "googleTrendsKeywords": "number",
+    "avgGoogleInterest": "number"
+  },
+  "reasoning": "string - overall analysis referencing real data",
   "confidence": "number 0-100"
 }
 
-Rank opportunities by a composite score: (demandScore * 0.4) + ((100 - competitionScore) * 0.3) + (monetizationScore * 0.3). Return top 5 opportunities.`;
+Return top 5 opportunities. Base your analysis on the REAL data provided, not general knowledge.`;
 
 export class ServiceResearchAgent extends BaseAgent {
   constructor() {
@@ -39,42 +52,133 @@ export class ServiceResearchAgent extends BaseAgent {
     this.status = 'running';
     await this.log('run_started', { inputs });
 
-    try {
-      const response = await this.callClaude(SYSTEM_PROMPT, JSON.stringify({
-        platforms: ['Google Trends', 'Reddit', 'LinkedIn', 'Upwork'],
-        focus: inputs.config?.focus || 'B2B services',
-        region: inputs.config?.region || 'US',
-      }));
+    const focus = inputs.config?.focus || 'B2B services';
+    const region = inputs.config?.region || 'US';
 
-      const parsed = this.parseLLMJson<any>(response);
+    // Step 1: Fetch REAL data from all sources
+    await this.log('fetching_real_data', { focus, region, phase: 'Fetching live data from Reddit, Google Trends (SerpAPI), LinkedIn, Upwork' });
+
+    let realData: TrendResearchResult;
+    try {
+      realData = await fetchRealTrends(focus, region, true); // forceRefresh=true for fresh data
+      await this.log('real_data_fetched', {
+        redditPosts: realData.dataSourcesSummary.reddit.postsAnalyzed,
+        linkedinPosts: realData.dataSourcesSummary.linkedin.postsAnalyzed,
+        upworkJobs: realData.dataSourcesSummary.upwork.jobsAnalyzed,
+        googleTrendsKeywords: realData.dataSourcesSummary.googleTrends.keywordsAnalyzed,
+        totalSignals: realData.dataSourcesSummary.totalSignals,
+      });
+    } catch (error: any) {
+      await this.log('real_data_error', { error: error.message });
+      // If real data fetch fails completely, fall back to mock
+      this.status = 'done';
+      return this.getFallbackOutput(focus);
+    }
+
+    // Step 2: Send real data to Gemini for AI-powered analysis
+    try {
+      await this.log('ai_analysis', { phase: 'Sending real data to AI for analysis' });
+
+      const userMessage = JSON.stringify({
+        focus,
+        region,
+        realData: {
+          opportunities: realData.opportunities.map(opp => ({
+            niche: opp.niche,
+            compositeScore: opp.compositeScore,
+            growthRate: opp.growthRate,
+            trendData: {
+              redditMentions: opp.trendData.redditMentions,
+              linkedinMentions: opp.trendData.linkedinMentions,
+              upworkJobs: opp.trendData.upworkJobs,
+              googleTrendsScore: opp.trendData.googleTrendsScore,
+              totalEngagement: opp.trendData.totalEngagement,
+              googleTrends: opp.trendData.googleTrends ? {
+                interestOverTime: opp.trendData.googleTrends.interestOverTime,
+                risingQueries: opp.trendData.googleTrends.risingQueries,
+                relatedQueries: opp.trendData.googleTrends.relatedQueries,
+              } : null,
+            },
+            reasoning: opp.reasoning,
+            estimatedMarketSize: opp.estimatedMarketSize,
+            targetPlatforms: opp.targetPlatforms,
+          })),
+          summary: realData.dataSourcesSummary,
+        },
+      });
+
+      const response = await this.callClaude(SYSTEM_PROMPT, userMessage);
+      const parsed = this.safeParseLLMJson<any>(response, ['opportunities']);
+
+      // Merge real data source summary into output
+      if (!parsed.dataSourcesSummary) {
+        parsed.dataSourcesSummary = {
+          redditPostsAnalyzed: realData.dataSourcesSummary.reddit.postsAnalyzed,
+          linkedinPostsAnalyzed: realData.dataSourcesSummary.linkedin.postsAnalyzed,
+          upworkJobsAnalyzed: realData.dataSourcesSummary.upwork.jobsAnalyzed,
+          googleTrendsKeywords: realData.dataSourcesSummary.googleTrends.keywordsAnalyzed,
+          avgGoogleInterest: realData.dataSourcesSummary.googleTrends.avgInterest,
+        };
+      }
+
       this.status = 'done';
       await this.log('run_completed', { output: parsed });
 
       return {
         success: true,
         data: parsed,
-        reasoning: parsed.reasoning || 'Analysis complete',
-        confidence: parsed.confidence || 85,
+        reasoning: parsed.reasoning || realData.reasoning,
+        confidence: parsed.confidence || realData.confidence,
       };
     } catch (error: any) {
-      this.status = 'error';
-      await this.log('run_error', { error: error.message });
+      await this.log('ai_analysis_fallback', { error: error.message, phase: 'Using real data directly without AI enhancement' });
 
-      // Return mock data
-      return {
-        success: true,
-        data: {
-          opportunities: [
-            { niche: 'AI-Powered Content Marketing', demandScore: 92, competitionScore: 45, monetizationScore: 88, googleTrendsScore: 85, reasoning: 'Explosive demand for AI content with low agency competition. Google Trends shows +340% YoY growth.', estimatedMarketSize: '$4.2B', targetPlatforms: ['LinkedIn', 'Google Ads', 'Google Trends'], risingQueries: ['AI content writer', 'ChatGPT marketing', 'AI copywriting'] },
-            { niche: 'Shopify Store CRO Consulting', demandScore: 85, competitionScore: 62, monetizationScore: 79, googleTrendsScore: 72, reasoning: 'Growing e-commerce with high willingness to pay. Rising queries around conversion optimization.', estimatedMarketSize: '$2.8B', targetPlatforms: ['Reddit', 'Upwork', 'Google Trends'], risingQueries: ['Shopify conversion rate', 'ecommerce CRO'] },
-            { niche: 'B2B LinkedIn Lead Generation', demandScore: 88, competitionScore: 55, monetizationScore: 84, googleTrendsScore: 78, reasoning: 'Strong demand from B2B companies seeking qualified leads. Google Trends confirms sustained interest.', estimatedMarketSize: '$3.1B', targetPlatforms: ['LinkedIn', 'Google Trends'], risingQueries: ['LinkedIn automation', 'B2B lead gen', 'outbound sales'] },
-            { niche: 'SaaS Onboarding Optimization', demandScore: 78, competitionScore: 38, monetizationScore: 91, googleTrendsScore: 65, reasoning: 'Niche market with very high LTV and low competition. Breakout query "product-led growth".', estimatedMarketSize: '$1.5B', targetPlatforms: ['Google Trends', 'Hacker News'], risingQueries: ['product-led growth', 'SaaS onboarding', 'user activation'] },
-            { niche: 'Paid Media for DTC Brands', demandScore: 90, competitionScore: 72, monetizationScore: 82, googleTrendsScore: 81, reasoning: 'High volume demand, specialization provides edge. Rising interest in Meta ads alternatives.', estimatedMarketSize: '$5.6B', targetPlatforms: ['Meta', 'Google Ads', 'Google Trends'], risingQueries: ['DTC marketing', 'Meta ads agency', 'performance marketing'] },
-          ],
-        },
-        reasoning: 'Analyzed market signals across 4 platforms including Google Trends (SerpAPI). Top opportunities ranked by composite score with Google Trends data validating demand signals.',
-        confidence: 89,
-      };
+      // AI failed but we have real data — return it directly
+      this.status = 'done';
+      return this.formatRealDataAsOutput(realData);
     }
+  }
+
+  /** Format the real trend data directly as agent output (no AI needed) */
+  private formatRealDataAsOutput(realData: TrendResearchResult): AgentOutput {
+    return {
+      success: true,
+      data: {
+        opportunities: realData.opportunities.slice(0, 5).map(opp => ({
+          niche: opp.niche,
+          demandScore: opp.demandScore,
+          competitionScore: opp.competitionScore,
+          monetizationScore: opp.monetizationScore,
+          googleTrendsScore: opp.trendData.googleTrendsScore,
+          reasoning: opp.reasoning,
+          estimatedMarketSize: opp.estimatedMarketSize,
+          targetPlatforms: opp.targetPlatforms,
+          risingQueries: opp.trendData.googleTrends?.risingQueries?.map(q => q.query) || [],
+        })),
+        dataSourcesSummary: {
+          redditPostsAnalyzed: realData.dataSourcesSummary.reddit.postsAnalyzed,
+          linkedinPostsAnalyzed: realData.dataSourcesSummary.linkedin.postsAnalyzed,
+          upworkJobsAnalyzed: realData.dataSourcesSummary.upwork.jobsAnalyzed,
+          googleTrendsKeywords: realData.dataSourcesSummary.googleTrends.keywordsAnalyzed,
+          avgGoogleInterest: realData.dataSourcesSummary.googleTrends.avgInterest,
+        },
+      },
+      reasoning: realData.reasoning,
+      confidence: realData.confidence,
+    };
+  }
+
+  /** Last resort fallback if even real data fetching fails */
+  private getFallbackOutput(focus: string): AgentOutput {
+    return {
+      success: false,
+      data: {
+        opportunities: [],
+        error: 'Failed to fetch live market data. Check API keys and network connectivity.',
+      },
+      reasoning: `Could not fetch real data for "${focus}". SerpAPI key may be invalid or rate-limited. Reddit API may be temporarily unavailable.`,
+      confidence: 0,
+      error: 'Real data fetch failed — no mock data returned. Fix the data source issue and retry.',
+    };
   }
 }
