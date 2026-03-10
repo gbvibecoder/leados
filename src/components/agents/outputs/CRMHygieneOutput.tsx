@@ -218,8 +218,8 @@ export function CRMHygieneOutput({ data }: Props) {
             <div>
               <div className="text-[10px] font-medium text-muted-foreground mb-1.5">Matching Criteria</div>
               {dedup.matchingCriteria.map((mc: any, idx: number) => (
-                <div key={idx} className="flex items-center justify-between text-[10px] py-1 border-b border-border/30 last:border-0">
-                  <span className="font-medium">{mc.field}</span>
+                <div key={idx} className="flex items-center justify-between text-[10px] py-1 border-b border-border/30 last:border-0 gap-2">
+                  <span className="font-medium break-words min-w-0">{mc.field}</span>
                   <div className="flex items-center gap-3">
                     <span className="text-muted-foreground">{mc.type}</span>
                     <span className="text-muted-foreground">weight: {mc.weight}</span>
@@ -234,20 +234,20 @@ export function CRMHygieneOutput({ data }: Props) {
             <div>
               <div className="text-[10px] font-medium text-muted-foreground mb-1.5">Merge Examples</div>
               {dedup.duplicateExamples.map((ex: any, idx: number) => (
-                <div key={idx} className="p-2 bg-muted/30 rounded mb-1.5 text-[10px]">
+                <div key={idx} className="p-2 bg-muted/30 rounded mb-1.5 text-[10px] overflow-hidden">
                   <div className="flex items-center gap-2 mb-1">
                     <CheckCircle className="w-3 h-3 text-green-400 flex-shrink-0" />
-                    <span className="font-medium text-green-400">Kept:</span>
-                    <span>{ex.kept.email}</span>
-                    <span className="text-muted-foreground">({ex.kept.interactions} interactions)</span>
+                    <span className="font-medium text-green-400 shrink-0">Kept:</span>
+                    <span className="truncate">{ex.kept.email}</span>
+                    <span className="text-muted-foreground shrink-0">({ex.kept.interactions} interactions)</span>
                   </div>
                   <div className="flex items-center gap-2 mb-1">
                     <XCircle className="w-3 h-3 text-red-400 flex-shrink-0" />
-                    <span className="font-medium text-red-400">Removed:</span>
-                    <span>{ex.removed.email}</span>
-                    <span className="text-muted-foreground">({ex.removed.interactions} interactions)</span>
+                    <span className="font-medium text-red-400 shrink-0">Removed:</span>
+                    <span className="truncate">{ex.removed.email}</span>
+                    <span className="text-muted-foreground shrink-0">({ex.removed.interactions} interactions)</span>
                   </div>
-                  <div className="text-muted-foreground">Match: {ex.matchType} ({ex.confidence}% confidence)</div>
+                  <div className="text-muted-foreground break-words">Match: {ex.matchType} ({ex.confidence}% confidence)</div>
                 </div>
               ))}
             </div>
@@ -416,16 +416,16 @@ export function CRMHygieneOutput({ data }: Props) {
             <div>
               <div className="text-[10px] font-medium text-muted-foreground mb-1.5">Enrichment Examples</div>
               {enrich.enrichmentExamples.map((ex: any, idx: number) => (
-                <div key={idx} className="p-2 bg-muted/30 rounded mb-1.5 text-[10px]">
-                  <div className="font-medium mb-1">{ex.lead}</div>
+                <div key={idx} className="p-2 bg-muted/30 rounded mb-1.5 text-[10px] overflow-hidden">
+                  <div className="font-medium mb-1 break-words">{ex.lead}</div>
                   <div className="grid grid-cols-2 gap-2">
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-red-400 text-[9px]">Before:</span>
-                      <div className="text-muted-foreground">{ex.before.industry || 'null'}, {ex.before.employees || 'null'} employees</div>
+                      <div className="text-muted-foreground break-words">{ex.before.industry || 'null'}, {ex.before.employees || 'null'} employees</div>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-green-400 text-[9px]">After:</span>
-                      <div>{ex.after.industry}, {ex.after.employees} employees, {ex.after.revenue}</div>
+                      <div className="break-words">{ex.after.industry}, {ex.after.employees} employees, {ex.after.revenue}</div>
                     </div>
                   </div>
                 </div>
@@ -452,7 +452,7 @@ export function CRMHygieneOutput({ data }: Props) {
                   <ArrowRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
                   <span className={`px-1.5 py-0.5 rounded ${STAGE_COLORS[update.to] || 'bg-gray-500/20 text-gray-400'}`}>{update.to}</span>
                 </div>
-                <span className="text-muted-foreground truncate flex-shrink-0 max-w-[200px]">{update.reason}</span>
+                <span className="text-muted-foreground break-words flex-shrink-0 max-w-[200px]">{update.reason}</span>
               </div>
             ))}
           </div>
@@ -489,7 +489,7 @@ export function CRMHygieneOutput({ data }: Props) {
                       <span className="text-muted-foreground">— {item.leadId}</span>
                       <span className="px-1.5 py-0.5 bg-muted/30 rounded text-[9px]">{item.channel}</span>
                     </div>
-                    <div className="text-muted-foreground">{item.summary}</div>
+                    <div className="text-muted-foreground break-words">{item.summary}</div>
                   </div>
                   <span className="text-[9px] text-muted-foreground flex-shrink-0 whitespace-nowrap">
                     {new Date(item.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -518,9 +518,9 @@ export function CRMHygieneOutput({ data }: Props) {
                   <span className="text-xs font-medium">GDPR</span>
                 </div>
                 <div className="space-y-0.5 text-[10px] text-muted-foreground">
-                  <div>Consent tracked: {compliance.gdpr.consentRecordsTracked}</div>
-                  <div>Erasure requests: {compliance.gdpr.erasureRequestsProcessed} done, {compliance.gdpr.erasureRequestsPending} pending</div>
-                  <div>Consent rate: {compliance.gdpr.consentRate}%</div>
+                  <div className="break-words">Consent tracked: {compliance.gdpr.consentRecordsTracked}</div>
+                  <div className="break-words">Erasure requests: {compliance.gdpr.erasureRequestsProcessed} done, {compliance.gdpr.erasureRequestsPending} pending</div>
+                  <div className="break-words">Consent rate: {compliance.gdpr.consentRate}%</div>
                 </div>
               </div>
             )}
@@ -562,7 +562,7 @@ export function CRMHygieneOutput({ data }: Props) {
                 <Clock className="w-3 h-3 text-muted-foreground" />
                 <span className="font-medium">Data Retention</span>
               </div>
-              <div className="text-muted-foreground">
+              <div className="text-muted-foreground break-words">
                 Policy: {compliance.dataRetention.policy} | Expiring in 30d: {compliance.dataRetention.recordsExpiring30d} | Archived: {compliance.dataRetention.recordsArchived}
               </div>
             </div>
@@ -620,7 +620,7 @@ export function CRMHygieneOutput({ data }: Props) {
             <Sparkles className="w-4 h-4 text-teal-400 flex-shrink-0" />
             <span className="text-xs sm:text-sm font-medium">Hygiene Analysis</span>
           </div>
-          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">{d.reasoning}</p>
+          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed break-words">{d.reasoning}</p>
         </div>
       )}
     </div>

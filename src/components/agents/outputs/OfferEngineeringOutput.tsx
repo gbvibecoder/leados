@@ -70,7 +70,7 @@ export function OfferEngineeringOutput({ data }: Props) {
           <span className="text-xs text-muted-foreground uppercase tracking-wider">Service Offer</span>
         </div>
         <h2 className="text-base sm:text-xl font-bold leading-tight">{offer.serviceName}</h2>
-        <p className="text-xs sm:text-sm text-muted-foreground mt-2 leading-relaxed">{offer.transformationPromise}</p>
+        <p className="text-xs sm:text-sm text-muted-foreground mt-2 leading-relaxed break-words">{offer.transformationPromise}</p>
       </div>
 
       {/* ICP Section */}
@@ -81,7 +81,7 @@ export function OfferEngineeringOutput({ data }: Props) {
         onToggle={() => setExpandedSection(expandedSection === 'icp' ? null : 'icp')}
       >
         <div className="space-y-3 sm:space-y-4">
-          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">{offer.icp.description}</p>
+          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed break-words">{offer.icp.description}</p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
             <InfoCard label="Company Size" value={offer.icp.companySize} />
@@ -93,7 +93,7 @@ export function OfferEngineeringOutput({ data }: Props) {
           {offer.icp.psychographics && (
             <div className="p-2.5 sm:p-3 bg-purple-500/10 rounded-lg border border-purple-500/20">
               <span className="text-xs text-purple-400 font-medium">Psychographics</span>
-              <p className="text-xs sm:text-sm mt-1 leading-relaxed">{offer.icp.psychographics}</p>
+              <p className="text-xs sm:text-sm mt-1 leading-relaxed break-words">{offer.icp.psychographics}</p>
             </div>
           )}
         </div>
@@ -113,7 +113,7 @@ export function OfferEngineeringOutput({ data }: Props) {
               <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-red-500/20 flex items-center justify-center text-xs text-red-400 shrink-0">
                 {idx + 1}
               </span>
-              <p className="text-xs sm:text-sm leading-relaxed">{point}</p>
+              <p className="text-xs sm:text-sm leading-relaxed break-words">{point}</p>
             </div>
           ))}
         </div>
@@ -143,7 +143,7 @@ export function OfferEngineeringOutput({ data }: Props) {
         <div className="p-3 sm:p-4 bg-green-500/10 rounded-lg border border-green-500/20">
           <div className="flex items-start gap-2 sm:gap-3">
             <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-400 shrink-0 mt-0.5" />
-            <p className="text-xs sm:text-sm leading-relaxed">{offer.guarantee}</p>
+            <p className="text-xs sm:text-sm leading-relaxed break-words">{offer.guarantee}</p>
           </div>
         </div>
       </CollapsibleSection>
@@ -158,7 +158,7 @@ export function OfferEngineeringOutput({ data }: Props) {
         <div className="space-y-3 sm:space-y-4">
           <div className="p-2.5 sm:p-3 bg-muted/50 rounded-lg">
             <div className="text-xs font-medium text-muted-foreground mb-1">Market Positioning</div>
-            <p className="text-xs sm:text-sm leading-relaxed">{offer.positioning}</p>
+            <p className="text-xs sm:text-sm leading-relaxed break-words">{offer.positioning}</p>
           </div>
 
           <div className="p-2.5 sm:p-3 bg-gradient-to-r from-purple-500/10 to-blue-500/10 rounded-lg border border-purple-500/20">
@@ -166,7 +166,7 @@ export function OfferEngineeringOutput({ data }: Props) {
               <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-400 shrink-0" />
               <span className="text-xs font-medium text-purple-400">Unique Mechanism</span>
             </div>
-            <p className="text-xs sm:text-sm leading-relaxed">{offer.uniqueMechanism}</p>
+            <p className="text-xs sm:text-sm leading-relaxed break-words">{offer.uniqueMechanism}</p>
           </div>
         </div>
       </CollapsibleSection>
@@ -232,7 +232,7 @@ function InfoCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="p-2.5 sm:p-3 bg-muted/30 rounded-lg border border-border/50">
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="text-xs sm:text-sm font-medium mt-0.5 leading-snug">{value}</div>
+      <div className="text-xs sm:text-sm font-medium mt-0.5 leading-snug break-words">{value}</div>
     </div>
   );
 }

@@ -206,7 +206,7 @@ export function PaidTrafficOutput({ data }: Props) {
                   <tbody>
                     {googleAds.keywords.slice(0, 12).map((kw: any, idx: number) => (
                       <tr key={idx} className="border-b border-border/30">
-                        <td className="py-1.5 pr-3 font-medium">{kw.keyword}</td>
+                        <td className="py-1.5 pr-3 font-medium max-w-xs break-words">{kw.keyword}</td>
                         <td className="py-1.5 pr-3">
                           <span className={`px-1.5 py-0.5 rounded text-[10px] ${
                             kw.matchType === 'exact' ? 'bg-green-500/20 text-green-400' :
@@ -236,8 +236,8 @@ export function PaidTrafficOutput({ data }: Props) {
               <div className="space-y-2">
                 {googleAds.adGroups.map((ag: any, idx: number) => (
                   <div key={idx} className="p-2.5 bg-muted/30 rounded-lg border border-border/50">
-                    <div className="font-medium text-sm mb-1">{ag.name}</div>
-                    {ag.theme && <div className="text-[10px] text-muted-foreground mb-2">{ag.theme}</div>}
+                    <div className="font-medium text-sm mb-1 break-words">{ag.name}</div>
+                    {ag.theme && <div className="text-[10px] text-muted-foreground mb-2 break-words">{ag.theme}</div>}
                     <div className="flex flex-wrap gap-1 mb-2">
                       {ag.keywords?.map((kw: string, kIdx: number) => (
                         <span key={kIdx} className="px-1.5 py-0.5 text-[10px] bg-green-500/10 text-green-400 rounded">{kw}</span>
@@ -249,7 +249,7 @@ export function PaidTrafficOutput({ data }: Props) {
                           <div key={hIdx} className="text-blue-400 font-medium">{h}</div>
                         ))}
                         {ag.adCopy.descriptions?.map((d: string, dIdx: number) => (
-                          <div key={dIdx} className="text-muted-foreground">{d}</div>
+                          <div key={dIdx} className="text-muted-foreground break-words">{d}</div>
                         ))}
                       </div>
                     )}
@@ -345,7 +345,7 @@ export function PaidTrafficOutput({ data }: Props) {
                       }`}>{aud.type.toUpperCase()}</span>
                       <span className="font-medium text-sm">{aud.name}</span>
                     </div>
-                    <p className="text-[10px] text-muted-foreground">{aud.targeting}</p>
+                    <p className="text-[10px] text-muted-foreground break-words">{aud.targeting}</p>
                     <div className="text-[10px] text-muted-foreground mt-1">
                       Est. size: <span className="text-foreground font-medium">{aud.estimatedSize?.toLocaleString()}</span>
                     </div>
@@ -420,7 +420,7 @@ export function PaidTrafficOutput({ data }: Props) {
             <Sparkles className="w-4 h-4 text-indigo-400 flex-shrink-0" />
             <span className="text-xs sm:text-sm font-medium">Campaign Strategy</span>
           </div>
-          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">{d.reasoning}</p>
+          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed break-words">{d.reasoning}</p>
         </div>
       )}
     </div>

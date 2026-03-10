@@ -245,7 +245,7 @@ export function TrackingAttributionOutput({ data }: Props) {
                             <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 flex-shrink-0" />
                             <div className="flex-1">
                               <span className="font-medium">{tp.channel}</span>
-                              <span className="text-muted-foreground"> — {tp.action}</span>
+                              <span className="text-muted-foreground break-words"> — {tp.action}</span>
                             </div>
                             <div className="text-muted-foreground">{new Date(tp.timestamp).toLocaleDateString()}</div>
                           </div>
@@ -278,11 +278,11 @@ export function TrackingAttributionOutput({ data }: Props) {
               <div className="text-[10px] font-medium text-blue-400 uppercase tracking-wide mb-1.5">Tags ({gtm.tags?.length || 0})</div>
               <div className="space-y-1">
                 {(gtm.tags || []).map((tag: any, idx: number) => (
-                  <div key={idx} className="flex items-center gap-2 p-1.5 bg-muted/20 rounded text-[10px]">
+                  <div key={idx} className="flex items-center gap-2 p-1.5 bg-muted/20 rounded text-[10px] overflow-hidden">
                     <Tag className="w-3 h-3 text-blue-400 flex-shrink-0" />
-                    <span className="font-medium">{tag.name}</span>
-                    <span className="text-muted-foreground">({tag.type})</span>
-                    <span className="text-muted-foreground ml-auto">Trigger: {tag.trigger}</span>
+                    <span className="font-medium truncate">{tag.name}</span>
+                    <span className="text-muted-foreground shrink-0">({tag.type})</span>
+                    <span className="text-muted-foreground ml-auto truncate">Trigger: {tag.trigger}</span>
                   </div>
                 ))}
               </div>
@@ -409,7 +409,7 @@ export function TrackingAttributionOutput({ data }: Props) {
                 ) : (
                   <Clock className="w-3.5 h-3.5 text-yellow-400 flex-shrink-0" />
                 )}
-                <span className={item.status === 'passed' ? '' : item.status === 'failed' ? 'text-red-400' : 'text-yellow-400'}>
+                <span className={`break-words ${item.status === 'passed' ? '' : item.status === 'failed' ? 'text-red-400' : 'text-yellow-400'}`}>
                   {item.check}
                 </span>
               </div>
@@ -452,7 +452,7 @@ export function TrackingAttributionOutput({ data }: Props) {
             <Sparkles className="w-4 h-4 text-indigo-400 flex-shrink-0" />
             <span className="text-xs sm:text-sm font-medium">Attribution Strategy</span>
           </div>
-          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">{d.reasoning}</p>
+          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed break-words">{d.reasoning}</p>
         </div>
       )}
     </div>

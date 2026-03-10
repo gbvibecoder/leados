@@ -272,7 +272,7 @@ export function InboundCaptureOutput({ data }: Props) {
                 <div className="space-y-1">
                   {factor.rules?.map((rule: any, rIdx: number) => (
                     <div key={rIdx} className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">{rule.condition}</span>
+                      <span className="text-muted-foreground break-words">{rule.condition}</span>
                       <span className="font-medium text-green-400">+{rule.points}</span>
                     </div>
                   ))}
@@ -309,7 +309,7 @@ export function InboundCaptureOutput({ data }: Props) {
                     <tr key={idx} className="border-b border-border/30">
                       <td className="py-1.5 pr-3">
                         <div className="font-medium">{lead.name}</div>
-                        <div className="text-[10px] text-muted-foreground">{lead.email}</div>
+                        <div className="text-[10px] text-muted-foreground truncate">{lead.email}</div>
                       </td>
                       <td className="py-1.5 pr-3">{lead.company}</td>
                       <td className="py-1.5 pr-3">
@@ -425,7 +425,7 @@ export function InboundCaptureOutput({ data }: Props) {
               {crmSetup.pipelineStages.some((s: any) => s.autoActions?.length > 0) && (
                 <div className="mt-2 space-y-1">
                   {crmSetup.pipelineStages.filter((s: any) => s.autoActions?.length > 0).map((stage: any, idx: number) => (
-                    <div key={idx} className="text-[10px] text-muted-foreground">
+                    <div key={idx} className="text-[10px] text-muted-foreground break-words">
                       <span className="text-foreground">{stage.name}:</span> {stage.autoActions.join(' · ')}
                     </div>
                   ))}
@@ -465,10 +465,10 @@ export function InboundCaptureOutput({ data }: Props) {
               </div>
               <div className="space-y-1">
                 {crmSetup.webhookEndpoints.map((wh: any, idx: number) => (
-                  <div key={idx} className="flex items-center justify-between text-[10px] p-1.5 bg-muted/20 rounded">
-                    <div>
+                  <div key={idx} className="flex items-center justify-between text-[10px] p-1.5 bg-muted/20 rounded overflow-hidden">
+                    <div className="min-w-0 flex-1">
                       <span className="font-medium">{wh.source}</span>
-                      <span className="text-muted-foreground ml-2 font-mono">{wh.url}</span>
+                      <span className="text-muted-foreground ml-2 font-mono break-all">{wh.url}</span>
                     </div>
                     <div className="flex gap-1">
                       {wh.events?.map((ev: string, eIdx: number) => (
@@ -498,7 +498,7 @@ export function InboundCaptureOutput({ data }: Props) {
             <Sparkles className="w-4 h-4 text-cyan-400 flex-shrink-0" />
             <span className="text-xs sm:text-sm font-medium">Capture Strategy</span>
           </div>
-          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">{d.reasoning}</p>
+          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed break-words">{d.reasoning}</p>
         </div>
       )}
     </div>

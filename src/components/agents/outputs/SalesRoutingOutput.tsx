@@ -130,8 +130,8 @@ export function SalesRoutingOutput({ data }: Props) {
       </div>
 
       {/* Summary Metrics */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-3">
-        <div className="p-2.5 sm:p-3 rounded-lg border bg-green-500/5 border-green-500/20 overflow-hidden">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-3 overflow-hidden">
+        <div className="p-2.5 sm:p-3 rounded-lg border bg-green-500/5 border-green-500/20 overflow-hidden min-w-0">
           <div className="flex items-center gap-1.5 mb-1">
             <ShoppingCart className="w-3.5 h-3.5 text-green-400" />
             <span className="text-[10px] sm:text-xs text-green-400/80 font-medium uppercase tracking-wide">Checkout</span>
@@ -139,7 +139,7 @@ export function SalesRoutingOutput({ data }: Props) {
           <div className="text-xl sm:text-2xl font-bold text-green-400">{summary.checkout || 0}</div>
           <div className="text-[10px] text-muted-foreground mt-0.5">ready to buy</div>
         </div>
-        <div className="p-2.5 sm:p-3 rounded-lg border bg-blue-500/5 border-blue-500/20 overflow-hidden">
+        <div className="p-2.5 sm:p-3 rounded-lg border bg-blue-500/5 border-blue-500/20 overflow-hidden min-w-0">
           <div className="flex items-center gap-1.5 mb-1">
             <Calendar className="w-3.5 h-3.5 text-blue-400" />
             <span className="text-[10px] sm:text-xs text-blue-400/80 font-medium uppercase tracking-wide">Sales Call</span>
@@ -147,7 +147,7 @@ export function SalesRoutingOutput({ data }: Props) {
           <div className="text-xl sm:text-2xl font-bold text-blue-400">{summary.salesCall || 0}</div>
           <div className="text-[10px] text-muted-foreground mt-0.5">booked with rep</div>
         </div>
-        <div className="p-2.5 sm:p-3 rounded-lg border bg-yellow-500/5 border-yellow-500/20 overflow-hidden">
+        <div className="p-2.5 sm:p-3 rounded-lg border bg-yellow-500/5 border-yellow-500/20 overflow-hidden min-w-0">
           <div className="flex items-center gap-1.5 mb-1">
             <Mail className="w-3.5 h-3.5 text-yellow-400" />
             <span className="text-[10px] sm:text-xs text-yellow-400/80 font-medium uppercase tracking-wide">Nurture</span>
@@ -155,7 +155,7 @@ export function SalesRoutingOutput({ data }: Props) {
           <div className="text-xl sm:text-2xl font-bold text-yellow-400">{summary.nurture || 0}</div>
           <div className="text-[10px] text-muted-foreground mt-0.5">in drip sequence</div>
         </div>
-        <div className="p-2.5 sm:p-3 rounded-lg border bg-red-500/5 border-red-500/20 overflow-hidden">
+        <div className="p-2.5 sm:p-3 rounded-lg border bg-red-500/5 border-red-500/20 overflow-hidden min-w-0">
           <div className="flex items-center gap-1.5 mb-1">
             <XCircle className="w-3.5 h-3.5 text-red-400" />
             <span className="text-[10px] sm:text-xs text-red-400/80 font-medium uppercase tracking-wide">Disqualified</span>
@@ -163,13 +163,21 @@ export function SalesRoutingOutput({ data }: Props) {
           <div className="text-xl sm:text-2xl font-bold text-red-400">{summary.disqualified || 0}</div>
           <div className="text-[10px] text-muted-foreground mt-0.5">archived</div>
         </div>
-        <div className="p-2.5 sm:p-3 rounded-lg border bg-emerald-500/5 border-emerald-500/20 overflow-hidden">
+        <div className="p-2.5 sm:p-3 rounded-lg border bg-emerald-500/5 border-emerald-500/20 overflow-hidden min-w-0">
           <div className="flex items-center gap-1.5 mb-1">
-            <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="text-[10px] sm:text-xs text-emerald-400/80 font-medium uppercase tracking-wide">Conversion</span>
+            <TrendingUp className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <span className="text-[10px] sm:text-xs text-emerald-400/80 font-medium uppercase tracking-wide truncate">Conversion</span>
           </div>
-          <div className="text-xl sm:text-2xl font-bold text-emerald-400">{summary.conversionProjection || 0}%</div>
-          <div className="text-[10px] text-muted-foreground mt-0.5">projected rate</div>
+          <div className="text-xl sm:text-2xl font-bold text-emerald-400">
+            {typeof summary.conversionProjection === 'string'
+              ? (summary.conversionProjection.match(/(\d+)\s*closed/)?.[1] ?? summary.conversionProjection.match(/(\d+%)/)?.[1] ?? '—')
+              : `${summary.conversionProjection || 0}%`}
+          </div>
+          <div className="text-[10px] text-muted-foreground mt-0.5 truncate" title={typeof summary.conversionProjection === 'string' ? summary.conversionProjection : 'projected rate'}>
+            {typeof summary.conversionProjection === 'string'
+              ? summary.conversionProjection.replace(/^\d+\s*/, '').substring(0, 30)
+              : 'projected rate'}
+          </div>
         </div>
       </div>
 
@@ -288,17 +296,17 @@ export function SalesRoutingOutput({ data }: Props) {
                       )}
 
                       {/* Routing Reason */}
-                      <div className="p-2 bg-muted/30 rounded text-xs">
+                      <div className="p-2 bg-muted/30 rounded text-xs overflow-hidden">
                         <span className="text-muted-foreground">Reason: </span>
-                        <span className="font-medium">{lead.reason}</span>
+                        <span className="font-medium break-words">{lead.reason}</span>
                       </div>
 
                       {/* Destination */}
                       {lead.destination && (
-                        <div className="p-2 bg-muted/30 rounded text-xs flex items-center gap-2">
+                        <div className="p-2 bg-muted/30 rounded text-xs flex items-center gap-2 overflow-hidden">
                           <ArrowRight className="w-3 h-3 text-cyan-400 flex-shrink-0" />
-                          <span className="text-muted-foreground">Destination: </span>
-                          <span className="font-medium truncate">{lead.destination}</span>
+                          <span className="text-muted-foreground shrink-0">Destination: </span>
+                          <span className="font-medium truncate min-w-0">{lead.destination}</span>
                           <CopyButton text={lead.destination} />
                         </div>
                       )}
@@ -311,7 +319,7 @@ export function SalesRoutingOutput({ data }: Props) {
                             {lead.actions.map((action: string, aIdx: number) => (
                               <div key={aIdx} className="flex items-center gap-2 text-[10px]">
                                 <Check className="w-3 h-3 text-green-400 flex-shrink-0" />
-                                <span>{action}</span>
+                                <span className="break-words">{action}</span>
                               </div>
                             ))}
                           </div>
@@ -353,7 +361,7 @@ export function SalesRoutingOutput({ data }: Props) {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">{rule.name}</span>
+                      <span className="text-sm font-medium break-words">{rule.name}</span>
                       <span className="text-[10px] text-muted-foreground">Priority {rule.priority}</span>
                       {rule.sla && (
                         <span className="px-1.5 py-0.5 text-[9px] bg-muted rounded">SLA: {rule.sla}</span>
@@ -362,7 +370,7 @@ export function SalesRoutingOutput({ data }: Props) {
                     <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted-foreground">
                       <span>Score: {rule.condition?.scoreRange || '—'}</span>
                       <ArrowRight className="w-2.5 h-2.5" />
-                      <span className="font-medium text-foreground">{rule.destination}</span>
+                      <span className="font-medium text-foreground break-words">{rule.destination}</span>
                     </div>
                     {rule.condition?.additionalSignals?.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1">
@@ -438,7 +446,7 @@ export function SalesRoutingOutput({ data }: Props) {
                       <span className="font-medium uppercase">{notif.type}</span>
                       <span className="text-muted-foreground">to {notif.recipient}</span>
                     </div>
-                    <div className="text-muted-foreground mt-0.5 truncate">{notif.message}</div>
+                    <div className="text-muted-foreground mt-0.5 break-words">{notif.message}</div>
                   </div>
                 </div>
               );
@@ -454,7 +462,7 @@ export function SalesRoutingOutput({ data }: Props) {
             <Sparkles className="w-4 h-4 text-cyan-400 flex-shrink-0" />
             <span className="text-xs sm:text-sm font-medium">Routing Strategy</span>
           </div>
-          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">{d.reasoning}</p>
+          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed break-words">{d.reasoning}</p>
         </div>
       )}
     </div>

@@ -171,9 +171,9 @@ export function PerformanceOptimizationOutput({ data }: Props) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className={`text-[10px] font-bold uppercase ${sev.color}`}>{alert.severity}</span>
-                    <span className="text-xs font-medium">{alert.message}</span>
+                    <span className="text-xs font-medium break-words">{alert.message}</span>
                   </div>
-                  <div className="text-[10px] text-muted-foreground mt-0.5">{alert.action}</div>
+                  <div className="text-[10px] text-muted-foreground mt-0.5 break-words">{alert.action}</div>
                 </div>
               </div>
             );
@@ -219,9 +219,9 @@ export function PerformanceOptimizationOutput({ data }: Props) {
                   <div><span className="text-muted-foreground">Meetings: </span><span className="font-medium">{m.meetings}</span></div>
                 </div>
                 <div className="text-[10px]">
-                  <span className="font-medium text-foreground">{campaign.action}</span>
+                  <span className="font-medium text-foreground break-words">{campaign.action}</span>
                 </div>
-                <div className="text-[10px] text-muted-foreground mt-1">{campaign.reason}</div>
+                <div className="text-[10px] text-muted-foreground mt-1 break-words">{campaign.reason}</div>
               </div>
             );
           })}
@@ -294,7 +294,7 @@ export function PerformanceOptimizationOutput({ data }: Props) {
                   <span>CTR: {item.ctrTrend}</span>
                   <span>Frequency: {item.frequency}x/7d</span>
                 </div>
-                <div className="text-[10px]">{item.recommendation}</div>
+                <div className="text-[10px] break-words">{item.recommendation}</div>
               </div>
             ))}
           </div>
@@ -321,7 +321,7 @@ export function PerformanceOptimizationOutput({ data }: Props) {
                     <span className="text-xs font-medium">{rec.area}</span>
                   </div>
                   {rec.currentState && <div className="text-[10px] text-muted-foreground mb-1">Current: {rec.currentState}</div>}
-                  <div className="text-[10px] font-medium">{rec.recommendation}</div>
+                  <div className="text-[10px] font-medium break-words">{rec.recommendation}</div>
                   {rec.expectedImpact && <div className="text-[10px] text-green-400 mt-1">Impact: {rec.expectedImpact}</div>}
                 </div>
               );
@@ -408,7 +408,7 @@ export function PerformanceOptimizationOutput({ data }: Props) {
             <Sparkles className="w-4 h-4 text-amber-400 flex-shrink-0" />
             <span className="text-xs sm:text-sm font-medium">Optimization Strategy</span>
           </div>
-          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">{d.reasoning}</p>
+          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed break-words">{d.reasoning}</p>
         </div>
       )}
     </div>

@@ -240,7 +240,7 @@ export function ContentCreativeOutput({ data }: Props) {
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <div className="font-semibold text-sm text-blue-400">{ad.headline}</div>
-                        <p className="text-xs text-muted-foreground mt-1">{ad.description}</p>
+                        <p className="text-xs text-muted-foreground mt-1 break-words">{ad.description}</p>
                       </div>
                       <CopyButton text={`${ad.headline}\n${ad.description}`} />
                     </div>
@@ -266,7 +266,7 @@ export function ContentCreativeOutput({ data }: Props) {
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <div className="font-semibold text-sm">{ad.headline}</div>
-                        <p className="text-xs text-muted-foreground mt-0.5">{ad.description}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 break-words">{ad.description}</p>
                       </div>
                       <CopyButton text={`${ad.headline}\n${ad.description}\n\n${ad.primaryText}`} />
                     </div>
@@ -301,7 +301,7 @@ export function ContentCreativeOutput({ data }: Props) {
                     <span className={`inline-block px-2 py-0.5 text-[10px] rounded-full border mb-1.5 ${ANGLE_COLORS[hook.angle] || 'bg-muted text-muted-foreground'}`}>
                       {hook.angle.toUpperCase()}
                     </span>
-                    <p className="text-sm font-medium leading-relaxed">{hook.hook}</p>
+                    <p className="text-sm font-medium leading-relaxed break-words">{hook.hook}</p>
                   </div>
                   <CopyButton text={hook.hook} />
                 </div>
@@ -362,7 +362,7 @@ export function ContentCreativeOutput({ data }: Props) {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="text-[10px] font-medium text-sky-400 uppercase tracking-wide mb-1">{msg.label}</div>
-                    <p className="text-xs leading-relaxed">{msg.text}</p>
+                    <p className="text-xs leading-relaxed break-words">{msg.text}</p>
                   </div>
                   <CopyButton text={msg.text} />
                 </div>
@@ -396,15 +396,15 @@ export function ContentCreativeOutput({ data }: Props) {
                 <div className="space-y-1.5">
                   <div className="p-2 bg-red-500/5 rounded border-l-2 border-red-500/50">
                     <div className="text-[10px] font-medium text-red-400 mb-0.5">HOOK</div>
-                    <p className="text-xs leading-relaxed">{script.hook}</p>
+                    <p className="text-xs leading-relaxed break-words">{script.hook}</p>
                   </div>
                   <div className="p-2 bg-muted/20 rounded border-l-2 border-border">
                     <div className="text-[10px] font-medium text-muted-foreground mb-0.5">BODY</div>
-                    <p className="text-xs leading-relaxed">{script.body}</p>
+                    <p className="text-xs leading-relaxed break-words">{script.body}</p>
                   </div>
                   <div className="p-2 bg-green-500/5 rounded border-l-2 border-green-500/50">
                     <div className="text-[10px] font-medium text-green-400 mb-0.5">CTA</div>
-                    <p className="text-xs leading-relaxed">{script.cta}</p>
+                    <p className="text-xs leading-relaxed break-words">{script.cta}</p>
                   </div>
                 </div>
               </div>
@@ -427,7 +427,7 @@ export function ContentCreativeOutput({ data }: Props) {
                 <div className="flex items-center gap-2 mb-2">
                   <span className="px-2 py-0.5 text-[10px] bg-yellow-500/20 text-yellow-400 rounded">{brief.type}</span>
                 </div>
-                <p className="text-xs text-muted-foreground mb-2">{brief.description}</p>
+                <p className="text-xs text-muted-foreground mb-2 break-words">{brief.description}</p>
                 <div className="space-y-1">
                   {brief.talkingPoints.map((point, pIdx) => (
                     <div key={pIdx} className="flex items-start gap-1.5 text-xs">
@@ -457,15 +457,15 @@ export function ContentCreativeOutput({ data }: Props) {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                   <div className="p-2 bg-background/50 rounded">
                     <div className="text-[10px] font-medium text-pink-400 mb-0.5">Layout</div>
-                    <p className="text-muted-foreground">{brief.layout}</p>
+                    <p className="text-muted-foreground break-words">{brief.layout}</p>
                   </div>
                   <div className="p-2 bg-background/50 rounded">
                     <div className="text-[10px] font-medium text-purple-400 mb-0.5">Imagery</div>
-                    <p className="text-muted-foreground">{brief.imagery}</p>
+                    <p className="text-muted-foreground break-words">{brief.imagery}</p>
                   </div>
                   <div className="p-2 bg-background/50 rounded">
                     <div className="text-[10px] font-medium text-blue-400 mb-0.5">Text Overlay</div>
-                    <p className="text-muted-foreground">{brief.textOverlay}</p>
+                    <p className="text-muted-foreground break-words">{brief.textOverlay}</p>
                   </div>
                 </div>
               </div>
@@ -481,7 +481,7 @@ export function ContentCreativeOutput({ data }: Props) {
             <Sparkles className="w-4 h-4 text-pink-400 flex-shrink-0" />
             <span className="text-xs sm:text-sm font-medium">Creative Strategy</span>
           </div>
-          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">{displayData.reasoning}</p>
+          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed break-words">{displayData.reasoning}</p>
         </div>
       )}
     </div>

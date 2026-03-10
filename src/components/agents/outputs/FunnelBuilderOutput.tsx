@@ -204,8 +204,8 @@ export function FunnelBuilderOutput({ data }: Props) {
           {/* Hero Preview */}
           <div className="p-3 sm:p-4 bg-gradient-to-r from-blue-500/5 to-purple-500/5 rounded-lg border border-blue-500/20">
             <div className="text-xs uppercase tracking-wider text-blue-400 mb-1">Hero Headline</div>
-            <div className="text-base sm:text-lg font-bold mb-1">{funnelData.landingPage.headline}</div>
-            <div className="text-xs sm:text-sm text-muted-foreground">{funnelData.landingPage.subheadline}</div>
+            <div className="text-base sm:text-lg font-bold mb-1 break-words">{funnelData.landingPage.headline}</div>
+            <div className="text-xs sm:text-sm text-muted-foreground break-words">{funnelData.landingPage.subheadline}</div>
             <div className="mt-3 inline-block px-4 py-2 bg-blue-600 text-white text-xs sm:text-sm rounded-lg font-medium">
               {funnelData.landingPage.cta}
             </div>
@@ -215,8 +215,8 @@ export function FunnelBuilderOutput({ data }: Props) {
           {funnelData.landingPage.seoMeta && (
             <div className="p-2.5 sm:p-3 bg-muted/20 rounded-lg border border-border/50">
               <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">SEO Meta</div>
-              <div className="text-sm font-medium">{funnelData.landingPage.seoMeta.title}</div>
-              <div className="text-xs text-muted-foreground mt-0.5">{funnelData.landingPage.seoMeta.description}</div>
+              <div className="text-sm font-medium break-words">{funnelData.landingPage.seoMeta.title}</div>
+              <div className="text-xs text-muted-foreground mt-0.5 break-words">{funnelData.landingPage.seoMeta.description}</div>
             </div>
           )}
 
@@ -264,13 +264,13 @@ export function FunnelBuilderOutput({ data }: Props) {
           {/* Submit Action */}
           <div className="p-2.5 bg-muted/10 rounded-lg border border-border/50">
             <div className="text-xs text-muted-foreground mb-1">On Submit</div>
-            <div className="text-xs sm:text-sm">{funnelData.leadForm.submitAction}</div>
+            <div className="text-xs sm:text-sm break-words">{funnelData.leadForm.submitAction}</div>
           </div>
 
           {funnelData.leadForm.webhookUrl && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Zap className="w-3 h-3" />
-              <span>Webhook: <code className="text-xs bg-muted/30 px-1 py-0.5 rounded">{funnelData.leadForm.webhookUrl}</code></span>
+              <Zap className="w-3 h-3 shrink-0" />
+              <span className="min-w-0 break-all">Webhook: <code className="text-xs bg-muted/30 px-1 py-0.5 rounded break-all">{funnelData.leadForm.webhookUrl}</code></span>
             </div>
           )}
         </div>
@@ -292,7 +292,7 @@ export function FunnelBuilderOutput({ data }: Props) {
 
           <div className="p-2.5 bg-muted/10 rounded-lg border border-border/50">
             <div className="text-xs text-muted-foreground mb-1">Availability</div>
-            <div className="text-xs sm:text-sm">{funnelData.bookingCalendar.availability}</div>
+            <div className="text-xs sm:text-sm break-words">{funnelData.bookingCalendar.availability}</div>
           </div>
 
           <div className="flex items-center gap-2 p-2.5 bg-purple-500/5 rounded-lg border border-purple-500/20">
@@ -325,7 +325,7 @@ export function FunnelBuilderOutput({ data }: Props) {
         <div className="space-y-3">
           <div className="p-2.5 bg-muted/10 rounded-lg border border-border/50">
             <div className="text-xs text-muted-foreground mb-1">Pipeline</div>
-            <div className="text-sm font-medium">{funnelData.crmIntegration.pipeline}</div>
+            <div className="text-sm font-medium break-words">{funnelData.crmIntegration.pipeline}</div>
           </div>
 
           {/* Pipeline Stages Visual */}
@@ -429,7 +429,7 @@ export function FunnelBuilderOutput({ data }: Props) {
           <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-400 shrink-0" />
           <span className="text-xs sm:text-sm font-medium text-blue-400">Build Reasoning</span>
         </div>
-        <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+        <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed break-words">
           {funnelData.reasoning || data?.reasoning || ''}
         </p>
       </div>
@@ -665,7 +665,7 @@ function InfoCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="p-2.5 bg-muted/20 rounded-lg border border-border/50">
       <div className="text-xs text-muted-foreground mb-0.5">{label}</div>
-      <div className="text-xs sm:text-sm font-medium">{value}</div>
+      <div className="text-xs sm:text-sm font-medium break-words">{value}</div>
     </div>
   );
 }

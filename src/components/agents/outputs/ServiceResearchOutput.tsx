@@ -318,7 +318,7 @@ export function ServiceResearchOutput({ data, isLive = false }: Props) {
                   #{opp.rank}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="font-medium text-sm sm:text-base truncate">{opp.niche}</div>
+                  <div className="font-medium text-sm sm:text-base truncate break-words">{opp.niche}</div>
                   <div className="text-xs text-muted-foreground flex flex-wrap gap-x-2">
                     <span>Score: <span className="text-green-400 font-semibold">{opp.compositeScore}</span></span>
                     <span className="hidden xs:inline">•</span>
@@ -421,7 +421,7 @@ export function ServiceResearchOutput({ data, isLive = false }: Props) {
                 {/* Reasoning */}
                 <div className="p-2.5 sm:p-3 bg-muted/50 rounded-lg">
                   <div className="text-xs font-medium text-muted-foreground mb-1">Analysis</div>
-                  <p className="text-xs sm:text-sm leading-relaxed">{opp.reasoning}</p>
+                  <p className="text-xs sm:text-sm leading-relaxed break-words">{opp.reasoning}</p>
                 </div>
 
                 {/* Platform Mentions */}
@@ -513,7 +513,7 @@ export function ServiceResearchOutput({ data, isLive = false }: Props) {
           <BarChart3 className="w-4 h-4 text-blue-400 flex-shrink-0" />
           <span className="text-xs sm:text-sm font-medium">Research Summary</span>
         </div>
-        <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">{displayData.reasoning}</p>
+        <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed break-words">{displayData.reasoning}</p>
       </div>
     </div>
   );

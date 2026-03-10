@@ -328,7 +328,7 @@ export function AIQualificationOutput({ data }: Props) {
                       {/* Routing Action */}
                       <div className="p-2 bg-muted/30 rounded text-xs">
                         <span className="text-muted-foreground">Routing: </span>
-                        <span className="font-medium">{call.routingAction}</span>
+                        <span className="font-medium break-words">{call.routingAction}</span>
                       </div>
 
                       {/* Transcript */}
@@ -367,7 +367,7 @@ export function AIQualificationOutput({ data }: Props) {
                 <span className="text-[10px] font-medium text-blue-400 uppercase tracking-wide">Greeting</span>
                 <CopyButton text={callScript.greeting} />
               </div>
-              <p className="text-xs leading-relaxed">{callScript.greeting}</p>
+              <p className="text-xs leading-relaxed break-words">{callScript.greeting}</p>
             </div>
           )}
 
@@ -389,8 +389,8 @@ export function AIQualificationOutput({ data }: Props) {
                         {key === 'budget' ? '(30 pts)' : key === 'authority' ? '(25 pts)' : key === 'need' ? '(25 pts)' : '(20 pts)'}
                       </span>
                     </div>
-                    <p className="text-xs font-medium mb-1">{q.question}</p>
-                    {q.followUp && <p className="text-[10px] text-muted-foreground italic mb-1.5">Follow-up: {q.followUp}</p>}
+                    <p className="text-xs font-medium mb-1 break-words">{q.question}</p>
+                    {q.followUp && <p className="text-[10px] text-muted-foreground italic mb-1.5 break-words">Follow-up: {q.followUp}</p>}
                     {q.goodAnswers?.length > 0 && (
                       <div className="flex flex-wrap gap-1">
                         {q.goodAnswers.map((a: string, aIdx: number) => (
@@ -419,7 +419,7 @@ export function AIQualificationOutput({ data }: Props) {
                         </span>
                         <CopyButton text={script} />
                       </div>
-                      <p className="text-[10px] text-muted-foreground leading-relaxed">{script}</p>
+                      <p className="text-[10px] text-muted-foreground leading-relaxed break-words">{script}</p>
                     </div>
                   );
                 })}
@@ -444,7 +444,7 @@ export function AIQualificationOutput({ data }: Props) {
                   <span className="text-xs font-medium text-yellow-400">"{objection}"</span>
                   <CopyButton text={response} />
                 </div>
-                <p className="text-[10px] text-muted-foreground leading-relaxed">{response}</p>
+                <p className="text-[10px] text-muted-foreground leading-relaxed break-words">{response}</p>
               </div>
             ))}
           </div>
@@ -500,7 +500,7 @@ export function AIQualificationOutput({ data }: Props) {
           {voiceConfig.consentScript && (
             <div className="mt-2 p-2 bg-violet-500/5 rounded border border-violet-500/10 text-[10px]">
               <Shield className="w-3 h-3 text-violet-400 inline mr-1" />
-              <span className="text-muted-foreground">Consent: </span>{voiceConfig.consentScript}
+              <span className="text-muted-foreground">Consent: </span><span className="break-words">{voiceConfig.consentScript}</span>
             </div>
           )}
         </div>
@@ -513,7 +513,7 @@ export function AIQualificationOutput({ data }: Props) {
             <Sparkles className="w-4 h-4 text-violet-400 flex-shrink-0" />
             <span className="text-xs sm:text-sm font-medium">Qualification Strategy</span>
           </div>
-          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">{d.reasoning}</p>
+          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed break-words">{d.reasoning}</p>
         </div>
       )}
     </div>

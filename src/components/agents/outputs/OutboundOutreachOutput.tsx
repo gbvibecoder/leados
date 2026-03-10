@@ -260,7 +260,7 @@ export function OutboundOutreachOutput({ data }: Props) {
                 <Target className="w-3 h-3 text-emerald-400" />
                 <span className="text-[10px] font-medium text-emerald-400 uppercase tracking-wide">Prospect Criteria</span>
               </div>
-              <p className="text-xs text-muted-foreground">{coldEmail.prospectCriteria.icpMatch}</p>
+              <p className="text-xs text-muted-foreground break-words">{coldEmail.prospectCriteria.icpMatch}</p>
               {coldEmail.prospectCriteria.sources?.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-2">
                   {coldEmail.prospectCriteria.sources.map((src: string, idx: number) => (
@@ -283,7 +283,7 @@ export function OutboundOutreachOutput({ data }: Props) {
                   <span key={idx} className="px-1.5 py-0.5 text-[10px] bg-blue-500/10 text-blue-400 rounded">{domain}</span>
                 ))}
               </div>
-              <div className="text-[10px] text-muted-foreground">{coldEmail.domains.warmupStatus}</div>
+              <div className="text-[10px] text-muted-foreground break-words">{coldEmail.domains.warmupStatus}</div>
             </div>
           )}
 
@@ -397,7 +397,7 @@ export function OutboundOutreachOutput({ data }: Props) {
           {linkedIn.connectionStrategy && (
             <div className="p-2.5 bg-sky-500/5 rounded-lg border border-sky-500/10">
               <div className="text-[10px] font-medium text-sky-400 mb-1">Connection Strategy</div>
-              <p className="text-xs text-muted-foreground">{linkedIn.connectionStrategy}</p>
+              <p className="text-xs text-muted-foreground break-words">{linkedIn.connectionStrategy}</p>
             </div>
           )}
 
@@ -448,7 +448,7 @@ export function OutboundOutreachOutput({ data }: Props) {
                       {linkedIn.targetingCriteria.additionalFilters.map((filter: string, idx: number) => (
                         <div key={idx} className="text-[10px] flex items-center gap-1">
                           <div className="w-1 h-1 rounded-full bg-sky-400 flex-shrink-0" />
-                          {filter}
+                          <span className="break-words min-w-0">{filter}</span>
                         </div>
                       ))}
                     </div>
@@ -527,13 +527,13 @@ export function OutboundOutreachOutput({ data }: Props) {
                 {linkedIn.profileOptimization.headline && (
                   <div>
                     <span className="text-[10px] text-muted-foreground">Headline:</span>
-                    <p className="font-medium mt-0.5">{linkedIn.profileOptimization.headline}</p>
+                    <p className="font-medium mt-0.5 break-words">{linkedIn.profileOptimization.headline}</p>
                   </div>
                 )}
                 {linkedIn.profileOptimization.about && (
                   <div>
                     <span className="text-[10px] text-muted-foreground">About:</span>
-                    <p className="text-muted-foreground mt-0.5">{linkedIn.profileOptimization.about}</p>
+                    <p className="text-muted-foreground mt-0.5 break-words">{linkedIn.profileOptimization.about}</p>
                   </div>
                 )}
                 {linkedIn.profileOptimization.bannerCTA && (
@@ -611,7 +611,7 @@ export function OutboundOutreachOutput({ data }: Props) {
             <Sparkles className="w-4 h-4 text-emerald-400 flex-shrink-0" />
             <span className="text-xs sm:text-sm font-medium">Outbound Strategy</span>
           </div>
-          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">{d.reasoning}</p>
+          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed break-words">{d.reasoning}</p>
         </div>
       )}
     </div>
