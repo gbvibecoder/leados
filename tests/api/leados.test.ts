@@ -3,12 +3,13 @@ import { GET as GET_LEADS } from '@/app/api/leados/leads/route';
 import { GET as GET_ANALYTICS } from '@/app/api/leados/analytics/route';
 
 describe('GET /api/leados/leads', () => {
-  it('returns 200 with 15 mock leads', async () => {
+  it('returns 200 with leads from database', async () => {
     const req = new Request('http://localhost:3000/api/leados/leads');
     const res = await GET_LEADS(req);
     const data = await res.json();
     expect(res.status).toBe(200);
-    expect(data).toHaveLength(15);
+    expect(Array.isArray(data)).toBe(true);
+    expect(data.length).toBeGreaterThan(0);
   });
 
   it('each lead has required fields', async () => {

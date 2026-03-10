@@ -80,7 +80,7 @@ export function Sidebar() {
               <Bot className="h-4 w-4 text-indigo-400" />
               <span className="text-xs font-medium text-zinc-300">AI Engine</span>
             </div>
-            <p className="mt-1 text-xs text-zinc-500">Claude Sonnet 4</p>
+            <p className="mt-1 text-xs text-zinc-500">Gemini 2.0 Flash</p>
           </div>
         </div>
       )}

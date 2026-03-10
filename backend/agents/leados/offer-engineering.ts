@@ -76,7 +76,7 @@ export class OfferEngineeringAgent extends BaseAgent {
         previousOutputs: inputs.previousOutputs || {},
       });
       const response = await this.callClaude(SYSTEM_PROMPT, userMessage);
-      const parsed = this.parseLLMJson<any>(response);
+      const parsed = this.safeParseLLMJson<any>(response, ['offer']);
       this.status = 'done';
       await this.log('run_completed', { output: parsed });
       return {
@@ -100,35 +100,60 @@ export class OfferEngineeringAgent extends BaseAgent {
 
   private getMockOutput(inputs: AgentInput): any {
     const serviceResearch = inputs.previousOutputs?.['service-research'];
-    const niche = serviceResearch?.data?.opportunities?.[0]?.niche || 'AI-Powered Content Marketing';
+    const topOpp = serviceResearch?.data?.opportunities?.[0];
+    const niche = topOpp?.niche || 'AI-Powered Content Marketing';
+    const marketSize = topOpp?.estimatedMarketSize || '$4.2B';
+    const risingQueries = topOpp?.risingQueries || ['AI lead generation', 'automated outbound', 'B2B sales automation'];
+    const trendsScore = topOpp?.googleTrendsScore || 78;
+    const platforms = topOpp?.targetPlatforms || ['LinkedIn', 'Google Ads'];
+
+    // Adapt ICP based on niche
+    const nicheConfigs: Record<string, { industry: string; companySize: string; revenue: string; decisionMaker: string; painPrefix: string }> = {
+      default: { industry: 'B2B SaaS & Technology', companySize: '10-200 employees', revenue: '$1M-$50M ARR', decisionMaker: 'VP of Marketing / Head of Growth / CMO', painPrefix: 'lead generation' },
+    };
+
+    const nicheKey = niche.toLowerCase();
+    let config = nicheConfigs.default;
+    if (nicheKey.includes('shopify') || nicheKey.includes('ecommerce') || nicheKey.includes('dtc')) {
+      config = { industry: 'E-Commerce & DTC Brands', companySize: '5-100 employees', revenue: '$500K-$20M revenue', decisionMaker: 'Founder / Head of Marketing / E-Commerce Manager', painPrefix: 'customer acquisition' };
+    } else if (nicheKey.includes('linkedin') || nicheKey.includes('b2b lead')) {
+      config = { industry: 'B2B Services & Consulting', companySize: '10-500 employees', revenue: '$2M-$100M revenue', decisionMaker: 'VP Sales / Head of Business Development / CRO', painPrefix: 'qualified pipeline generation' };
+    } else if (nicheKey.includes('saas') && nicheKey.includes('onboarding')) {
+      config = { industry: 'SaaS & Product-Led Growth', companySize: '20-300 employees', revenue: '$2M-$50M ARR', decisionMaker: 'VP Product / Head of Growth / CPO', painPrefix: 'user activation and retention' };
+    } else if (nicheKey.includes('content') || nicheKey.includes('creative')) {
+      config = { industry: 'Digital Marketing & Content', companySize: '5-200 employees', revenue: '$500K-$30M revenue', decisionMaker: 'CMO / Head of Content / Marketing Director', painPrefix: 'content-driven lead generation' };
+    } else if (nicheKey.includes('paid media') || nicheKey.includes('ads') || nicheKey.includes('traffic')) {
+      config = { industry: 'Performance Marketing & Media Buying', companySize: '10-200 employees', revenue: '$1M-$50M revenue', decisionMaker: 'VP Marketing / Performance Marketing Manager / CMO', painPrefix: 'paid acquisition at scale' };
+    }
+
+    const slug = niche.replace(/[^a-zA-Z0-9]+/g, ' ').trim().split(' ').slice(0, 3).join(' ');
+    const serviceName = `LeadFlow AI — ${slug} Engine`;
 
     return {
       offer: {
-        serviceName: 'LeadFlow AI — Autonomous Lead Generation Engine',
+        serviceName,
         icp: {
-          description:
-            'B2B SaaS companies with 10-200 employees and $1M-$50M ARR that are struggling with inconsistent lead flow, high customer acquisition costs, and over-reliance on founder-led sales. They have a proven product but need a scalable, predictable pipeline to hit their next growth milestone.',
-          companySize: '10-200 employees',
-          revenue: '$1M-$50M ARR',
-          industry: 'B2B SaaS & Technology',
-          decisionMaker: 'VP of Marketing / Head of Growth / CMO',
+          description: `${config.industry} companies with ${config.companySize} and ${config.revenue} that are struggling with ${config.painPrefix}, high customer acquisition costs, and inability to scale outbound. They need a predictable, autonomous pipeline to hit their next growth milestone.`,
+          companySize: config.companySize,
+          revenue: config.revenue,
+          industry: config.industry,
+          decisionMaker: config.decisionMaker,
         },
         painPoints: [
-          'Inconsistent lead flow — feast-or-famine pipeline that makes revenue forecasting impossible',
+          `Inconsistent ${config.painPrefix} — feast-or-famine pipeline that makes revenue forecasting impossible`,
           'High CAC that erodes margins — spending $200+ per lead on channels that don\'t convert',
           'Sales team wastes 60% of time on unqualified leads that were never going to buy',
           'No attribution visibility — can\'t tell which channels actually drive revenue vs. vanity metrics',
-          'Founder-led sales bottleneck — CEO still closes most deals because no repeatable system exists',
+          `Over-reliance on manual processes — no scalable system for ${config.painPrefix}`,
         ],
-        transformationPromise:
-          'Double your qualified leads in 90 days with fully autonomous AI-powered lead generation — or get a full refund',
+        transformationPromise: `Double your qualified leads in 90 days with fully autonomous AI-powered ${config.painPrefix} — or get a full refund`,
         pricingTiers: [
           {
             name: 'Starter',
             price: 2997,
             billingCycle: 'monthly',
             features: [
-              'Up to 5 active campaigns (Google Ads + Meta)',
+              `Up to 5 active campaigns (${platforms.slice(0, 2).join(' + ')})`,
               'AI-powered lead scoring & qualification',
               '500 outbound emails/month via Instantly',
               'Basic landing page (1 variant)',
@@ -171,20 +196,16 @@ export class OfferEngineeringAgent extends BaseAgent {
             ],
           },
         ],
-        guarantee:
-          '90-Day Double-or-Refund Guarantee: If we don\'t at least double your qualified lead volume within 90 days of launch, we\'ll refund 100% of your fees — no questions asked. We track everything, so there\'s full transparency on what "qualified" means.',
-        positioning:
-          'Unlike traditional agencies that charge retainers for manual work with opaque results, LeadFlow AI is a fully autonomous system — 13 AI agents working 24/7 across every channel. You get the output of an entire marketing department at a fraction of the cost, with complete attribution transparency and performance guarantees that agencies refuse to offer.',
-        uniqueMechanism:
-          'The LeadOS 13-Agent Orchestration Engine — a proprietary AI pipeline where specialized agents handle every stage from market research to CRM hygiene, communicating via real-time message queues. Each agent optimizes its domain autonomously while the Performance Optimization Agent reallocates budget across channels every 6 hours based on actual revenue attribution, not vanity metrics.',
+        guarantee: `90-Day Double-or-Refund Guarantee: If we don't at least double your qualified lead volume within 90 days of launch, we'll refund 100% of your fees — no questions asked.`,
+        positioning: `Unlike traditional agencies that charge retainers for manual work with opaque results, ${serviceName} is a fully autonomous system — 13 AI agents working 24/7 across every channel. You get the output of an entire marketing department at a fraction of the cost, with complete attribution transparency and performance guarantees.`,
+        uniqueMechanism: 'The LeadOS 13-Agent Orchestration Engine — a proprietary AI pipeline where specialized agents handle every stage from market research to CRM hygiene, communicating via real-time message queues. Each agent optimizes its domain autonomously while the Performance Optimization Agent reallocates budget across channels every 6 hours based on actual revenue attribution.',
         trendInsights: {
-          searchInterest: 78,
-          risingKeywords: ['AI lead generation', 'automated outbound', 'B2B sales automation', 'AI SDR'],
+          searchInterest: trendsScore,
+          risingKeywords: risingQueries,
           topRegions: ['California', 'Texas', 'New York', 'Florida', 'Washington'],
         },
       },
-      reasoning:
-        `Analyzed the "${niche}" opportunity from service research. ICP narrowed to B2B SaaS because they have the highest LTV ($4,500+ average), understand the value of lead generation, and have budget to invest. Pricing anchored at $2,997 Starter to filter out non-serious buyers while Enterprise at $9,997 captures high-value accounts. The 90-day guarantee removes risk and accelerates decision-making. Unique mechanism leverages the actual LeadOS architecture as a competitive moat.`,
+      reasoning: `Analyzed the "${niche}" opportunity (market size: ${marketSize}). ICP narrowed to ${config.industry} with ${config.decisionMaker} as buyer. Pricing anchored at $2,997 Starter to filter non-serious buyers while Enterprise at $9,997 captures high-value accounts. Google Trends score of ${trendsScore}/100 with rising queries: ${risingQueries.join(', ')}.`,
       confidence: 88,
     };
   }

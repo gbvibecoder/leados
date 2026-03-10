@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, Fragment } from 'react';
-import { Users, Search, Filter, ChevronDown, ChevronRight, Mail, Phone as PhoneIcon, Calendar, Bot, ArrowUpDown } from 'lucide-react';
+import { Users, Search, ChevronRight, Mail, Phone as PhoneIcon, Calendar, Bot, Plus, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { leados } from '@/lib/api';
 import { ErrorBoundary } from '@/components/layout/error-boundary';
@@ -15,15 +15,6 @@ const stageColors: Record<string, string> = {
   lost: 'bg-red-900/50 text-red-300',
 };
 
-const mockInteractions = [
-  { type: 'email_sent', content: 'Initial outreach — "Quick question about your growth strategy"', timestamp: '2026-03-01T10:00:00Z' },
-  { type: 'email_opened', content: 'Email opened 3 times', timestamp: '2026-03-01T14:30:00Z' },
-  { type: 'link_clicked', content: 'Clicked landing page link', timestamp: '2026-03-01T14:32:00Z' },
-  { type: 'form_submitted', content: 'Submitted contact form with phone number', timestamp: '2026-03-02T09:15:00Z' },
-  { type: 'ai_call', content: 'AI qualification call — Duration: 4m 32s — Score: 82/100 — Outcome: High Intent', timestamp: '2026-03-02T11:00:00Z' },
-  { type: 'routed', content: 'Routed to sales calendar — Booking link sent', timestamp: '2026-03-02T11:05:00Z' },
-];
-
 const typeIcons: Record<string, typeof Mail> = {
   email_sent: Mail,
   email_opened: Mail,
@@ -33,6 +24,64 @@ const typeIcons: Record<string, typeof Mail> = {
   routed: Calendar,
 };
 
+function AddLeadModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
+  const [form, setForm] = useState({ name: '', email: '', company: '', phone: '', source: 'organic', stage: 'new', segment: 'smb', notes: '' });
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await fetch('/api/leados/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      onAdded();
+      onClose();
+    } catch {
+      alert('Failed to add lead');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+      <form onSubmit={handleSubmit} className="w-full max-w-md rounded-xl border border-zinc-700 bg-zinc-900 p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-white">Add New Lead</h2>
+          <button type="button" onClick={onClose} className="text-zinc-400 hover:text-white"><X className="h-5 w-5" /></button>
+        </div>
+        <input required placeholder="Name *" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:border-indigo-500 focus:outline-none" />
+        <input placeholder="Email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:border-indigo-500 focus:outline-none" />
+        <input placeholder="Company" value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:border-indigo-500 focus:outline-none" />
+        <input placeholder="Phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:border-indigo-500 focus:outline-none" />
+        <div className="grid grid-cols-2 gap-3">
+          <select value={form.source} onChange={e => setForm({ ...form, source: e.target.value })} className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 focus:outline-none">
+            <option value="google_ads">Google Ads</option>
+            <option value="meta_ads">Meta Ads</option>
+            <option value="linkedin">LinkedIn</option>
+            <option value="cold_email">Cold Email</option>
+            <option value="organic">Organic</option>
+            <option value="referral">Referral</option>
+            <option value="webinar">Webinar</option>
+          </select>
+          <select value={form.segment} onChange={e => setForm({ ...form, segment: e.target.value })} className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 focus:outline-none">
+            <option value="enterprise">Enterprise</option>
+            <option value="mid_market">Mid-Market</option>
+            <option value="smb">SMB</option>
+          </select>
+        </div>
+        <textarea placeholder="Notes (optional)" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={2} className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:border-indigo-500 focus:outline-none" />
+        <button type="submit" disabled={saving} className="w-full rounded-lg bg-indigo-600 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50">
+          {saving ? 'Adding...' : 'Add Lead'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 function LeadsPageInner() {
   const [leads, setLeads] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,8 +89,9 @@ function LeadsPageInner() {
   const [sourceFilter, setSourceFilter] = useState('');
   const [search, setSearch] = useState('');
   const [expandedLead, setExpandedLead] = useState<string | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
 
-  useEffect(() => {
+  const fetchLeads = () => {
     setLoading(true);
     const params: Record<string, string> = {};
     if (stageFilter) params.stage = stageFilter;
@@ -50,6 +100,10 @@ function LeadsPageInner() {
       .then(setLeads)
       .catch(() => setLeads([]))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchLeads();
   }, [stageFilter, sourceFilter]);
 
   const filtered = leads.filter(l => {
@@ -60,10 +114,17 @@ function LeadsPageInner() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-white">Leads / CRM</h1>
-        <p className="mt-1 text-sm text-zinc-400">Manage and track all captured leads</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-white">Leads / CRM</h1>
+          <p className="mt-1 text-sm text-zinc-400">Manage and track all captured leads &middot; {leads.length} total</p>
+        </div>
+        <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500">
+          <Plus className="h-4 w-4" /> Add Lead
+        </button>
       </div>
+
+      {showAddModal && <AddLeadModal onClose={() => setShowAddModal(false)} onAdded={fetchLeads} />}
 
       {/* Pipeline Stage Overview */}
       <div className="grid gap-3 sm:grid-cols-3 md:grid-cols-6">
@@ -169,22 +230,39 @@ function LeadsPageInner() {
                 {expandedLead === lead.id && (
                   <tr key={`${lead.id}_expanded`}>
                     <td colSpan={6} className="bg-zinc-900/30 px-8 py-4">
-                      <h4 className="mb-3 text-sm font-medium text-zinc-200">Activity Timeline</h4>
-                      <div className="space-y-3">
-                        {mockInteractions.map((interaction, i) => {
-                          const Icon = typeIcons[interaction.type] || Mail;
-                          return (
-                            <div key={i} className="flex gap-3">
-                              <div className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-zinc-800">
-                                <Icon className="h-3 w-3 text-zinc-400" />
-                              </div>
-                              <div>
-                                <p className="text-sm text-zinc-300">{interaction.content}</p>
-                                <p className="text-xs text-zinc-500">{new Date(interaction.timestamp).toLocaleString()}</p>
-                              </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div>
+                          <h4 className="mb-2 text-sm font-medium text-zinc-200">Contact Info</h4>
+                          <div className="space-y-1 text-sm text-zinc-400">
+                            {lead.email && <p className="flex items-center gap-2"><Mail className="h-3.5 w-3.5" /> {lead.email}</p>}
+                            {lead.phone && <p className="flex items-center gap-2"><PhoneIcon className="h-3.5 w-3.5" /> {lead.phone}</p>}
+                            {lead.segment && <p>Segment: <span className="capitalize text-zinc-300">{lead.segment?.replace('_', ' ')}</span></p>}
+                            {lead.notes && <p className="mt-2 text-zinc-500 italic">{lead.notes}</p>}
+                          </div>
+                        </div>
+                        <div>
+                          <h4 className="mb-2 text-sm font-medium text-zinc-200">Activity Timeline</h4>
+                          {lead.interactions && lead.interactions.length > 0 ? (
+                            <div className="space-y-3">
+                              {lead.interactions.map((interaction: any, i: number) => {
+                                const Icon = typeIcons[interaction.type] || Mail;
+                                return (
+                                  <div key={i} className="flex gap-3">
+                                    <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-800">
+                                      <Icon className="h-3 w-3 text-zinc-400" />
+                                    </div>
+                                    <div>
+                                      <p className="text-sm text-zinc-300">{interaction.content}</p>
+                                      <p className="text-xs text-zinc-500">{new Date(interaction.timestamp).toLocaleString()}</p>
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
-                          );
-                        })}
+                          ) : (
+                            <p className="text-sm text-zinc-500">No interactions recorded yet</p>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>

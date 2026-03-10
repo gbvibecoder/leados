@@ -73,6 +73,14 @@ interface Props {
   isLive?: boolean;
 }
 
+/** Format large numbers into readable short form with unit suffix */
+function formatCount(n: number): { value: string; suffix: string; full: string } {
+  const full = n.toLocaleString();
+  if (n >= 1_000_000) return { value: (n / 1_000_000).toFixed(1), suffix: 'M', full };
+  if (n >= 1_000) return { value: (n / 1_000).toFixed(1), suffix: 'K', full };
+  return { value: n.toString(), suffix: '', full };
+}
+
 export function ServiceResearchOutput({ data, isLive = false }: Props) {
   const [liveData, setLiveData] = useState<TrendResearchResult | null>(null);
   const [loading, setLoading] = useState(isLive);
@@ -194,47 +202,90 @@ export function ServiceResearchOutput({ data, isLive = false }: Props) {
       )}
 
       {/* Data Sources Summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-3">
-        {/* Google Trends - Primary */}
-        <div className="p-2 sm:p-3 bg-green-500/10 rounded-lg border border-green-500/20 flex sm:block items-center justify-between">
-          <div className="text-xs text-muted-foreground sm:hidden">Trends</div>
-          <div className="flex items-center gap-1.5 sm:block">
-            <Search className="w-4 h-4 text-green-400 sm:hidden" />
-            <div className="text-lg sm:text-2xl font-bold text-green-400">
-              {displayData.dataSourcesSummary.googleTrends?.avgInterest || 0}
+      {(() => {
+        const reddit = formatCount(displayData.dataSourcesSummary.reddit.postsAnalyzed);
+        const linkedin = formatCount(displayData.dataSourcesSummary.linkedin?.postsAnalyzed || 0);
+        const upwork = formatCount(displayData.dataSourcesSummary.upwork?.jobsAnalyzed || 0);
+        return (
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-3">
+            {/* Google Trends */}
+            <div className="p-2.5 sm:p-3 bg-green-500/10 rounded-lg border border-green-500/20 overflow-hidden">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Search className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
+                <span className="text-[10px] sm:text-xs text-green-400/80 font-medium uppercase tracking-wide">Google Trends</span>
+              </div>
+              <div className="flex items-baseline gap-0.5">
+                <span className="text-xl sm:text-2xl font-bold text-green-400">
+                  {displayData.dataSourcesSummary.googleTrends?.avgInterest || 0}
+                </span>
+                <span className="text-xs text-green-400/60 font-medium">/100</span>
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">Avg Interest Score</div>
+            </div>
+
+            {/* Reddit */}
+            <div className="p-2.5 sm:p-3 bg-orange-500/10 rounded-lg border border-orange-500/20 overflow-hidden" title={`${reddit.full} posts analyzed`}>
+              <div className="flex items-center gap-1.5 mb-1">
+                <div className="w-3.5 h-3.5 rounded-full bg-orange-500/30 flex items-center justify-center flex-shrink-0">
+                  <span className="text-[8px] font-bold text-orange-400">R</span>
+                </div>
+                <span className="text-[10px] sm:text-xs text-orange-400/80 font-medium uppercase tracking-wide">Reddit</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse ml-auto flex-shrink-0" />
+              </div>
+              <div className="flex items-baseline gap-0.5">
+                <span className="text-xl sm:text-2xl font-bold text-orange-400">{reddit.value}</span>
+                {reddit.suffix && <span className="text-sm sm:text-base font-semibold text-orange-400/70">{reddit.suffix}</span>}
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">Posts Analyzed</div>
+            </div>
+
+            {/* LinkedIn */}
+            <div className="p-2.5 sm:p-3 bg-blue-500/10 rounded-lg border border-blue-500/20 overflow-hidden" title={`${linkedin.full} LinkedIn posts found`}>
+              <div className="flex items-center gap-1.5 mb-1">
+                <div className="w-3.5 h-3.5 rounded-sm bg-blue-500/30 flex items-center justify-center flex-shrink-0">
+                  <span className="text-[8px] font-bold text-blue-400">in</span>
+                </div>
+                <span className="text-[10px] sm:text-xs text-blue-400/80 font-medium uppercase tracking-wide">LinkedIn</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse ml-auto flex-shrink-0" />
+              </div>
+              <div className="flex items-baseline gap-0.5">
+                <span className="text-xl sm:text-2xl font-bold text-blue-400">{linkedin.value}</span>
+                {linkedin.suffix && <span className="text-sm sm:text-base font-semibold text-blue-400/70">{linkedin.suffix}</span>}
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">Posts Found</div>
+            </div>
+
+            {/* Upwork */}
+            <div className="p-2.5 sm:p-3 bg-emerald-500/10 rounded-lg border border-emerald-500/20 overflow-hidden" title={`${upwork.full} Upwork jobs found`}>
+              <div className="flex items-center gap-1.5 mb-1">
+                <div className="w-3.5 h-3.5 rounded-full bg-emerald-500/30 flex items-center justify-center flex-shrink-0">
+                  <span className="text-[8px] font-bold text-emerald-400">U</span>
+                </div>
+                <span className="text-[10px] sm:text-xs text-emerald-400/80 font-medium uppercase tracking-wide">Upwork</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse ml-auto flex-shrink-0" />
+              </div>
+              <div className="flex items-baseline gap-0.5">
+                <span className="text-xl sm:text-2xl font-bold text-emerald-400">{upwork.value}</span>
+                {upwork.suffix && <span className="text-sm sm:text-base font-semibold text-emerald-400/70">{upwork.suffix}</span>}
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">Jobs Found</div>
+            </div>
+
+            {/* Confidence */}
+            <div className="p-2.5 sm:p-3 bg-purple-500/10 rounded-lg border border-purple-500/20 overflow-hidden">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Award className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
+                <span className="text-[10px] sm:text-xs text-purple-400/80 font-medium uppercase tracking-wide">Confidence</span>
+              </div>
+              <div className="flex items-baseline gap-0.5">
+                <span className="text-xl sm:text-2xl font-bold text-purple-400">{displayData.confidence}</span>
+                <span className="text-sm sm:text-base font-semibold text-purple-400/70">%</span>
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">Data Reliability</div>
             </div>
           </div>
-          <div className="text-xs text-muted-foreground hidden sm:block">Google Trends</div>
-        </div>
-        <div className="p-2 sm:p-3 bg-orange-500/10 rounded-lg border border-orange-500/20 flex sm:block items-center justify-between">
-          <div className="text-xs text-muted-foreground sm:hidden">Reddit</div>
-          <div className="text-lg sm:text-2xl font-bold text-orange-400">
-            {displayData.dataSourcesSummary.reddit.postsAnalyzed.toLocaleString()}
-          </div>
-          <div className="text-xs text-muted-foreground hidden sm:block">Reddit Posts</div>
-        </div>
-        <div className="p-2 sm:p-3 bg-blue-500/10 rounded-lg border border-blue-500/20 flex sm:block items-center justify-between">
-          <div className="text-xs text-muted-foreground sm:hidden">LinkedIn</div>
-          <div className="text-lg sm:text-2xl font-bold text-blue-400">
-            {displayData.dataSourcesSummary.linkedin?.postsAnalyzed || 0}
-          </div>
-          <div className="text-xs text-muted-foreground hidden sm:block">LinkedIn Posts</div>
-        </div>
-        <div className="p-2 sm:p-3 bg-emerald-500/10 rounded-lg border border-emerald-500/20 flex sm:block items-center justify-between">
-          <div className="text-xs text-muted-foreground sm:hidden">Upwork</div>
-          <div className="text-lg sm:text-2xl font-bold text-emerald-400">
-            {displayData.dataSourcesSummary.upwork?.jobsAnalyzed || 0}
-          </div>
-          <div className="text-xs text-muted-foreground hidden sm:block">Upwork Jobs</div>
-        </div>
-        <div className="p-2 sm:p-3 bg-purple-500/10 rounded-lg border border-purple-500/20 flex sm:block items-center justify-between">
-          <div className="text-xs text-muted-foreground sm:hidden">Score</div>
-          <div className="text-lg sm:text-2xl font-bold text-purple-400">
-            {displayData.confidence}%
-          </div>
-          <div className="text-xs text-muted-foreground hidden sm:block">Confidence</div>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* Ranked Opportunities List */}
       <div className="space-y-3">
@@ -374,27 +425,44 @@ export function ServiceResearchOutput({ data, isLive = false }: Props) {
                 </div>
 
                 {/* Platform Mentions */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-                  <div className="p-2.5 sm:p-3 bg-green-500/5 rounded-lg border border-green-500/10">
-                    <div className="flex items-center gap-1">
-                      <Search className="w-3.5 h-3.5 text-green-400" />
-                      <span className="text-base sm:text-lg font-bold text-green-400">{opp.trendData.googleTrendsScore || 0}</span>
+                {(() => {
+                  const oppReddit = formatCount(opp.trendData.redditMentions);
+                  const oppLinkedin = formatCount(opp.trendData.linkedinMentions || 0);
+                  const oppUpwork = formatCount(opp.trendData.upworkJobs || 0);
+                  return (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+                      <div className="p-2.5 sm:p-3 bg-green-500/5 rounded-lg border border-green-500/10">
+                        <div className="flex items-center gap-1">
+                          <Search className="w-3.5 h-3.5 text-green-400" />
+                          <span className="text-base sm:text-lg font-bold text-green-400">{opp.trendData.googleTrendsScore || 0}</span>
+                          <span className="text-xs text-green-400/60">/100</span>
+                        </div>
+                        <div className="text-[10px] text-muted-foreground">Google Trends</div>
+                      </div>
+                      <div className="p-2.5 sm:p-3 bg-orange-500/5 rounded-lg border border-orange-500/10" title={`${oppReddit.full} mentions`}>
+                        <div className="flex items-baseline gap-0.5">
+                          <span className="text-base sm:text-lg font-bold text-orange-400">{oppReddit.value}</span>
+                          {oppReddit.suffix && <span className="text-xs font-semibold text-orange-400/60">{oppReddit.suffix}</span>}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground">Reddit Mentions</div>
+                      </div>
+                      <div className="p-2.5 sm:p-3 bg-blue-500/5 rounded-lg border border-blue-500/10" title={`${oppLinkedin.full} posts`}>
+                        <div className="flex items-baseline gap-0.5">
+                          <span className="text-base sm:text-lg font-bold text-blue-400">{oppLinkedin.value}</span>
+                          {oppLinkedin.suffix && <span className="text-xs font-semibold text-blue-400/60">{oppLinkedin.suffix}</span>}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground">LinkedIn Posts</div>
+                      </div>
+                      <div className="p-2.5 sm:p-3 bg-emerald-500/5 rounded-lg border border-emerald-500/10" title={`${oppUpwork.full} jobs`}>
+                        <div className="flex items-baseline gap-0.5">
+                          <span className="text-base sm:text-lg font-bold text-emerald-400">{oppUpwork.value}</span>
+                          {oppUpwork.suffix && <span className="text-xs font-semibold text-emerald-400/60">{oppUpwork.suffix}</span>}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground">Upwork Jobs</div>
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground">Google Trends</div>
-                  </div>
-                  <div className="p-2.5 sm:p-3 bg-orange-500/5 rounded-lg border border-orange-500/10">
-                    <div className="text-base sm:text-lg font-bold text-orange-400">{opp.trendData.redditMentions}</div>
-                    <div className="text-xs text-muted-foreground">Reddit</div>
-                  </div>
-                  <div className="p-2.5 sm:p-3 bg-blue-500/5 rounded-lg border border-blue-500/10">
-                    <div className="text-base sm:text-lg font-bold text-blue-400">{opp.trendData.linkedinMentions || 0}</div>
-                    <div className="text-xs text-muted-foreground">LinkedIn</div>
-                  </div>
-                  <div className="p-2.5 sm:p-3 bg-emerald-500/5 rounded-lg border border-emerald-500/10">
-                    <div className="text-base sm:text-lg font-bold text-emerald-400">{opp.trendData.upworkJobs || 0}</div>
-                    <div className="text-xs text-muted-foreground">Upwork</div>
-                  </div>
-                </div>
+                  );
+                })()}
 
                 {/* Target Platforms */}
                 <div>

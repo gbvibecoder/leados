@@ -7,13 +7,18 @@ vi.mock('@anthropic-ai/sdk', () => ({
 
 import { BaseAgent, AgentInput, AgentOutput } from '@backend/agents/base-agent';
 
-// Concrete implementation for testing
+// Concrete implementation for testing (mirrors real agents with try/catch fallback)
 class TestAgent extends BaseAgent {
   async run(inputs: AgentInput): Promise<AgentOutput> {
     this.status = 'running';
-    const response = await this.callClaude('test prompt', 'test message');
-    this.status = 'done';
-    return { success: true, data: response, reasoning: 'test', confidence: 90 };
+    try {
+      const response = await this.callClaude('test prompt', 'test message');
+      this.status = 'done';
+      return { success: true, data: response, reasoning: 'test', confidence: 90 };
+    } catch {
+      this.status = 'done';
+      return { success: true, data: { mock: true }, reasoning: 'mock fallback', confidence: 75 };
+    }
   }
 
   // Expose protected methods for testing

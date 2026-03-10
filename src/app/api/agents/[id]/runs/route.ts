@@ -719,7 +719,37 @@ const defaultMockOutput = {
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  // For service-research agent, fetch LIVE data from Reddit & Hacker News
+  // First, check database for real agent runs
+  try {
+    const { prisma } = await import('@/lib/prisma');
+    const dbRuns = await prisma.agentRun.findMany({
+      where: { agentId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+    });
+
+    if (dbRuns.length > 0) {
+      // Return real runs from database
+      const runs = dbRuns.map((run: any) => ({
+        id: run.id,
+        agentId: run.agentId,
+        agentName: run.agentName,
+        status: run.status,
+        outputsJson: run.outputsJson ? JSON.parse(run.outputsJson) : null,
+        error: run.error,
+        startedAt: run.startedAt,
+        completedAt: run.completedAt,
+        createdAt: run.createdAt,
+      }));
+      return NextResponse.json(runs);
+    }
+  } catch {
+    // Database not available, fall through to mock data
+  }
+
+  // No real runs found — return mock data for display
+
+  // For service-research agent, try LIVE data from Reddit & Hacker News
   if (id === 'service-research') {
     try {
       const liveData = await fetchRealTrends('B2B services', 'US');
@@ -740,7 +770,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       ]);
     } catch (error) {
       console.error('Failed to fetch live trends:', error);
-      // Fall back to mock data on error
       const fallbackOutput = agentMockOutputs['service-research-fallback'] || defaultMockOutput;
       return NextResponse.json([
         {

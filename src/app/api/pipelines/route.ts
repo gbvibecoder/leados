@@ -1,30 +1,59 @@
 import { NextResponse } from 'next/server';
-
-const mockPipelines: any[] = [];
+import { prisma } from '@/lib/prisma';
 
 export async function POST(req: Request) {
-  try {
-    const body = await req.json();
-    const pipeline = {
-      id: `pipe_${Date.now()}`,
-      type: 'leados',
+  const body = await req.json().catch(() => ({}));
+
+  const pipeline = await prisma.pipeline.create({
+    data: {
+      type: body.type || 'leados',
       status: 'idle',
-      config: body.config || {},
-      currentAgentIndex: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      agentRuns: [],
-    };
-    mockPipelines.push(pipeline);
-    return NextResponse.json(pipeline);
-  } catch {
-    return NextResponse.json({ id: `pipe_${Date.now()}`, type: 'leados', status: 'idle', config: {}, currentAgentIndex: 0, createdAt: new Date().toISOString(), agentRuns: [] });
-  }
+      config: JSON.stringify(body.config || {}),
+    },
+  });
+
+  return NextResponse.json({
+    id: pipeline.id,
+    type: pipeline.type,
+    status: pipeline.status,
+    config: body.config || {},
+    currentAgentIndex: pipeline.currentAgentIndex,
+    createdAt: pipeline.createdAt,
+    updatedAt: pipeline.updatedAt,
+    agentRuns: [],
+  });
 }
 
 export async function GET() {
-  if (mockPipelines.length > 0) return NextResponse.json(mockPipelines);
-  return NextResponse.json([
-    { id: 'pipe_demo_1', type: 'leados', status: 'completed', config: {}, currentAgentIndex: 13, createdAt: '2026-03-08T10:00:00Z', agentRuns: [] },
-  ]);
+  const pipelines = await prisma.pipeline.findMany({
+    include: { agentRuns: { orderBy: { createdAt: 'asc' } } },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+  });
+
+  if (pipelines.length === 0) {
+    // Return a demo pipeline if none exist
+    return NextResponse.json([
+      { id: 'pipe_demo_1', type: 'leados', status: 'idle', config: {}, currentAgentIndex: 0, createdAt: new Date().toISOString(), agentRuns: [] },
+    ]);
+  }
+
+  return NextResponse.json(pipelines.map(p => ({
+    id: p.id,
+    type: p.type,
+    status: p.status,
+    config: p.config ? JSON.parse(p.config) : {},
+    currentAgentIndex: p.currentAgentIndex,
+    createdAt: p.createdAt,
+    updatedAt: p.updatedAt,
+    agentRuns: p.agentRuns.map(r => ({
+      id: r.id,
+      agentId: r.agentId,
+      agentName: r.agentName,
+      status: r.status,
+      outputsJson: r.outputsJson ? JSON.parse(r.outputsJson) : null,
+      startedAt: r.startedAt,
+      completedAt: r.completedAt,
+    })),
+  })));
 }
