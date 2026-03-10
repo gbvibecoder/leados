@@ -222,46 +222,159 @@ const agentMockOutputs: Record<string, any> = {
   'funnel-builder': {
     success: true,
     data: {
-      funnel: {
-        name: 'LeadFlow AI — High-Converting Lead Funnel',
-        pages: [
+      landingPage: {
+        url: 'https://leadflow-ai.com/get-started',
+        deployTarget: 'Webflow',
+        headline: 'Double Your Qualified Leads in 90 Days — Or Your Money Back',
+        subheadline: 'B2B SaaS companies use LeadFlow AI to build a predictable, scalable pipeline — fully autonomous, performance-guaranteed, and live in 48 hours',
+        sections: [
           {
-            type: 'landing',
-            name: 'Main Landing Page',
-            url: '/leadflow-ai',
-            conversionGoal: 'Book Demo Call',
-            elements: ['Hero with promise', 'Social proof bar', 'Pain points section', '3-tier pricing', 'ROI calculator', 'FAQ', 'Final CTA']
+            type: 'hero',
+            content: {
+              headline: 'Double Your Qualified Leads in 90 Days — Or Your Money Back',
+              subheadline: 'B2B SaaS companies use LeadFlow AI to build a predictable, scalable pipeline — fully autonomous, performance-guaranteed, and live in 48 hours',
+              cta: 'Book Your Free Strategy Call',
+              ctaSubtext: 'No commitment. See your custom growth plan in 30 minutes.',
+              backgroundStyle: 'gradient-dark',
+              socialProofBar: '500+ B2B SaaS companies trust LeadFlow AI to fill their pipeline',
+              guaranteeBadge: '90-Day Double-or-Refund Guarantee'
+            }
           },
           {
-            type: 'booking',
-            name: 'Demo Booking Page',
-            url: '/leadflow-ai/demo',
-            integration: 'Calendly',
-            conversionGoal: 'Scheduled Call'
+            type: 'painPoints',
+            content: {
+              sectionTitle: 'Sound Familiar?',
+              points: [
+                { icon: 'chart-down', title: 'Feast-or-Famine Pipeline', description: 'One month you\'re drowning in leads, the next month it\'s crickets.' },
+                { icon: 'money-burn', title: 'Burning Cash on Bad Leads', description: 'You\'re spending $200+ per lead on channels that produce tire-kickers.' },
+                { icon: 'clock', title: 'Sales Team Wasting Time', description: 'Your reps spend 60% of their day chasing unqualified leads.' },
+                { icon: 'blind', title: 'Zero Attribution Visibility', description: 'You can\'t tell which channels drive revenue vs vanity metrics.' },
+                { icon: 'bottleneck', title: 'Founder-Led Sales Bottleneck', description: 'The CEO is still closing most deals because there\'s no repeatable system.' }
+              ]
+            }
           },
           {
-            type: 'thank-you',
-            name: 'Confirmation Page',
-            url: '/leadflow-ai/thank-you',
-            elements: ['Confirmation message', 'Pre-call video', 'Case study download']
+            type: 'solution',
+            content: {
+              sectionTitle: 'Meet LeadFlow AI: Your Autonomous Growth Engine',
+              transformationPromise: 'Double Your Qualified Leads in 90 Days',
+              uniqueMechanism: 'Our 13-Agent Orchestration Engine deploys specialized AI agents across every stage of your pipeline — from market research to CRM hygiene — working 24/7.',
+              features: ['AI-powered multi-channel campaigns', 'Autonomous lead scoring and AI voice qualification', 'Real-time budget reallocation', 'Full-funnel multi-touch attribution']
+            }
+          },
+          {
+            type: 'socialProof',
+            content: {
+              sectionTitle: 'Trusted by Growth-Stage SaaS Leaders',
+              testimonials: [
+                { name: 'Sarah Chen', title: 'VP Marketing, TechVentures', quote: 'We went from 40 qualified leads/month to 127 in the first 90 days.', metric: '3.2x qualified leads' },
+                { name: 'Mike Rodriguez', title: 'CEO, GrowthLab', quote: 'Our CAC dropped from $340 to $128 while lead volume tripled.', metric: '62% lower CAC' },
+                { name: 'Emily Watson', title: 'Head of Growth, StartupForge', quote: 'The attribution dashboard finally showed us where our money was working.', metric: '4.2x ROAS' }
+              ],
+              logos: ['TechVentures', 'GrowthLab', 'StartupForge', 'CloudScale', 'RevOps', 'DataDrive']
+            }
+          },
+          {
+            type: 'pricing',
+            content: {
+              sectionTitle: 'Simple, Transparent Pricing',
+              tiers: [
+                { name: 'Starter', price: '$2,997/mo', highlight: false, cta: 'Get Started', features: ['5 active campaigns', 'AI lead scoring', '500 outbound emails/mo', 'Weekly reports', 'CRM integration'] },
+                { name: 'Growth', price: '$5,997/mo', highlight: true, badge: 'Most Popular', cta: 'Book Strategy Call', features: ['Unlimited campaigns', 'AI voice qualification', '2,500 emails + LinkedIn', 'Multi-touch attribution', 'Dedicated success manager'] },
+                { name: 'Enterprise', price: '$9,997/mo', highlight: false, cta: 'Talk to Sales', features: ['Everything in Growth', 'Custom AI scripts', '10,000 emails + LinkedIn', 'White-glove funnel design', '1-hour response SLA'] }
+              ],
+              guarantee: '90-Day Double-or-Refund Guarantee'
+            }
+          },
+          {
+            type: 'faq',
+            content: {
+              sectionTitle: 'Frequently Asked Questions',
+              questions: [
+                { q: 'How long until I see results?', a: 'Most clients see first qualified leads within 7-14 days of launch.' },
+                { q: 'Do I need to provide content?', a: 'No — our Content & Creative Agent produces everything autonomously.' },
+                { q: 'Can I use my existing CRM?', a: 'Yes — we integrate with HubSpot, GoHighLevel, and Salesforce.' }
+              ]
+            }
+          },
+          {
+            type: 'cta',
+            content: {
+              headline: 'Ready to Transform Your Pipeline?',
+              subheadline: 'Book a free 30-minute strategy call with a custom growth projection.',
+              ctaButton: 'Book Your Free Strategy Call',
+              ctaSubtext: 'Limited spots — we only onboard 10 new clients per month',
+              urgency: true
+            }
           }
         ],
-        tracking: {
-          ga4: true,
-          metaPixel: true,
-          googleAds: true,
-          utmParams: ['source', 'medium', 'campaign', 'content', 'term']
-        },
-        deployTarget: 'Webflow'
+        cta: 'Book Your Free Strategy Call',
+        seoMeta: {
+          title: 'LeadFlow AI — Double Your Qualified Leads in 90 Days',
+          description: 'B2B SaaS companies use LeadFlow AI for autonomous, AI-powered lead generation. 90-Day Double-or-Refund Guarantee.',
+          ogImage: '/og/leadflow-ai.png'
+        }
       },
-      copyBlocks: {
-        headline: 'Double Your Qualified Leads in 90 Days — Or Your Money Back',
-        subheadline: '13 AI agents working 24/7 to fill your pipeline with buyers ready to close',
-        cta: 'Book Your Strategy Call →'
-      }
+      leadForm: {
+        fields: [
+          { name: 'firstName', type: 'text', label: 'First Name', placeholder: 'John', required: true },
+          { name: 'lastName', type: 'text', label: 'Last Name', placeholder: 'Smith', required: true },
+          { name: 'workEmail', type: 'email', label: 'Work Email', placeholder: 'john@company.com', required: true },
+          { name: 'company', type: 'text', label: 'Company', placeholder: 'Acme Inc', required: true },
+          { name: 'phone', type: 'phone', label: 'Phone Number', placeholder: '+1 (555) 000-0000', required: false },
+          { name: 'monthlyMarketingBudget', type: 'select', label: 'Monthly Marketing Budget', placeholder: 'Select range', required: true, options: ['Under $5K', '$5K-$10K', '$10K-$25K', '$25K-$50K', '$50K+'] },
+          { name: 'currentMonthlyLeads', type: 'select', label: 'Current Monthly Leads', placeholder: 'Select range', required: false, options: ['0-50', '50-200', '200-500', '500+'] }
+        ],
+        submitButtonText: 'Book Your Free Strategy Call',
+        submitAction: 'Redirect to Calendly booking page, create HubSpot contact, fire Meta Lead event + Google Ads conversion',
+        successMessage: 'Thanks! You\'ll be redirected to book your strategy call.',
+        webhookUrl: '/api/webhooks/lead-capture'
+      },
+      bookingCalendar: {
+        provider: 'Calendly',
+        url: 'https://calendly.com/leados/leadflow-ai-strategy-call',
+        meetingType: 'Strategy Call',
+        meetingDuration: 30,
+        bufferTime: 15,
+        availability: 'Monday-Friday, 9:00 AM - 5:00 PM EST',
+        preCallQuestions: [
+          'What is your biggest lead generation challenge?',
+          'What is your current monthly marketing spend?',
+          'Have you used AI tools for sales or marketing before?'
+        ],
+        confirmationRedirect: 'https://leadflow-ai.com/thank-you'
+      },
+      crmIntegration: {
+        provider: 'HubSpot',
+        pipeline: 'LeadFlow AI — Acquisition Pipeline',
+        stages: ['New Lead', 'Form Submitted', 'Call Booked', 'AI Qualified', 'Strategy Call Completed', 'Proposal Sent', 'Negotiation', 'Closed Won', 'Closed Lost'],
+        contactProperties: ['Lead Source', 'Monthly Marketing Budget', 'Current Monthly Leads', 'Lead Score', 'Qualification Outcome', 'UTM Source', 'UTM Medium', 'UTM Campaign'],
+        lifecycleStages: ['subscriber → Form Submitted', 'lead → Call Booked', 'marketingqualifiedlead → AI Qualified', 'salesqualifiedlead → Strategy Call Completed', 'opportunity → Proposal Sent', 'customer → Closed Won'],
+        automations: [
+          { trigger: 'Form Submitted', action: 'Create contact in HubSpot, assign to pipeline, send confirmation email' },
+          { trigger: 'Call Booked', action: 'Update deal stage, notify sales rep via Slack' },
+          { trigger: 'AI Qualified (score >= 70)', action: 'Move to Strategy Call stage, assign to senior rep' },
+          { trigger: 'AI Qualified (score < 40)', action: 'Move to nurture sequence, enroll in drip campaign' },
+          { trigger: 'No-Show', action: 'Send reschedule email, add to follow-up task queue' },
+          { trigger: 'Closed Won', action: 'Trigger onboarding workflow, create Stripe subscription' },
+          { trigger: 'Closed Lost', action: 'Log reason, enroll in win-back sequence after 90 days' }
+        ]
+      },
+      tracking: {
+        gtmContainerId: 'GTM-LEADFLOW',
+        metaPixelId: '123456789012345',
+        googleAdsConversionId: 'AW-987654321',
+        events: ['page_view', 'scroll_depth_50', 'scroll_depth_90', 'cta_click', 'form_start', 'form_submit', 'calendly_booking', 'lead', 'qualified_lead'],
+        utmParams: ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term']
+      },
+      pages: [
+        { type: 'landing', name: 'Main Landing Page', url: '/leadflow-ai', description: 'Primary conversion page with hero, pain points, solution, pricing, FAQ, and CTA' },
+        { type: 'booking', name: 'Demo Booking Page', url: '/leadflow-ai/book', description: 'Calendly embed with pre-call questions and form data pass-through' },
+        { type: 'thank-you', name: 'Confirmation Page', url: '/leadflow-ai/thank-you', description: 'Post-booking confirmation with pre-call video and case study download' }
+      ]
     },
-    reasoning: 'Built conversion-optimized funnel based on Offer Engineering output. 3-page structure (landing → booking → thank-you) minimizes friction. ROI calculator adds interactivity. Full tracking stack enables attribution.',
-    confidence: 89
+    reasoning: 'Built conversion-optimized funnel based on Offer Engineering output. 3-page structure (landing → booking → thank-you) minimizes friction. Pain-agitate-solve framework optimized for B2B SaaS buyer psychology. Full tracking stack (GTM + Meta Pixel + Google Ads) enables multi-touch attribution. HubSpot pipeline with 9 stages and 7 automations covers the complete lead lifecycle.',
+    confidence: 87
   },
 
   'content-creative': {

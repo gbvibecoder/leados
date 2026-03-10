@@ -4,6 +4,7 @@ import React from 'react';
 import { ServiceResearchOutput } from './outputs/ServiceResearchOutput';
 import { OfferEngineeringOutput } from './outputs/OfferEngineeringOutput';
 import { ValidationOutput } from './outputs/ValidationOutput';
+import { FunnelBuilderOutput } from './outputs/FunnelBuilderOutput';
 import { GenericAgentOutput } from './outputs/GenericAgentOutput';
 
 interface AgentOutputProps {
@@ -30,8 +31,10 @@ export function AgentOutput({ agentId, agentName, data, isLive = false }: AgentO
     case 'validation':
       return <ValidationOutput data={data} />;
 
-    // TODO: Add more agent-specific outputs
     case 'funnel-builder':
+      return <FunnelBuilderOutput data={data} />;
+
+    // TODO: Add more agent-specific outputs
     case 'content-creative':
     case 'paid-traffic':
     case 'outbound-outreach':
