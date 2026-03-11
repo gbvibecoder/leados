@@ -8,7 +8,13 @@ import { useAppStore } from '@/lib/store';
 import { connectSSE } from '@/lib/api';
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
-  const { updateAgentStatus, updatePipelineStatus, addActivity, setCurrentAgentIndex } = useAppStore();
+  const { updateAgentStatus, updatePipelineStatus, addActivity, setCurrentAgentIndex, loadProjects, loadBlacklist } = useAppStore();
+
+  // Load global state on mount
+  useEffect(() => {
+    loadProjects();
+    loadBlacklist();
+  }, [loadProjects, loadBlacklist]);
 
   useEffect(() => {
     let es: EventSource | null = null;

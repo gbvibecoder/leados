@@ -49,6 +49,8 @@ export const leados = {
     return fetchApi<any[]>(`/leados/leads${query}`);
   },
   getLead: (id: string) => fetchApi<any>(`/leados/leads/${id}`),
+  createLead: (data: Record<string, unknown>) =>
+    fetchApi<any>('/leados/leads', { method: 'POST', body: JSON.stringify(data) }),
   updateLead: (id: string, data: Record<string, unknown>) =>
     fetchApi<any>(`/leados/leads/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   analytics: (params?: Record<string, string>) => {

@@ -1,11 +1,12 @@
 'use client';
 
-import { Bell, Search, User } from 'lucide-react';
+import { Bell, Search, User, Building2, Globe, X } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
 export function Navbar() {
-  const { sidebarOpen } = useAppStore();
+  const { sidebarOpen, projects, selectedProjectId, selectProject } = useAppStore();
+  const selectedProject = projects.find((p) => p.id === selectedProjectId);
 
   return (
     <header
@@ -16,6 +17,26 @@ export function Navbar() {
     >
       <div className="flex items-center gap-4">
         <h2 className="text-lg font-semibold text-white">LeadOS</h2>
+
+        {/* Active project indicator */}
+        {selectedProject && (
+          <div className="flex items-center gap-2 rounded-lg border border-indigo-500/20 bg-indigo-500/5 px-3 py-1.5">
+            {selectedProject.type === 'internal' ? (
+              <Building2 className="h-3.5 w-3.5 text-amber-400" />
+            ) : (
+              <Globe className="h-3.5 w-3.5 text-indigo-400" />
+            )}
+            <span className="text-xs font-medium text-zinc-300">{selectedProject.name}</span>
+            <button
+              onClick={() => selectProject(null)}
+              className="ml-1 rounded p-0.5 text-zinc-500 hover:bg-zinc-700 hover:text-zinc-300"
+              title="Clear project filter"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        )}
+
         <div className="relative hidden md:block">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
           <input

@@ -18,6 +18,15 @@ function getDbPath(): string {
 function ensureSchema(dbPath: string) {
   const db = new Database(dbPath);
 
+  // Migrate: add projectId to Lead table if it exists but lacks the column
+  try {
+    const cols = db.prepare("PRAGMA table_info('Lead')").all();
+    if (cols.length > 0 && !cols.some((c: any) => c.name === 'projectId')) {
+      db.exec('ALTER TABLE "Lead" ADD COLUMN "projectId" TEXT REFERENCES "Project"("id") ON DELETE SET NULL');
+      db.exec('CREATE INDEX IF NOT EXISTS "Lead_projectId_idx" ON "Lead"("projectId")');
+    }
+  } catch { /* table may not exist yet, will be created below */ }
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS "User" (
       "id" TEXT NOT NULL PRIMARY KEY,
@@ -76,6 +85,7 @@ function ensureSchema(dbPath: string) {
     CREATE TABLE IF NOT EXISTS "Lead" (
       "id" TEXT NOT NULL PRIMARY KEY,
       "pipelineId" TEXT,
+      "projectId" TEXT,
       "name" TEXT NOT NULL,
       "email" TEXT,
       "company" TEXT,
@@ -94,8 +104,10 @@ function ensureSchema(dbPath: string) {
       "notes" TEXT,
       "enrichmentData" TEXT,
       "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "Lead_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project" ("id") ON DELETE SET NULL ON UPDATE CASCADE
     );
+    CREATE INDEX IF NOT EXISTS "Lead_projectId_idx" ON "Lead"("projectId");
 
     CREATE TABLE IF NOT EXISTS "Interaction" (
       "id" TEXT NOT NULL PRIMARY KEY,

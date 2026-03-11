@@ -7,10 +7,12 @@ export async function GET(req: Request) {
   const source = searchParams.get('source');
   const minScore = searchParams.get('minScore');
   const search = searchParams.get('search');
+  const projectId = searchParams.get('projectId');
 
   const where: Record<string, any> = {};
   if (stage) where.stage = stage;
   if (source) where.source = source;
+  if (projectId) where.projectId = projectId;
   if (minScore) where.score = { gte: parseInt(minScore) };
   if (search) {
     where.OR = [
@@ -32,7 +34,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const body = await req.json();
 
-  const { name, email, company, phone, source, channel, score, stage, segment, notes } = body;
+  const { name, email, company, phone, source, channel, score, stage, segment, notes, projectId: leadProjectId } = body;
 
   if (!name || !source) {
     return NextResponse.json({ error: 'Name and source are required' }, { status: 400 });
@@ -50,6 +52,7 @@ export async function POST(req: Request) {
       stage: stage || 'new',
       segment: segment || null,
       notes: notes || null,
+      projectId: leadProjectId || null,
     },
   });
 
