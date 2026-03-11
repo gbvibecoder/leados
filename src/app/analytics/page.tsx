@@ -4,39 +4,59 @@ import { useState, useEffect } from 'react';
 import { DollarSign, Users, Target, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { leados } from '@/lib/api';
+import { useAppStore } from '@/lib/store';
+import { ProjectFilter } from '@/components/projects/project-filter';
 import { ErrorBoundary } from '@/components/layout/error-boundary';
 import dynamic from 'next/dynamic';
 
 const RechartsComponents = dynamic(() => import('@/components/dashboard/analytics-charts'), { ssr: false });
 
 function AnalyticsPageInner() {
+  const { selectedProjectId, projects, loadProjects } = useAppStore();
   const [data, setData] = useState<any>(null);
   const [period, setPeriod] = useState('30d');
 
+  const selectedProject = projects.find((p) => p.id === selectedProjectId);
+
   useEffect(() => {
-    leados.analytics({ period }).then(setData).catch(() => {});
-  }, [period]);
+    loadProjects();
+  }, [loadProjects]);
+
+  useEffect(() => {
+    const params: Record<string, string> = { period };
+    if (selectedProjectId) params.projectId = selectedProjectId;
+    leados.analytics(params).then(setData).catch(() => {});
+  }, [period, selectedProjectId]);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white">Analytics</h1>
-          <p className="mt-1 text-sm text-zinc-400">LeadOS performance metrics and insights</p>
+          <h1 className="text-3xl font-bold text-white">
+            {selectedProject ? `${selectedProject.name} Analytics` : 'Analytics'}
+          </h1>
+          <p className="mt-1 text-sm text-zinc-400">
+            {selectedProject
+              ? `Performance metrics for ${selectedProject.name}`
+              : 'LeadOS performance metrics and insights'}
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          {['7d', '30d', '90d'].map(p => (
-            <button
-              key={p}
-              onClick={() => setPeriod(p)}
-              className={cn(
-                'rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
-                period === p ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'
-              )}
-            >
-              {p}
-            </button>
-          ))}
+        <div className="flex items-center gap-3">
+          <ProjectFilter />
+          <div className="flex items-center gap-2">
+            {['7d', '30d', '90d'].map(p => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className={cn(
+                  'rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
+                  period === p ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                )}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

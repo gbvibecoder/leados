@@ -5,7 +5,7 @@ import { PipelineFlow } from '@/components/agents/pipeline-flow';
 import { AgentDetailPanel } from '@/components/agents/agent-detail-panel';
 import { AgentCustomizer } from '@/components/agents/agent-customizer';
 import { ProjectSelector } from '@/components/projects/project-selector';
-import { useAppStore, DISCOVERY_AGENT_IDS } from '@/lib/store';
+import { useAppStore, DISCOVERY_AGENT_IDS, LEADOS_AGENTS } from '@/lib/store';
 import { pipelines as pipelinesApi, agents as agentsApi } from '@/lib/api';
 import { ErrorBoundary } from '@/components/layout/error-boundary';
 
@@ -42,11 +42,21 @@ export default function LeadOSPage() {
     enableAllAgents,
     disableAllAgents,
     loadAgentConfig,
+    updateProjectConfig,
   } = useAppStore();
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
   const isInternal = selectedProject?.type === 'internal';
+
+  // Start-from-step state
+  const startFromAgentId = selectedProject?.config?.startFromAgentId || null;
+
+  // Available agents for start-from dropdown (respects internal project filtering)
+  const availableStartAgents = LEADOS_AGENTS.filter((a) => {
+    if (isInternal && DISCOVERY_AGENT_IDS.includes(a.id)) return false;
+    return true;
+  });
 
   // Load projects and agent config from localStorage on mount
   useEffect(() => {
@@ -63,11 +73,8 @@ export default function LeadOSPage() {
         config: {},
         projectId: selectedProjectId || undefined,
       });
-      // Start the pipeline — it runs in the background on the server.
-      // SSE events will update the UI in real-time via client-layout.tsx.
       await pipelinesApi.start(created.id);
     } catch {
-      // If API fails, simulate pipeline execution locally
       for (let i = 0; i < pipeline.agents.length; i++) {
         const agent = pipeline.agents[i];
         setCurrentAgentIndex(i);
@@ -113,6 +120,13 @@ export default function LeadOSPage() {
     }
   };
 
+  const handleStartFromChange = (agentId: string) => {
+    if (!selectedProjectId) return;
+    updateProjectConfig(selectedProjectId, {
+      startFromAgentId: agentId || undefined,
+    });
+  };
+
   return (
     <ErrorBoundary>
       <div className="relative">
@@ -136,12 +150,39 @@ export default function LeadOSPage() {
           </div>
         )}
 
+        {/* Start from any step */}
+        {selectedProject && (
+          <div className="mb-4 rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-3">
+            <div className="flex items-center gap-4">
+              <label className="text-sm text-zinc-400 whitespace-nowrap">Start workflow from:</label>
+              <select
+                value={startFromAgentId || ''}
+                onChange={(e) => handleStartFromChange(e.target.value)}
+                className="h-9 flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-3 text-sm text-zinc-300 focus:border-indigo-500 focus:outline-none"
+              >
+                <option value="">Beginning (first agent)</option>
+                {availableStartAgents.map((agent) => (
+                  <option key={agent.id} value={agent.id}>
+                    {agent.name}
+                  </option>
+                ))}
+              </select>
+              {startFromAgentId && (
+                <p className="text-xs text-indigo-400">
+                  Skipping {availableStartAgents.findIndex((a) => a.id === startFromAgentId)} agent(s) before {LEADOS_AGENTS.find((a) => a.id === startFromAgentId)?.name}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
         <AgentCustomizer
           disabledAgentIds={disabledAgentIds}
           onToggleAgent={toggleAgent}
           onEnableAll={enableAllAgents}
           onDisableAll={disableAllAgents}
           isInternal={isInternal}
+          projectConfig={selectedProject?.config}
         />
 
         <PipelineFlow

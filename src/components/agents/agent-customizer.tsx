@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Settings2, Check, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LEADOS_AGENTS, DISCOVERY_AGENT_IDS } from '@/lib/store';
+import type { ProjectConfig } from '@/lib/store';
 
 interface AgentCustomizerProps {
   disabledAgentIds: Set<string>;
@@ -11,6 +12,7 @@ interface AgentCustomizerProps {
   onEnableAll: () => void;
   onDisableAll: () => void;
   isInternal?: boolean;
+  projectConfig?: ProjectConfig | null;
 }
 
 const AGENT_PHASES: { label: string; ids: string[] }[] = [
@@ -42,12 +44,25 @@ export function AgentCustomizer({
   onEnableAll,
   onDisableAll,
   isInternal,
+  projectConfig,
 }: AgentCustomizerProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   const agentMap = new Map(LEADOS_AGENTS.map((a) => [a.id, a.name]));
   const totalAgents = LEADOS_AGENTS.length;
-  const enabledCount = totalAgents - disabledAgentIds.size;
+
+  // Determine enabled count based on project config or global disabled set
+  const hasProjectConfig = !!projectConfig?.enabledAgentIds;
+  const enabledCount = hasProjectConfig
+    ? projectConfig!.enabledAgentIds!.length
+    : totalAgents - disabledAgentIds.size;
+
+  const isAgentEnabled = (agentId: string): boolean => {
+    if (hasProjectConfig) {
+      return projectConfig!.enabledAgentIds!.includes(agentId);
+    }
+    return !disabledAgentIds.has(agentId);
+  };
 
   return (
     <div className="mb-4">
@@ -61,6 +76,11 @@ export function AgentCustomizer({
           <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-xs font-medium text-indigo-400">
             {enabledCount}/{totalAgents} enabled
           </span>
+          {hasProjectConfig && (
+            <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-400">
+              Project-specific
+            </span>
+          )}
         </div>
         {isOpen ? (
           <ChevronUp className="h-4 w-4 text-zinc-500" />
@@ -73,7 +93,7 @@ export function AgentCustomizer({
         <div className="mt-2 rounded-lg border border-zinc-800 bg-zinc-900/80 p-4">
           <div className="mb-4 flex items-center justify-between">
             <p className="text-xs text-zinc-500">
-              Toggle agents on/off. Only enabled agents will run in the pipeline.
+              Toggle agents on/off. {hasProjectConfig ? 'Config is saved per project.' : 'Only enabled agents will run in the pipeline.'}
             </p>
             <div className="flex gap-2">
               <button
@@ -110,7 +130,7 @@ export function AgentCustomizer({
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2">
                     {phaseAgents.map((agentId) => {
-                      const isDisabled = disabledAgentIds.has(agentId);
+                      const isDisabled = !isAgentEnabled(agentId);
                       const isSkippedByProject = isInternal && DISCOVERY_AGENT_IDS.includes(agentId);
 
                       return (
