@@ -85,7 +85,7 @@ async function fetchRedditData(subreddits: string[], keywords: string[]): Promis
   const keywordPromises = keywords.slice(0, 5).map(async (keyword) => {
     try {
       // Search across all of Reddit for this keyword (sorted by new for fresh data)
-      const response = await fetch(
+      const response = await fetch?.(
         `https://www.reddit.com/search.json?q=${encodeURIComponent(keyword)}&sort=relevance&t=week&limit=50`,
         {
           headers: {
@@ -94,7 +94,7 @@ async function fetchRedditData(subreddits: string[], keywords: string[]): Promis
         }
       );
 
-      if (!response.ok) return;
+      if (!response?.ok) return;
 
       const data = await response.json();
       const posts = data.data.children.map((child: any) => ({
@@ -145,7 +145,7 @@ async function fetchRedditData(subreddits: string[], keywords: string[]): Promis
   // Also fetch hot posts from target subreddits for additional signals
   for (const subreddit of subreddits.slice(0, 3)) {
     try {
-      const response = await fetch(
+      const response = await fetch?.(
         `https://www.reddit.com/r/${subreddit}/hot.json?limit=50`,
         {
           headers: {
@@ -154,7 +154,7 @@ async function fetchRedditData(subreddits: string[], keywords: string[]): Promis
         }
       );
 
-      if (!response.ok) continue;
+      if (!response?.ok) continue;
 
       const data = await response.json();
       const posts = data.data.children.map((child: any) => ({

@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Anthropic from '@anthropic-ai/sdk';
 
 export type AgentStatus = 'idle' | 'running' | 'done' | 'error';
 
@@ -48,28 +48,32 @@ export abstract class BaseAgent {
   }
 
   protected async callClaude(systemPrompt: string, userMessage: string, maxRetries = 3): Promise<string> {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
-      await this.log('mock_mode', { reason: 'No GEMINI_API_KEY set' });
-      throw new Error('No GEMINI_API_KEY configured — using mock fallback');
+      await this.log('mock_mode', { reason: 'No ANTHROPIC_API_KEY set' });
+      throw new Error('No ANTHROPIC_API_KEY configured — using mock fallback');
     }
 
     let lastError: Error | null = null;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({
-          model: 'gemini-2.0-flash',
-          systemInstruction: systemPrompt,
+        const client = new Anthropic({ apiKey });
+
+        const message = await client.messages.create({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 8192,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userMessage }],
         });
 
-        const result = await model.generateContent(userMessage);
-        const response = result.response;
-        const text = response.text();
+        const text = message.content
+          .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+          .map(block => block.text)
+          .join('');
 
         if (!text || text.trim().length === 0) {
-          throw new Error('Empty response from Gemini');
+          throw new Error('Empty response from Claude');
         }
 
         return text;
@@ -77,8 +81,8 @@ export abstract class BaseAgent {
         lastError = error;
         await this.log('llm_retry', { attempt, maxRetries, error: error.message });
 
-        // Don't retry on auth errors or invalid key
-        if (error.message?.includes('API_KEY') || error.message?.includes('401') || error.message?.includes('403')) {
+        // Don't retry on auth errors
+        if (error.status === 401 || error.status === 403) {
           throw error;
         }
 
