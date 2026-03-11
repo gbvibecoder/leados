@@ -1,12 +1,20 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { Users, Target, DollarSign, TrendingUp, Zap, Play } from 'lucide-react';
 import { KPICard } from '@/components/dashboard/kpi-card';
 import { PipelineStatus } from '@/components/dashboard/pipeline-status';
 import { ActivityFeed } from '@/components/dashboard/activity-feed';
+import { leados } from '@/lib/api';
 import Link from 'next/link';
 
 export default function DashboardPage() {
+  const [data, setData] = useState<any>(null);
+
+  useEffect(() => {
+    leados.analytics({ period: '30d' }).then(setData).catch(() => {});
+  }, []);
+
   return (
     <div className="space-y-6">
       <div>
@@ -18,10 +26,30 @@ export default function DashboardPage() {
 
       {/* KPI Summary Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KPICard title="Total Leads" value="1,247" change={12.5} changeLabel="vs last week" icon={Users} color="indigo" />
-        <KPICard title="Qualified Leads" value="312" change={8.3} changeLabel="vs last week" icon={Target} color="emerald" />
-        <KPICard title="CAC" value="$127.80" change={-5.2} changeLabel="improvement" icon={DollarSign} color="amber" />
-        <KPICard title="ROAS" value="4.2x" change={15.1} changeLabel="vs last week" icon={TrendingUp} color="blue" />
+        <KPICard
+          title="Total Leads"
+          value={data ? data.totalLeads.toLocaleString() : '—'}
+          icon={Users}
+          color="indigo"
+        />
+        <KPICard
+          title="Qualified Leads"
+          value={data ? data.qualifiedLeads.toLocaleString() : '—'}
+          icon={Target}
+          color="emerald"
+        />
+        <KPICard
+          title="CAC"
+          value={data ? `$${data.cac}` : '—'}
+          icon={DollarSign}
+          color="amber"
+        />
+        <KPICard
+          title="Conversion Rate"
+          value={data ? `${data.conversionRate}%` : '—'}
+          icon={TrendingUp}
+          color="blue"
+        />
       </div>
 
       {/* Pipeline Status */}

@@ -48,6 +48,7 @@ export const leados = {
     const query = params ? '?' + new URLSearchParams(params).toString() : '';
     return fetchApi<any>(`/leados/analytics${query}`);
   },
+  activity: () => fetchApi<any[]>('/leados/activity'),
 };
 
 // Settings endpoints

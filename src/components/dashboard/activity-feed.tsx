@@ -1,8 +1,10 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { Bot, CheckCircle2, AlertCircle, Zap, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppStore, ActivityItem } from '@/lib/store';
+import { leados } from '@/lib/api';
 
 const iconMap = {
   agent_started: { icon: Bot, color: 'text-blue-400' },
@@ -14,28 +16,31 @@ const iconMap = {
 
 export function ActivityFeed() {
   const { activityFeed } = useAppStore();
+  const [dbActivity, setDbActivity] = useState<ActivityItem[]>([]);
 
-  const items: ActivityItem[] = activityFeed.length > 0 ? activityFeed : [
-    {
-      id: '1',
-      type: 'info',
-      message: 'System initialized. Ready to run pipeline.',
-      timestamp: new Date().toISOString(),
-    },
-    {
-      id: '2',
-      type: 'agent_completed',
-      agentName: 'Service Research Agent',
-      message: 'Discovered 5 high-demand service opportunities',
-      timestamp: new Date(Date.now() - 3600000).toISOString(),
-    },
-    {
-      id: '3',
-      type: 'pipeline_completed',
-      message: 'LeadOS pipeline completed — 47 leads generated',
-      timestamp: new Date(Date.now() - 86400000).toISOString(),
-    },
-  ];
+  useEffect(() => {
+    leados.activity().then((items) => {
+      setDbActivity(items.map((item: any) => ({
+        id: item.id,
+        type: item.type as ActivityItem['type'],
+        message: item.message,
+        agentName: item.agentName,
+        timestamp: item.timestamp,
+      })));
+    }).catch(() => {});
+  }, []);
+
+  // Merge real-time store activity with database activity
+  const items: ActivityItem[] = activityFeed.length > 0
+    ? activityFeed
+    : dbActivity.length > 0
+      ? dbActivity
+      : [{
+          id: '1',
+          type: 'info',
+          message: 'No activity yet. Run a pipeline to get started.',
+          timestamp: new Date().toISOString(),
+        }];
 
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
