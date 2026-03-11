@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { Building2, Globe, FolderOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/lib/store';
@@ -11,10 +12,12 @@ interface ProjectFilterProps {
 export function ProjectFilter({ className }: ProjectFilterProps) {
   const { projects, selectedProjectId, selectProject, loadProjects } = useAppStore();
 
-  // Load projects if not loaded
-  if (projects.length === 0) {
-    try { loadProjects(); } catch {}
-  }
+  // Load projects in an effect instead of during render
+  useEffect(() => {
+    if (projects.length === 0) {
+      try { loadProjects(); } catch {}
+    }
+  }, [projects.length, loadProjects]);
 
   return (
     <div className={cn('flex items-center gap-2', className)}>

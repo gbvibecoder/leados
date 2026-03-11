@@ -43,7 +43,7 @@ export default function LandingPage() {
   const router = useRouter();
 
   const handleGetStarted = () => {
-    router.push('/leados');
+    router.push('/dashboard');
   };
 
   return (
