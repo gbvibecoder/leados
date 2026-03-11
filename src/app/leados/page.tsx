@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { PipelineFlow } from '@/components/agents/pipeline-flow';
 import { AgentDetailPanel } from '@/components/agents/agent-detail-panel';
+import { AgentCustomizer } from '@/components/agents/agent-customizer';
 import { ProjectSelector } from '@/components/projects/project-selector';
 import { useAppStore, DISCOVERY_AGENT_IDS } from '@/lib/store';
 import { pipelines as pipelinesApi, agents as agentsApi } from '@/lib/api';
@@ -36,16 +37,22 @@ export default function LeadOSPage() {
     selectProject,
     createProject,
     loadProjects,
+    disabledAgentIds,
+    toggleAgent,
+    enableAllAgents,
+    disableAllAgents,
+    loadAgentConfig,
   } = useAppStore();
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
   const isInternal = selectedProject?.type === 'internal';
 
-  // Load projects from localStorage on mount
+  // Load projects and agent config from localStorage on mount
   useEffect(() => {
     loadProjects();
-  }, [loadProjects]);
+    loadAgentConfig();
+  }, [loadProjects, loadAgentConfig]);
 
   const handleRunPipeline = async () => {
     updatePipelineStatus('running');
@@ -128,6 +135,14 @@ export default function LeadOSPage() {
             </p>
           </div>
         )}
+
+        <AgentCustomizer
+          disabledAgentIds={disabledAgentIds}
+          onToggleAgent={toggleAgent}
+          onEnableAll={enableAllAgents}
+          onDisableAll={disableAllAgents}
+          isInternal={isInternal}
+        />
 
         <PipelineFlow
           title={selectedProject ? `${selectedProject.name} Pipeline` : 'LeadOS Pipeline'}

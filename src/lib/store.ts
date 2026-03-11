@@ -46,6 +46,13 @@ interface AppState {
   setCurrentAgentIndex: (index: number) => void;
   resetPipeline: () => void;
 
+  // Agent customization
+  disabledAgentIds: Set<string>;
+  toggleAgent: (agentId: string) => void;
+  enableAllAgents: () => void;
+  disableAllAgents: () => void;
+  loadAgentConfig: () => void;
+
   // Projects
   projects: Project[];
   selectedProjectId: string | null;
@@ -73,7 +80,7 @@ export interface ActivityItem {
   timestamp: string;
 }
 
-const LEADOS_AGENTS: AgentState[] = [
+export const LEADOS_AGENTS: AgentState[] = [
   { id: 'service-research', name: 'Service Research Agent', status: 'idle' },
   { id: 'offer-engineering', name: 'Offer Engineering Agent', status: 'idle' },
   { id: 'validation', name: 'Validation Agent', status: 'idle' },
@@ -89,11 +96,32 @@ const LEADOS_AGENTS: AgentState[] = [
   { id: 'crm-hygiene', name: 'CRM & Data Hygiene Agent', status: 'idle' },
 ];
 
-function getAgentsForProject(project: Project | undefined): AgentState[] {
+function getAgentsForProject(project: Project | undefined, disabledAgentIds: Set<string>): AgentState[] {
+  let agents = LEADOS_AGENTS;
   if (project?.type === 'internal') {
-    return LEADOS_AGENTS.filter((a) => !DISCOVERY_AGENT_IDS.includes(a.id));
+    agents = agents.filter((a) => !DISCOVERY_AGENT_IDS.includes(a.id));
   }
-  return LEADOS_AGENTS;
+  return agents.filter((a) => !disabledAgentIds.has(a.id));
+}
+
+function buildIdlePipeline(project: Project | undefined, disabledAgentIds: Set<string>): PipelineState {
+  const agents = getAgentsForProject(project, disabledAgentIds);
+  return {
+    status: 'idle' as const,
+    agents: agents.map((a) => ({
+      ...a,
+      status: 'idle' as const,
+      lastRunTime: undefined,
+      outputPreview: undefined,
+      progress: undefined,
+      error: undefined,
+    })),
+    currentAgentIndex: 0,
+  };
+}
+
+function saveDisabledAgents(ids: Set<string>) {
+  try { localStorage.setItem('leados_disabled_agents', JSON.stringify([...ids])); } catch {}
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -131,21 +159,47 @@ export const useAppStore = create<AppState>((set, get) => ({
   resetPipeline: () => {
     const state = get();
     const selectedProject = state.projects.find((p) => p.id === state.selectedProjectId);
-    const agents = getAgentsForProject(selectedProject);
-    set({
-      pipeline: {
-        status: 'idle' as const,
-        agents: agents.map((a) => ({
-          ...a,
-          status: 'idle' as const,
-          lastRunTime: undefined,
-          outputPreview: undefined,
-          progress: undefined,
-          error: undefined,
-        })),
-        currentAgentIndex: 0,
-      },
-    });
+    set({ pipeline: buildIdlePipeline(selectedProject, state.disabledAgentIds) });
+  },
+
+  // Agent customization
+  disabledAgentIds: new Set<string>(),
+  toggleAgent: (agentId) => {
+    const state = get();
+    const next = new Set(state.disabledAgentIds);
+    if (next.has(agentId)) {
+      next.delete(agentId);
+    } else {
+      next.add(agentId);
+    }
+    const selectedProject = state.projects.find((p) => p.id === state.selectedProjectId);
+    saveDisabledAgents(next);
+    set({ disabledAgentIds: next, pipeline: buildIdlePipeline(selectedProject, next) });
+  },
+  enableAllAgents: () => {
+    const state = get();
+    const next = new Set<string>();
+    const selectedProject = state.projects.find((p) => p.id === state.selectedProjectId);
+    saveDisabledAgents(next);
+    set({ disabledAgentIds: next, pipeline: buildIdlePipeline(selectedProject, next) });
+  },
+  disableAllAgents: () => {
+    const state = get();
+    const next = new Set(LEADOS_AGENTS.map((a) => a.id));
+    const selectedProject = state.projects.find((p) => p.id === state.selectedProjectId);
+    saveDisabledAgents(next);
+    set({ disabledAgentIds: next, pipeline: buildIdlePipeline(selectedProject, next) });
+  },
+  loadAgentConfig: () => {
+    try {
+      const stored = localStorage.getItem('leados_disabled_agents');
+      if (stored) {
+        const ids = new Set<string>(JSON.parse(stored));
+        const state = get();
+        const selectedProject = state.projects.find((p) => p.id === state.selectedProjectId);
+        set({ disabledAgentIds: ids, pipeline: buildIdlePipeline(selectedProject, ids) });
+      }
+    } catch {}
   },
 
   // Projects
@@ -179,36 +233,20 @@ export const useAppStore = create<AppState>((set, get) => ({
   removeProject: (projectId) => {
     const state = get();
     const updated = state.projects.filter((p) => p.id !== projectId);
-    const patches: Partial<AppState> = { projects: updated };
+    const patches: any = { projects: updated };
     if (state.selectedProjectId === projectId) {
       patches.selectedProjectId = null;
-      patches.pipeline = {
-        status: 'idle' as const,
-        agents: LEADOS_AGENTS.map((a) => ({ ...a, status: 'idle' as const })),
-        currentAgentIndex: 0,
-      };
+      patches.pipeline = buildIdlePipeline(undefined, state.disabledAgentIds);
     }
-    set(patches as any);
+    set(patches);
     try { localStorage.setItem('leados_projects', JSON.stringify(updated)); } catch {}
   },
   selectProject: (projectId) => {
     const state = get();
     const project = state.projects.find((p) => p.id === projectId);
-    const agents = getAgentsForProject(project);
     set({
       selectedProjectId: projectId,
-      pipeline: {
-        status: 'idle' as const,
-        agents: agents.map((a) => ({
-          ...a,
-          status: 'idle' as const,
-          lastRunTime: undefined,
-          outputPreview: undefined,
-          progress: undefined,
-          error: undefined,
-        })),
-        currentAgentIndex: 0,
-      },
+      pipeline: buildIdlePipeline(project, state.disabledAgentIds),
     });
   },
   loadProjects: () => {
