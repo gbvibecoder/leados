@@ -74,9 +74,12 @@ export default function LeadOSPage() {
     return phase?.id || null;
   }, [startFromAgentId]);
 
+  const hasExplicitAgentConfig = !!selectedProject?.config?.enabledAgentIds;
+
   const skippedPhaseIds = useMemo(() => {
     const skipped = new Set<string>();
-    if (isInternal) skipped.add('discovery');
+    // Only auto-skip discovery for internal projects when there's no explicit agent selection
+    if (isInternal && !hasExplicitAgentConfig) skipped.add('discovery');
     if (startFromPhaseId) {
       for (const phase of PIPELINE_PHASES) {
         if (phase.id === startFromPhaseId) break;
@@ -84,7 +87,7 @@ export default function LeadOSPage() {
       }
     }
     return skipped;
-  }, [isInternal, startFromPhaseId]);
+  }, [isInternal, hasExplicitAgentConfig, startFromPhaseId]);
 
   const enabledAgentIds = useMemo(() => {
     const enabled = new Set<string>();
