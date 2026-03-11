@@ -172,8 +172,9 @@ async function runPipelineInBackground(id: string, agentsToRun: string[]) {
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  // Check if pipeline is linked to an internal project
+  // Check project type and config
   let isInternal = false;
+  let enabledAgentIds: string[] | null = null;
   try {
     const pipeline = await prisma.pipeline.findUnique({
       where: { id },
@@ -182,14 +183,34 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (pipeline?.project?.type === 'internal') {
       isInternal = true;
     }
+    // Read project-level agent config
+    if (pipeline?.project?.config) {
+      try {
+        const config = typeof pipeline.project.config === 'string'
+          ? JSON.parse(pipeline.project.config)
+          : pipeline.project.config;
+        if (Array.isArray(config.enabledAgentIds)) {
+          enabledAgentIds = config.enabledAgentIds;
+        }
+      } catch {
+        // ignore parse errors
+      }
+    }
   } catch {
     // ignore
   }
 
   // Determine which agents to run
-  const agentsToRun = isInternal
-    ? ALL_AGENTS.filter((a) => !DISCOVERY_AGENT_IDS.has(a))
-    : ALL_AGENTS;
+  let agentsToRun: string[];
+  if (enabledAgentIds) {
+    // Use project-specific agent selection, preserving pipeline order
+    const enabledSet = new Set(enabledAgentIds);
+    agentsToRun = ALL_AGENTS.filter((a) => enabledSet.has(a));
+  } else if (isInternal) {
+    agentsToRun = ALL_AGENTS.filter((a) => !DISCOVERY_AGENT_IDS.has(a));
+  } else {
+    agentsToRun = ALL_AGENTS;
+  }
 
   // Update pipeline status to running
   try {

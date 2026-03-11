@@ -28,6 +28,7 @@ export interface Project {
   id: string;
   name: string;
   description?: string;
+  url?: string;
   type: 'internal' | 'external';
   status: string;
   config?: ProjectConfig | null;
@@ -73,7 +74,7 @@ interface AppState {
   selectedProjectId: string | null;
   setProjects: (projects: Project[]) => void;
   addProject: (project: Project) => void;
-  createProject: (data: { name: string; description?: string; type: 'internal' | 'external' }) => Project;
+  createProject: (data: { name: string; description?: string; url?: string; type: 'internal' | 'external'; enabledAgentIds?: string[] }) => Project;
   updateProject: (projectId: string, updates: Partial<Project>) => void;
   updateProjectConfig: (projectId: string, config: ProjectConfig) => void;
   removeProject: (projectId: string) => void;
@@ -123,17 +124,16 @@ export const LEADOS_AGENTS: AgentState[] = [
 function getAgentsForProject(project: Project | undefined, disabledAgentIds: Set<string>, globalStartFromAgentId?: string | null): AgentState[] {
   let agents = LEADOS_AGENTS;
 
-  // For internal projects, skip discovery agents
-  if (project?.type === 'internal') {
-    agents = agents.filter((a) => !DISCOVERY_AGENT_IDS.includes(a.id));
-  }
-
   // Per-project agent config takes priority when available
   if (project?.config?.enabledAgentIds) {
+    // Explicit selection — respect exactly what the user chose
     const enabledSet = new Set(project.config.enabledAgentIds);
     agents = agents.filter((a) => enabledSet.has(a.id));
-  } else {
-    // Fallback to global disabled set
+  } else if (project?.type === 'internal') {
+    // Internal projects with no explicit config skip discovery agents
+    agents = agents.filter((a) => !DISCOVERY_AGENT_IDS.includes(a.id));
+  } else if (!project) {
+    // No project — use global disabled set
     agents = agents.filter((a) => !disabledAgentIds.has(a.id));
   }
 
@@ -322,9 +322,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       id: Math.random().toString(36).slice(2) + Date.now().toString(36),
       name: data.name,
       description: data.description,
+      url: data.url,
       type: data.type,
       status: 'active',
-      config: null,
+      config: data.enabledAgentIds ? { enabledAgentIds: data.enabledAgentIds } : null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

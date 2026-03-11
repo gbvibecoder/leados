@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Building2, Globe, ArrowRight, Trash2, AlertTriangle, X } from 'lucide-react';
+import { Plus, Building2, Globe, ArrowRight, Trash2, AlertTriangle, X, ChevronDown, Check, Link2, Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useAppStore, DISCOVERY_AGENT_IDS } from '@/lib/store';
+import { useAppStore, DISCOVERY_AGENT_IDS, LEADOS_AGENTS } from '@/lib/store';
 import type { Project } from '@/lib/store';
 
 export default function ProjectsPage() {
@@ -13,23 +13,89 @@ export default function ProjectsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
   const [newDescription, setNewDescription] = useState('');
+  const [newUrl, setNewUrl] = useState('');
   const [newType, setNewType] = useState<'internal' | 'external'>('internal');
+  const [selectedAgents, setSelectedAgents] = useState<Set<string>>(
+    new Set(LEADOS_AGENTS.filter(a => !DISCOVERY_AGENT_IDS.includes(a.id)).map(a => a.id))
+  );
+  const [showAgentDropdown, setShowAgentDropdown] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadProjects();
   }, [loadProjects]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowAgentDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Agents visible in dropdown based on project type
+  const visibleAgents = useMemo(() => {
+    if (newType === 'internal') {
+      return LEADOS_AGENTS.filter(a => !DISCOVERY_AGENT_IDS.includes(a.id));
+    }
+    return LEADOS_AGENTS;
+  }, [newType]);
+
+  // When switching type, remove discovery agents from selection if going internal
+  const handleTypeChange = (type: 'internal' | 'external') => {
+    setNewType(type);
+    if (type === 'internal') {
+      setSelectedAgents(prev => {
+        const next = new Set(prev);
+        for (const id of DISCOVERY_AGENT_IDS) {
+          next.delete(id);
+        }
+        return next;
+      });
+    } else {
+      // External — select all 13 agents by default
+      setSelectedAgents(new Set(LEADOS_AGENTS.map(a => a.id)));
+    }
+  };
+
+  const toggleAgentSelection = (agentId: string) => {
+    setSelectedAgents(prev => {
+      const next = new Set(prev);
+      if (next.has(agentId)) {
+        next.delete(agentId);
+      } else {
+        next.add(agentId);
+      }
+      return next;
+    });
+  };
+
+  const selectAllAgents = () => {
+    setSelectedAgents(new Set(visibleAgents.map(a => a.id)));
+  };
+
+  const deselectAllAgents = () => {
+    setSelectedAgents(new Set());
+  };
 
   const handleCreate = () => {
     if (!newName.trim()) return;
     createProject({
       name: newName.trim(),
       description: newDescription.trim() || undefined,
+      url: newUrl.trim() || undefined,
       type: newType,
+      enabledAgentIds: [...selectedAgents],
     });
     setNewName('');
     setNewDescription('');
+    setNewUrl('');
     setNewType('internal');
+    setSelectedAgents(new Set(LEADOS_AGENTS.filter(a => !DISCOVERY_AGENT_IDS.includes(a.id)).map(a => a.id)));
     setShowCreate(false);
   };
 
@@ -38,13 +104,23 @@ export default function ProjectsPage() {
     router.push('/leados');
   };
 
+  const getEnabledAgentCount = (project: Project) => {
+    if (project.config?.enabledAgentIds) {
+      return project.config.enabledAgentIds.length;
+    }
+    if (project.type === 'internal') {
+      return LEADOS_AGENTS.length - DISCOVERY_AGENT_IDS.length;
+    }
+    return LEADOS_AGENTS.length;
+  };
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Projects</h1>
           <p className="text-sm text-zinc-400">
-            Manage your projects. Internal projects skip the first {DISCOVERY_AGENT_IDS.length} discovery agents.
+            Manage your projects. Select agents to customize which ones run in the pipeline.
           </p>
         </div>
         <button
@@ -82,11 +158,110 @@ export default function ProjectsPage() {
                 className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
               />
             </div>
+
+            {/* URL + Agent Selector row */}
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="mb-1 block text-sm text-zinc-400">URL</label>
+                <div className="relative">
+                  <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+                  <input
+                    type="url"
+                    value={newUrl}
+                    onChange={(e) => setNewUrl(e.target.value)}
+                    placeholder="https://example.com"
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-800 pl-9 pr-3 py-2 text-sm text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Agent dropdown */}
+              <div className="relative" ref={dropdownRef}>
+                <label className="mb-1 block text-sm text-zinc-400">Agents</label>
+                <button
+                  type="button"
+                  onClick={() => setShowAgentDropdown(!showAgentDropdown)}
+                  className={cn(
+                    'flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors min-w-[200px]',
+                    showAgentDropdown
+                      ? 'border-indigo-500 bg-zinc-800 text-white'
+                      : 'border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-600'
+                  )}
+                >
+                  <Bot className="h-4 w-4 text-indigo-400 shrink-0" />
+                  <span className="flex-1 text-left truncate">
+                    {selectedAgents.size === visibleAgents.length
+                      ? 'All agents selected'
+                      : selectedAgents.size === 0
+                      ? 'No agents selected'
+                      : `${selectedAgents.size} of ${visibleAgents.length} agents`}
+                  </span>
+                  <ChevronDown className={cn('h-4 w-4 text-zinc-500 transition-transform', showAgentDropdown && 'rotate-180')} />
+                </button>
+
+                {/* Dropdown panel */}
+                {showAgentDropdown && (
+                  <div className="absolute right-0 z-50 mt-1 w-[340px] rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl">
+                    {/* Select all / none controls */}
+                    <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-2">
+                      <span className="text-xs text-zinc-400">{selectedAgents.size} selected</span>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={selectAllAgents}
+                          className="text-[10px] font-medium text-indigo-400 hover:text-indigo-300"
+                        >
+                          Select All
+                        </button>
+                        <span className="text-zinc-700">|</span>
+                        <button
+                          onClick={deselectAllAgents}
+                          className="text-[10px] font-medium text-zinc-500 hover:text-zinc-400"
+                        >
+                          Clear All
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Agent list */}
+                    <div className="max-h-[300px] overflow-y-auto py-1">
+                      {visibleAgents.map((agent) => {
+                        const isSelected = selectedAgents.has(agent.id);
+                        return (
+                          <button
+                            key={agent.id}
+                            onClick={() => toggleAgentSelection(agent.id)}
+                            className={cn(
+                              'flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-zinc-800',
+                              isSelected && 'bg-indigo-950/20'
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                'flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors',
+                                isSelected
+                                  ? 'border-indigo-500 bg-indigo-600'
+                                  : 'border-zinc-600 bg-zinc-800'
+                              )}
+                            >
+                              {isSelected && <Check className="h-3 w-3 text-white" />}
+                            </div>
+                            <span className={cn('text-xs', isSelected ? 'text-zinc-200' : 'text-zinc-400')}>
+                              {agent.name}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div>
               <label className="mb-2 block text-sm text-zinc-400">Type</label>
               <div className="flex gap-3">
                 <button
-                  onClick={() => setNewType('internal')}
+                  onClick={() => handleTypeChange('internal')}
                   className={cn(
                     'flex flex-1 flex-col items-center gap-2 rounded-lg border p-4 transition-colors',
                     newType === 'internal'
@@ -103,7 +278,7 @@ export default function ProjectsPage() {
                   </span>
                 </button>
                 <button
-                  onClick={() => setNewType('external')}
+                  onClick={() => handleTypeChange('external')}
                   className={cn(
                     'flex flex-1 flex-col items-center gap-2 rounded-lg border p-4 transition-colors',
                     newType === 'external'
@@ -146,7 +321,7 @@ export default function ProjectsPage() {
           <Building2 className="mx-auto mb-3 h-10 w-10 text-zinc-600" />
           <p className="text-sm text-zinc-400">No projects yet</p>
           <p className="mt-1 text-xs text-zinc-600">
-            Create a project to organize your pipeline runs and skip agents for internal projects.
+            Create a project to organize your pipeline runs and choose which agents to run.
           </p>
         </div>
       ) : (
@@ -185,14 +360,30 @@ export default function ProjectsPage() {
 
               <h3 className="mb-1 text-base font-semibold text-white">{project.name}</h3>
               {project.description && (
-                <p className="mb-3 text-sm text-zinc-500">{project.description}</p>
+                <p className="mb-2 text-sm text-zinc-500">{project.description}</p>
               )}
 
-              <p className="mb-4 text-xs text-zinc-600">
-                {project.type === 'internal'
-                  ? `Runs 9 agents (skips ${DISCOVERY_AGENT_IDS.length} discovery agents)`
-                  : 'Runs all 13 agents'}
-              </p>
+              {project.url && (
+                <div className="mb-2 flex items-center gap-1.5">
+                  <Link2 className="h-3 w-3 text-zinc-500 shrink-0" />
+                  <a
+                    href={project.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-indigo-400 hover:text-indigo-300 truncate"
+                    title={project.url}
+                  >
+                    {project.url}
+                  </a>
+                </div>
+              )}
+
+              <div className="mb-4 flex items-center gap-2">
+                <Bot className="h-3 w-3 text-zinc-500" />
+                <p className="text-xs text-zinc-600">
+                  {getEnabledAgentCount(project)} of {LEADOS_AGENTS.length} agents enabled
+                </p>
+              </div>
 
               <button
                 onClick={() => handleLaunch(project)}
