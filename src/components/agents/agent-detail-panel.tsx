@@ -1,6 +1,6 @@
 'use client';
 
-import { X, Play, Clock, FileJson, Terminal } from 'lucide-react';
+import { X, Play, Clock, FileJson, Terminal, MessageSquare, Send } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import { agents as agentsApi } from '@/lib/api';
@@ -19,9 +19,11 @@ function AgentDetailPanelInner({ agentId, agentName, description, onClose, onRun
   const [runs, setRuns] = useState<any[]>([]);
   const [selectedRun, setSelectedRun] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [prompt, setPrompt] = useState('');
 
   useEffect(() => {
     setLoading(true);
+    setPrompt('');
     agentsApi.runs(agentId)
       .then((data) => {
         setRuns(Array.isArray(data) ? data : []);
@@ -30,6 +32,10 @@ function AgentDetailPanelInner({ agentId, agentName, description, onClose, onRun
       .catch(() => setRuns([]))
       .finally(() => setLoading(false));
   }, [agentId]);
+
+  const handleRunWithPrompt = () => {
+    onRun();
+  };
 
   return (
     <div className="fixed inset-y-0 right-0 z-50 w-full max-w-lg border-l border-zinc-800 bg-zinc-950 shadow-2xl">
@@ -51,13 +57,50 @@ function AgentDetailPanelInner({ agentId, agentName, description, onClose, onRun
             </div>
           )}
 
+          {/* Prompt input section */}
+          <div className="mb-4">
+            <h4 className="mb-2 flex items-center gap-2 text-sm font-medium text-zinc-300">
+              <MessageSquare className="h-4 w-4" />
+              Agent Prompt
+            </h4>
+            <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-1">
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder={`Enter custom instructions for ${agentName}...`}
+                rows={3}
+                className="w-full resize-none rounded-lg bg-transparent px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none"
+              />
+              <div className="flex items-center justify-between px-2 pb-1">
+                <p className="text-[10px] text-zinc-600">
+                  Customize how this agent processes data
+                </p>
+                {prompt.trim() && (
+                  <span className="text-[10px] text-indigo-400">
+                    {prompt.length} chars
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Run agent button */}
           <div className="mb-4">
             <button
-              onClick={onRun}
+              onClick={handleRunWithPrompt}
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700"
             >
-              <Play className="h-4 w-4" />
-              Run Agent
+              {prompt.trim() ? (
+                <>
+                  <Send className="h-4 w-4" />
+                  Run with Prompt
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4" />
+                  Run Agent
+                </>
+              )}
             </button>
           </div>
 

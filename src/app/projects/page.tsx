@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Building2, Globe, ArrowRight, Trash2 } from 'lucide-react';
+import { Plus, Building2, Globe, ArrowRight, Trash2, AlertTriangle, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppStore, DISCOVERY_AGENT_IDS } from '@/lib/store';
 import type { Project } from '@/lib/store';
@@ -14,6 +14,7 @@ export default function ProjectsPage() {
   const [newName, setNewName] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newType, setNewType] = useState<'internal' | 'external'>('internal');
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   useEffect(() => {
     loadProjects();
@@ -174,7 +175,7 @@ export default function ProjectsPage() {
                   </span>
                 </div>
                 <button
-                  onClick={() => removeProject(project.id)}
+                  onClick={() => setDeleteConfirm(project.id)}
                   className="rounded p-1 text-zinc-600 opacity-0 transition-opacity hover:bg-zinc-800 hover:text-red-400 group-hover:opacity-100"
                   title="Delete project"
                 >
@@ -204,6 +205,46 @@ export default function ProjectsPage() {
           ))}
         </div>
       )}
+
+      {/* Delete confirmation modal */}
+      {deleteConfirm && (() => {
+        const project = projects.find((p) => p.id === deleteConfirm);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="mx-4 w-full max-w-md rounded-xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-500/10">
+                  <AlertTriangle className="h-5 w-5 text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Delete Project</h3>
+                  <p className="text-sm text-zinc-400">This action cannot be undone.</p>
+                </div>
+              </div>
+              <p className="mb-6 text-sm text-zinc-300">
+                Are you sure you want to delete <span className="font-semibold text-white">{project?.name}</span>? All project configuration will be permanently removed.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setDeleteConfirm(null)}
+                  className="flex-1 rounded-lg border border-zinc-700 px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    removeProject(deleteConfirm);
+                    setDeleteConfirm(null);
+                  }}
+                  className="flex-1 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-red-500 transition-colors"
+                >
+                  Delete Project
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

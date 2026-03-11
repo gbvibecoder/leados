@@ -13,6 +13,7 @@ interface AgentCustomizerProps {
   onDisableAll: () => void;
   isInternal?: boolean;
   projectConfig?: ProjectConfig | null;
+  startFromAgentId?: string;
 }
 
 const AGENT_PHASES: { label: string; ids: string[] }[] = [
@@ -45,11 +46,27 @@ export function AgentCustomizer({
   onDisableAll,
   isInternal,
   projectConfig,
+  startFromAgentId,
 }: AgentCustomizerProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   const agentMap = new Map(LEADOS_AGENTS.map((a) => [a.id, a.name]));
   const totalAgents = LEADOS_AGENTS.length;
+
+  // Compute agents skipped by startFromAgentId
+  const skippedByStartFrom = new Set<string>();
+  if (startFromAgentId) {
+    const allIds = LEADOS_AGENTS.map((a) => a.id);
+    const startIdx = allIds.indexOf(startFromAgentId);
+    if (startIdx > 0) {
+      for (let i = 0; i < startIdx; i++) {
+        // Don't double-count agents already skipped by internal project
+        if (!(isInternal && DISCOVERY_AGENT_IDS.includes(allIds[i]))) {
+          skippedByStartFrom.add(allIds[i]);
+        }
+      }
+    }
+  }
 
   // Determine enabled count based on project config or global disabled set
   const hasProjectConfig = !!projectConfig?.enabledAgentIds;
@@ -115,6 +132,7 @@ export function AgentCustomizer({
             {AGENT_PHASES.map((phase) => {
               const phaseAgents = phase.ids.filter((id) => agentMap.has(id));
               const allSkippedByProject = isInternal && phase.ids.every((id) => DISCOVERY_AGENT_IDS.includes(id));
+              const allSkippedByStartFrom = phase.ids.every((id) => skippedByStartFrom.has(id) || (isInternal && DISCOVERY_AGENT_IDS.includes(id)));
 
               return (
                 <div key={phase.label}>
@@ -127,22 +145,29 @@ export function AgentCustomizer({
                         Skipped (internal)
                       </span>
                     )}
+                    {!allSkippedByProject && allSkippedByStartFrom && (
+                      <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-400">
+                        Skipped (start from)
+                      </span>
+                    )}
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2">
                     {phaseAgents.map((agentId) => {
                       const isDisabled = !isAgentEnabled(agentId);
                       const isSkippedByProject = isInternal && DISCOVERY_AGENT_IDS.includes(agentId);
+                      const isSkippedByStart = skippedByStartFrom.has(agentId);
+                      const isSkipped = isSkippedByProject || isSkippedByStart;
 
                       return (
                         <button
                           key={agentId}
                           onClick={() => {
-                            if (!isSkippedByProject) onToggleAgent(agentId);
+                            if (!isSkipped) onToggleAgent(agentId);
                           }}
-                          disabled={isSkippedByProject}
+                          disabled={isSkipped}
                           className={cn(
                             'flex items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-all',
-                            isSkippedByProject
+                            isSkipped
                               ? 'cursor-not-allowed border-zinc-800/50 bg-zinc-900/30 opacity-40'
                               : isDisabled
                                 ? 'border-zinc-800 bg-zinc-900/30 hover:border-zinc-700'
@@ -151,15 +176,15 @@ export function AgentCustomizer({
                         >
                           <div
                             className={cn(
-                              'flex h-5 w-5 flex-shrink-0 items-center justify-center rounded',
-                              isSkippedByProject
+                              'flex h-5 w-5 shrink-0 items-center justify-center rounded',
+                              isSkipped
                                 ? 'bg-zinc-800 text-zinc-600'
                                 : isDisabled
                                   ? 'border border-zinc-700 bg-zinc-800'
                                   : 'bg-indigo-600 text-white'
                             )}
                           >
-                            {isSkippedByProject ? (
+                            {isSkipped ? (
                               <X className="h-3 w-3" />
                             ) : !isDisabled ? (
                               <Check className="h-3 w-3" />
@@ -168,7 +193,7 @@ export function AgentCustomizer({
                           <span
                             className={cn(
                               'text-sm',
-                              isSkippedByProject
+                              isSkipped
                                 ? 'text-zinc-600 line-through'
                                 : isDisabled
                                   ? 'text-zinc-500'

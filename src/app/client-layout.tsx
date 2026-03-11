@@ -4,10 +4,13 @@ import { Sidebar } from '@/components/layout/sidebar';
 import { Navbar } from '@/components/layout/navbar';
 import { PageWrapper } from '@/components/layout/page-wrapper';
 import { useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { useAppStore } from '@/lib/store';
 import { connectSSE } from '@/lib/api';
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const isLandingPage = pathname === '/';
   const { updateAgentStatus, updatePipelineStatus, addActivity, setCurrentAgentIndex, loadProjects, loadBlacklist } = useAppStore();
 
   // Load global state on mount
@@ -90,6 +93,10 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
       es?.close();
     };
   }, [updateAgentStatus, updatePipelineStatus, addActivity, setCurrentAgentIndex]);
+
+  if (isLandingPage) {
+    return <>{children}</>;
+  }
 
   return (
     <>

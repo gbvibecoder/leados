@@ -61,6 +61,8 @@ interface AppState {
 
   // Agent customization (global fallback when no project selected)
   disabledAgentIds: Set<string>;
+  globalStartFromAgentId: string | null;
+  setGlobalStartFromAgentId: (agentId: string | null) => void;
   toggleAgent: (agentId: string) => void;
   enableAllAgents: () => void;
   disableAllAgents: () => void;
@@ -118,7 +120,7 @@ export const LEADOS_AGENTS: AgentState[] = [
   { id: 'crm-hygiene', name: 'CRM & Data Hygiene Agent', status: 'idle' },
 ];
 
-function getAgentsForProject(project: Project | undefined, disabledAgentIds: Set<string>): AgentState[] {
+function getAgentsForProject(project: Project | undefined, disabledAgentIds: Set<string>, globalStartFromAgentId?: string | null): AgentState[] {
   let agents = LEADOS_AGENTS;
 
   // For internal projects, skip discovery agents
@@ -136,8 +138,9 @@ function getAgentsForProject(project: Project | undefined, disabledAgentIds: Set
   }
 
   // Start from specific agent — remove agents before the start point
-  if (project?.config?.startFromAgentId) {
-    const startIdx = agents.findIndex((a) => a.id === project.config!.startFromAgentId);
+  const startFrom = project?.config?.startFromAgentId || (!project ? globalStartFromAgentId : null);
+  if (startFrom) {
+    const startIdx = agents.findIndex((a) => a.id === startFrom);
     if (startIdx > 0) {
       agents = agents.slice(startIdx);
     }
@@ -146,8 +149,8 @@ function getAgentsForProject(project: Project | undefined, disabledAgentIds: Set
   return agents;
 }
 
-function buildIdlePipeline(project: Project | undefined, disabledAgentIds: Set<string>): PipelineState {
-  const agents = getAgentsForProject(project, disabledAgentIds);
+function buildIdlePipeline(project: Project | undefined, disabledAgentIds: Set<string>, globalStartFromAgentId?: string | null): PipelineState {
+  const agents = getAgentsForProject(project, disabledAgentIds, globalStartFromAgentId);
   return {
     status: 'idle' as const,
     agents: agents.map((a) => ({
@@ -209,11 +212,20 @@ export const useAppStore = create<AppState>((set, get) => ({
   resetPipeline: () => {
     const state = get();
     const selectedProject = state.projects.find((p) => p.id === state.selectedProjectId);
-    set({ pipeline: buildIdlePipeline(selectedProject, state.disabledAgentIds) });
+    set({ pipeline: buildIdlePipeline(selectedProject, state.disabledAgentIds, state.globalStartFromAgentId) });
   },
 
   // Agent customization (global)
   disabledAgentIds: new Set<string>(),
+  globalStartFromAgentId: null,
+  setGlobalStartFromAgentId: (agentId) => {
+    const state = get();
+    set({ globalStartFromAgentId: agentId });
+    // Rebuild pipeline only when no project is selected
+    if (!state.selectedProjectId) {
+      set({ pipeline: buildIdlePipeline(undefined, state.disabledAgentIds, agentId) });
+    }
+  },
   toggleAgent: (agentId) => {
     const state = get();
     const selectedProject = state.projects.find((p) => p.id === state.selectedProjectId);
@@ -232,7 +244,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const updatedProject = { ...selectedProject, config: newConfig, updatedAt: new Date().toISOString() };
       const updated = state.projects.map((p) => p.id === selectedProject.id ? updatedProject : p);
       saveProjects(updated);
-      set({ projects: updated, pipeline: buildIdlePipeline(updatedProject, state.disabledAgentIds) });
+      set({ projects: updated, pipeline: buildIdlePipeline(updatedProject, state.disabledAgentIds, state.globalStartFromAgentId) });
       return;
     }
 
@@ -244,7 +256,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       next.add(agentId);
     }
     saveDisabledAgents(next);
-    set({ disabledAgentIds: next, pipeline: buildIdlePipeline(undefined, next) });
+    set({ disabledAgentIds: next, pipeline: buildIdlePipeline(undefined, next, get().globalStartFromAgentId) });
   },
   enableAllAgents: () => {
     const state = get();
@@ -256,13 +268,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       const updatedProject = { ...selectedProject, config: newConfig, updatedAt: new Date().toISOString() };
       const updated = state.projects.map((p) => p.id === selectedProject.id ? updatedProject : p);
       saveProjects(updated);
-      set({ projects: updated, pipeline: buildIdlePipeline(updatedProject, state.disabledAgentIds) });
+      set({ projects: updated, pipeline: buildIdlePipeline(updatedProject, state.disabledAgentIds, state.globalStartFromAgentId) });
       return;
     }
 
     const next = new Set<string>();
     saveDisabledAgents(next);
-    set({ disabledAgentIds: next, pipeline: buildIdlePipeline(undefined, next) });
+    set({ disabledAgentIds: next, pipeline: buildIdlePipeline(undefined, next, get().globalStartFromAgentId) });
   },
   disableAllAgents: () => {
     const state = get();
@@ -273,13 +285,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       const updatedProject = { ...selectedProject, config: newConfig, updatedAt: new Date().toISOString() };
       const updated = state.projects.map((p) => p.id === selectedProject.id ? updatedProject : p);
       saveProjects(updated);
-      set({ projects: updated, pipeline: buildIdlePipeline(updatedProject, state.disabledAgentIds) });
+      set({ projects: updated, pipeline: buildIdlePipeline(updatedProject, state.disabledAgentIds, state.globalStartFromAgentId) });
       return;
     }
 
     const next = new Set(LEADOS_AGENTS.map((a) => a.id));
     saveDisabledAgents(next);
-    set({ disabledAgentIds: next, pipeline: buildIdlePipeline(undefined, next) });
+    set({ disabledAgentIds: next, pipeline: buildIdlePipeline(undefined, next, get().globalStartFromAgentId) });
   },
   loadAgentConfig: () => {
     try {
@@ -288,7 +300,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         const ids = new Set<string>(JSON.parse(stored));
         const state = get();
         const selectedProject = state.projects.find((p) => p.id === state.selectedProjectId);
-        set({ disabledAgentIds: ids, pipeline: buildIdlePipeline(selectedProject, ids) });
+        set({ disabledAgentIds: ids, pipeline: buildIdlePipeline(selectedProject, ids, get().globalStartFromAgentId) });
       }
     } catch {}
   },
@@ -331,7 +343,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Rebuild pipeline if this is the selected project
     if (state.selectedProjectId === projectId) {
       const project = updated.find((p) => p.id === projectId);
-      set({ pipeline: buildIdlePipeline(project, state.disabledAgentIds) });
+      set({ pipeline: buildIdlePipeline(project, state.disabledAgentIds, state.globalStartFromAgentId) });
     }
   },
   updateProjectConfig: (projectId, config) => {
@@ -344,7 +356,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ projects: updated });
     saveProjects(updated);
     if (state.selectedProjectId === projectId) {
-      set({ pipeline: buildIdlePipeline(updatedProject, state.disabledAgentIds) });
+      set({ pipeline: buildIdlePipeline(updatedProject, state.disabledAgentIds, state.globalStartFromAgentId) });
     }
   },
   removeProject: (projectId) => {
@@ -353,7 +365,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const patches: any = { projects: updated };
     if (state.selectedProjectId === projectId) {
       patches.selectedProjectId = null;
-      patches.pipeline = buildIdlePipeline(undefined, state.disabledAgentIds);
+      patches.pipeline = buildIdlePipeline(undefined, state.disabledAgentIds, state.globalStartFromAgentId);
     }
     set(patches);
     saveProjects(updated);
@@ -363,7 +375,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const project = state.projects.find((p) => p.id === projectId);
     set({
       selectedProjectId: projectId,
-      pipeline: buildIdlePipeline(project, state.disabledAgentIds),
+      pipeline: buildIdlePipeline(project, state.disabledAgentIds, state.globalStartFromAgentId),
     });
     try { localStorage.setItem('leados_selected_project', projectId || ''); } catch {}
   },
@@ -381,7 +393,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             const state = get();
             set({
               selectedProjectId: selectedId,
-              pipeline: buildIdlePipeline(project, state.disabledAgentIds),
+              pipeline: buildIdlePipeline(project, state.disabledAgentIds, state.globalStartFromAgentId),
             });
           }
         }

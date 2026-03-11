@@ -1,13 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { PipelineFlow } from '@/components/agents/pipeline-flow';
-import { AgentDetailPanel } from '@/components/agents/agent-detail-panel';
-import { AgentCustomizer } from '@/components/agents/agent-customizer';
+import { useState, useEffect, useMemo } from 'react';
 import { ProjectSelector } from '@/components/projects/project-selector';
+import { PipelinePreview, PIPELINE_PHASES } from '@/components/pipeline/pipeline-preview';
+import { PipelineWizard } from '@/components/pipeline/pipeline-wizard';
+import { PipelineExecution } from '@/components/pipeline/pipeline-execution';
+import { AgentDetailPanel } from '@/components/agents/agent-detail-panel';
 import { useAppStore, DISCOVERY_AGENT_IDS, LEADOS_AGENTS } from '@/lib/store';
 import { pipelines as pipelinesApi, agents as agentsApi } from '@/lib/api';
 import { ErrorBoundary } from '@/components/layout/error-boundary';
+import { Building2, Pause, Play, RotateCcw } from 'lucide-react';
+import type { AgentStatus } from '@/lib/store';
+
 
 const AGENT_DESCRIPTIONS: Record<string, string> = {
   'service-research': 'Discovers high-demand service opportunities via Google Trends, Reddit, LinkedIn, and Upwork. Analyzes demand, competition, and monetization potential.',
@@ -43,22 +47,67 @@ export default function LeadOSPage() {
     disableAllAgents,
     loadAgentConfig,
     updateProjectConfig,
+    globalStartFromAgentId,
+    setGlobalStartFromAgentId,
   } = useAppStore();
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
   const isInternal = selectedProject?.type === 'internal';
 
-  // Start-from-step state
-  const startFromAgentId = selectedProject?.config?.startFromAgentId || null;
+  // Compute start-from phase (convert agentId → phaseId)
+  const startFromAgentId = selectedProject?.config?.startFromAgentId || (!selectedProjectId ? globalStartFromAgentId : null);
+  const startFromPhaseId = useMemo(() => {
+    if (!startFromAgentId) return null;
+    const phase = PIPELINE_PHASES.find((p) => p.agentIds.includes(startFromAgentId));
+    return phase?.id || null;
+  }, [startFromAgentId]);
 
-  // Available agents for start-from dropdown (respects internal project filtering)
-  const availableStartAgents = LEADOS_AGENTS.filter((a) => {
-    if (isInternal && DISCOVERY_AGENT_IDS.includes(a.id)) return false;
-    return true;
-  });
+  // Compute which phases are skipped
+  const skippedPhaseIds = useMemo(() => {
+    const skipped = new Set<string>();
+    if (isInternal) {
+      // Discovery phase is always skipped for internal projects
+      skipped.add('discovery');
+    }
+    // Phases before the startFrom phase
+    if (startFromPhaseId) {
+      for (const phase of PIPELINE_PHASES) {
+        if (phase.id === startFromPhaseId) break;
+        if (!skipped.has(phase.id)) skipped.add(phase.id);
+      }
+    }
+    return skipped;
+  }, [isInternal, startFromPhaseId]);
 
-  // Load projects and agent config from localStorage on mount
+  // Compute enabled agent IDs as a Set
+  const enabledAgentIds = useMemo(() => {
+    const enabled = new Set<string>();
+    const projectEnabled = selectedProject?.config?.enabledAgentIds;
+
+    for (const agent of LEADOS_AGENTS) {
+      // Skip agents from skipped phases
+      const agentPhase = PIPELINE_PHASES.find((p) => p.agentIds.includes(agent.id));
+      if (agentPhase && skippedPhaseIds.has(agentPhase.id)) continue;
+
+      if (projectEnabled) {
+        if (projectEnabled.includes(agent.id)) enabled.add(agent.id);
+      } else {
+        if (!disabledAgentIds.has(agent.id)) enabled.add(agent.id);
+      }
+    }
+    return enabled;
+  }, [selectedProject, disabledAgentIds, skippedPhaseIds]);
+
+  // Agent statuses for the preview bar
+  const agentStatuses = useMemo(() => {
+    const statuses: Record<string, AgentStatus> = {};
+    for (const agent of pipeline.agents) {
+      statuses[agent.id] = agent.status;
+    }
+    return statuses;
+  }, [pipeline.agents]);
+
   useEffect(() => {
     loadProjects();
     loadAgentConfig();
@@ -120,16 +169,37 @@ export default function LeadOSPage() {
     }
   };
 
-  const handleStartFromChange = (agentId: string) => {
-    if (!selectedProjectId) return;
-    updateProjectConfig(selectedProjectId, {
-      startFromAgentId: agentId || undefined,
-    });
+  const handleSetStartFrom = (phaseId: string | null) => {
+    // Convert phaseId to the first agent in that phase
+    const firstAgent = phaseId
+      ? PIPELINE_PHASES.find((p) => p.id === phaseId)?.agentIds[0] || null
+      : null;
+
+    if (selectedProjectId) {
+      updateProjectConfig(selectedProjectId, { startFromAgentId: firstAgent || undefined });
+    } else {
+      setGlobalStartFromAgentId(firstAgent);
+    }
   };
+
+  const handlePausePipeline = () => {
+    updatePipelineStatus('paused');
+  };
+
+  const handlePreviewPhaseClick = (phaseId: string) => {
+    // Toggle start-from on any phase (works with or without a project)
+    if (isInternal && phaseId === 'discovery') return;
+    handleSetStartFrom(startFromPhaseId === phaseId ? null : phaseId);
+  };
+
+  const completedCount = pipeline.agents.filter((a) => a.status === 'done').length;
+  const isRunning = pipeline.status === 'running';
+  const hasRun = pipeline.status !== 'idle';
 
   return (
     <ErrorBoundary>
       <div className="relative">
+        {/* Project selector */}
         <ProjectSelector
           projects={projects}
           selectedProjectId={selectedProjectId}
@@ -140,68 +210,162 @@ export default function LeadOSPage() {
           }}
         />
 
+        {/* Internal project notice */}
         {isInternal && (
-          <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3">
-            <p className="text-sm text-amber-400">
-              <span className="font-medium">Internal project</span> — Skipping discovery agents
-              ({DISCOVERY_AGENT_IDS.length} agents: Service Research, Offer Engineering, Validation, Funnel Builder).
-              Pipeline starts at Content & Creative.
-            </p>
-          </div>
-        )}
-
-        {/* Start from any step */}
-        {selectedProject && (
-          <div className="mb-4 rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-3">
-            <div className="flex items-center gap-4">
-              <label className="text-sm text-zinc-400 whitespace-nowrap">Start workflow from:</label>
-              <select
-                value={startFromAgentId || ''}
-                onChange={(e) => handleStartFromChange(e.target.value)}
-                className="h-9 flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-3 text-sm text-zinc-300 focus:border-indigo-500 focus:outline-none"
-              >
-                <option value="">Beginning (first agent)</option>
-                {availableStartAgents.map((agent) => (
-                  <option key={agent.id} value={agent.id}>
-                    {agent.name}
-                  </option>
-                ))}
-              </select>
-              {startFromAgentId && (
-                <p className="text-xs text-indigo-400">
-                  Skipping {availableStartAgents.findIndex((a) => a.id === startFromAgentId)} agent(s) before {LEADOS_AGENTS.find((a) => a.id === startFromAgentId)?.name}
-                </p>
-              )}
+          <div className="mb-5 flex items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-5 py-4">
+            <Building2 className="h-5 w-5 flex-shrink-0 text-amber-400" />
+            <div>
+              <p className="text-sm font-medium text-amber-400">Internal Project</p>
+              <p className="text-xs text-amber-400/70">
+                Discovery agents are skipped. Pipeline starts at Content & Creative.
+              </p>
             </div>
           </div>
         )}
 
-        <AgentCustomizer
-          disabledAgentIds={disabledAgentIds}
-          onToggleAgent={toggleAgent}
-          onEnableAll={enableAllAgents}
-          onDisableAll={disableAllAgents}
-          isInternal={isInternal}
-          projectConfig={selectedProject?.config}
+        {/* Page title */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-white">
+            {selectedProject ? `${selectedProject.name} Pipeline` : 'LeadOS Pipeline'}
+          </h1>
+          <p className="mt-1 text-sm text-zinc-400">
+            {hasRun
+              ? `${completedCount}/${pipeline.agents.length} agents completed`
+              : `Configure and run ${enabledAgentIds.size} of ${LEADOS_AGENTS.length} agents`}
+          </p>
+        </div>
+
+        {/* Visual pipeline preview bar */}
+        <PipelinePreview
+          enabledAgentIds={enabledAgentIds}
+          skippedPhaseIds={skippedPhaseIds}
+          startFromPhaseId={startFromPhaseId}
+          agentStatuses={hasRun ? agentStatuses : undefined}
+          onPhaseClick={handlePreviewPhaseClick}
+          isRunning={isRunning}
         />
 
-        <PipelineFlow
-          title={selectedProject ? `${selectedProject.name} Pipeline` : 'LeadOS Pipeline'}
-          agents={pipeline.agents}
-          pipelineStatus={pipeline.status}
-          currentAgentIndex={pipeline.currentAgentIndex}
-          onRunPipeline={handleRunPipeline}
-          onPausePipeline={() => updatePipelineStatus('paused')}
-          onResetPipeline={resetPipeline}
-          onAgentClick={setSelectedAgent}
-          onRunAgent={handleRunAgent}
-          accentColor="indigo"
-        />
+        {/* Start-from hint */}
+        {!hasRun && (
+          <p className="mb-4 -mt-3 text-xs text-zinc-600">
+            Click a phase in the flow above to start the pipeline from that step.
+          </p>
+        )}
 
+        {/* Wizard (config) or Execution (running/completed) */}
+        {!hasRun ? (
+          <PipelineWizard
+            enabledAgentIds={enabledAgentIds}
+            skippedPhaseIds={skippedPhaseIds}
+            startFromPhaseId={startFromPhaseId}
+            isInternal={isInternal || false}
+            onToggleAgent={toggleAgent}
+            onEnableAll={enableAllAgents}
+            onDisableAll={disableAllAgents}
+            onSetStartFrom={handleSetStartFrom}
+            onRunPipeline={handleRunPipeline}
+            onPausePipeline={handlePausePipeline}
+            onResetPipeline={resetPipeline}
+            onAgentClick={setSelectedAgent}
+            pipelineStatus={pipeline.status}
+          />
+        ) : (
+          <>
+            {/* Progress bar + inline controls */}
+            <div className="mb-6 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+                    isRunning ? 'bg-blue-500/10 text-blue-400' :
+                    pipeline.status === 'paused' ? 'bg-amber-500/10 text-amber-400' :
+                    pipeline.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400' :
+                    pipeline.status === 'error' ? 'bg-red-500/10 text-red-400' : 'text-zinc-400'
+                  }`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${
+                      isRunning ? 'bg-blue-400 animate-pulse' :
+                      pipeline.status === 'paused' ? 'bg-amber-400' :
+                      pipeline.status === 'completed' ? 'bg-emerald-400' :
+                      pipeline.status === 'error' ? 'bg-red-400' : 'bg-zinc-500'
+                    }`} />
+                    {isRunning ? 'Running' : pipeline.status === 'completed' ? 'Completed' : pipeline.status.charAt(0).toUpperCase() + pipeline.status.slice(1)}
+                  </span>
+                  <span className="text-xs text-zinc-500">
+                    {completedCount}/{pipeline.agents.length} agents · {Math.round((completedCount / pipeline.agents.length) * 100)}%
+                  </span>
+                </div>
+
+                {/* Pipeline action buttons */}
+                <div className="flex items-center gap-2">
+                  {isRunning && (
+                    <button
+                      onClick={handlePausePipeline}
+                      className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-500 transition-colors"
+                    >
+                      <Pause className="h-3.5 w-3.5" />
+                      Pause
+                    </button>
+                  )}
+                  {pipeline.status === 'paused' && (
+                    <button
+                      onClick={handleRunPipeline}
+                      className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 transition-colors"
+                    >
+                      <Play className="h-3.5 w-3.5" />
+                      Resume
+                    </button>
+                  )}
+                  {!isRunning && (
+                    <>
+                      <button
+                        onClick={resetPipeline}
+                        className="flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        Reset
+                      </button>
+                      <button
+                        onClick={handleRunPipeline}
+                        className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 transition-colors"
+                      >
+                        <Play className="h-3.5 w-3.5" />
+                        Run Again
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-800">
+                <div
+                  className={`h-full rounded-full transition-all duration-700 ${
+                    pipeline.status === 'completed' ? 'bg-emerald-500' :
+                    pipeline.status === 'paused' ? 'bg-amber-500' :
+                    pipeline.status === 'error' ? 'bg-red-500' : 'bg-indigo-500'
+                  }`}
+                  style={{ width: `${Math.round((completedCount / pipeline.agents.length) * 100)}%` }}
+                />
+              </div>
+            </div>
+
+            <PipelineExecution
+              agents={pipeline.agents}
+              currentAgentIndex={pipeline.currentAgentIndex}
+              pipelineStatus={pipeline.status}
+              onAgentClick={setSelectedAgent}
+              onRunAgent={handleRunAgent}
+            />
+          </>
+        )}
+
+        {/* Agent detail panel (right drawer) */}
         {selectedAgent && (
           <AgentDetailPanel
             agentId={selectedAgent}
-            agentName={pipeline.agents.find((a) => a.id === selectedAgent)?.name || selectedAgent}
+            agentName={
+              pipeline.agents.find((a) => a.id === selectedAgent)?.name
+              || LEADOS_AGENTS.find((a) => a.id === selectedAgent)?.name
+              || selectedAgent
+            }
             description={AGENT_DESCRIPTIONS[selectedAgent]}
             onClose={() => setSelectedAgent(null)}
             onRun={() => handleRunAgent(selectedAgent)}
