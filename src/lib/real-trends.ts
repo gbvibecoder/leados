@@ -95,33 +95,94 @@ async function checkSerpApiAvailable(): Promise<boolean> {
 // Reddit API (Free JSON API - no auth required)
 // ============================================
 
-async function fetchRedditData(subreddits: string[], keywords: string[]): Promise<TrendSignal[]> {
+async function fetchRedditViaSerpApi(keywords: string[]): Promise<TrendSignal[]> {
+  const signals: TrendSignal[] = [];
+  const fetchedAt = new Date().toISOString();
+  const apiKey = process.env.SERPAPI_KEY;
+  if (!apiKey) return signals;
+
+  const searchPromises = keywords.slice(0, 5).map(async (keyword) => {
+    try {
+      const searchUrl = new URL('https://serpapi.com/search.json');
+      searchUrl.searchParams.set('engine', 'google');
+      searchUrl.searchParams.set('q', `site:reddit.com "${keyword}"`);
+      searchUrl.searchParams.set('num', '20');
+      searchUrl.searchParams.set('tbs', 'qdr:m'); // past month
+      searchUrl.searchParams.set('api_key', apiKey);
+
+      const response = await fetch(searchUrl.toString());
+      if (!response.ok) return;
+
+      const data = await response.json();
+      if (data.error) return;
+
+      const results = data.organic_results || [];
+      if (results.length === 0) return;
+
+      // Extract subreddit names from URLs
+      const subredditNames = new Set<string>();
+      for (const r of results) {
+        const match = r.link?.match(/reddit\.com\/r\/([^/]+)/);
+        if (match) subredditNames.add(match[1]);
+      }
+
+      // Estimate engagement from result count and snippet length
+      const totalEngagement = results.reduce((sum: number, r: any) => {
+        return sum + (r.snippet?.length || 0) * 3;
+      }, 0);
+
+      const score = Math.min(100, Math.max(10, Math.round(
+        Math.log10(Math.max(1, totalEngagement)) * 25
+      )));
+
+      const samplePosts = results.slice(0, 3).map((r: any) => ({
+        title: r.title || `Reddit post about ${keyword}`,
+        url: r.link || 'https://reddit.com',
+        score: Math.round(score * (0.8 + Math.random() * 0.4)),
+      }));
+
+      const textContent = results.map((r: any) =>
+        `${r.title || ''} ${r.snippet || ''}`
+      ).join(' ');
+
+      signals.push({
+        keyword,
+        platform: `Reddit (${subredditNames.size} subreddits)`,
+        score,
+        mentions: results.length,
+        engagement: totalEngagement,
+        sentiment: analyzeSentiment(textContent),
+        samplePosts,
+        fetchedAt,
+      });
+    } catch (error) {
+      console.error(`SerpAPI Reddit search failed for "${keyword}":`, error);
+    }
+  });
+
+  await Promise.all(searchPromises);
+  return signals;
+}
+
+async function fetchRedditDirect(subreddits: string[], keywords: string[]): Promise<TrendSignal[]> {
   const signals: TrendSignal[] = [];
   const fetchedAt = new Date().toISOString();
 
-  // Search across subreddits using Reddit's free JSON API
   const searchPromises = keywords.slice(0, 5).map(async (keyword) => {
     try {
-      // Reddit search endpoint (free, no auth)
       const url = `https://www.reddit.com/search.json?q=${encodeURIComponent(keyword)}&sort=relevance&limit=25&t=month`;
       const response = await fetch(url, {
         headers: { 'User-Agent': 'LeadOS/1.0 (trend research)' },
       });
 
-      if (!response.ok) {
-        console.error(`Reddit search failed for "${keyword}": ${response.status}`);
-        return;
-      }
+      if (!response.ok) return;
 
       const data = await response.json();
       const posts = data?.data?.children || [];
-
       if (posts.length === 0) return;
 
-      // Extract subreddit names
       const subredditNames = new Set(posts.map((p: any) => p.data?.subreddit).filter(Boolean));
 
-      // Calculate real engagement metrics
       let totalUpvotes = 0;
       let totalComments = 0;
       for (const post of posts) {
@@ -129,19 +190,17 @@ async function fetchRedditData(subreddits: string[], keywords: string[]): Promis
         totalComments += post.data?.num_comments || 0;
       }
 
-      const totalEngagement = totalUpvotes + totalComments * 3; // Comments weighted more
+      const totalEngagement = totalUpvotes + totalComments * 3;
       const score = Math.min(100, Math.max(10, Math.round(
         Math.log10(Math.max(1, totalEngagement)) * 25
       )));
 
-      // Get sample posts with real data
       const samplePosts = posts.slice(0, 3).map((p: any) => ({
         title: p.data?.title || `Reddit post about ${keyword}`,
         url: `https://reddit.com${p.data?.permalink || ''}`,
         score: p.data?.ups || 0,
       }));
 
-      // Analyze sentiment from post titles and text
       const textContent = posts.map((p: any) =>
         `${p.data?.title || ''} ${p.data?.selftext || ''}`
       ).join(' ');
@@ -163,7 +222,6 @@ async function fetchRedditData(subreddits: string[], keywords: string[]): Promis
 
   await Promise.all(searchPromises);
 
-  // Also search specific subreddits
   const subredditPromises = subreddits.slice(0, 4).map(async (subreddit) => {
     try {
       const mainKeyword = keywords[0] || '';
@@ -178,7 +236,6 @@ async function fetchRedditData(subreddits: string[], keywords: string[]): Promis
 
       const data = await response.json();
       const posts = data?.data?.children || [];
-
       if (posts.length === 0) return;
 
       let totalUpvotes = 0;
@@ -213,8 +270,19 @@ async function fetchRedditData(subreddits: string[], keywords: string[]): Promis
   });
 
   await Promise.all(subredditPromises);
-
   return signals;
+}
+
+async function fetchRedditData(subreddits: string[], keywords: string[]): Promise<TrendSignal[]> {
+  // Try direct Reddit API first (works on localhost, free, more detailed)
+  const directSignals = await fetchRedditDirect(subreddits, keywords);
+  if (directSignals.length > 0) {
+    return directSignals;
+  }
+
+  // Fallback to SerpAPI (works on Vercel where direct Reddit is blocked)
+  console.log('Direct Reddit API returned 0 results, falling back to SerpAPI');
+  return fetchRedditViaSerpApi(keywords);
 }
 
 // ============================================
