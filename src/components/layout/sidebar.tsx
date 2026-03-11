@@ -12,15 +12,19 @@ import {
   ChevronLeft,
   ChevronRight,
   Zap,
+  FolderKanban,
+  ShieldBan,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/lib/store';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'Projects', href: '/projects', icon: FolderKanban },
   { name: 'LeadOS Pipeline', href: '/leados', icon: Workflow },
   { name: 'Leads / CRM', href: '/leads', icon: Users },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
+  { name: 'Blacklist', href: '/blacklist', icon: ShieldBan },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 

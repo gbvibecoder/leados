@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET(req?: NextRequest) {
   const period = req?.nextUrl?.searchParams?.get('period') || '30d';
+  const projectId = req?.nextUrl?.searchParams?.get('projectId') || null;
 
   // Calculate date range based on period
   const now = new Date();
@@ -10,9 +11,13 @@ export async function GET(req?: NextRequest) {
   const days = daysMap[period] || 30;
   const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
+  // Build where clause
+  const leadWhere: Record<string, any> = { createdAt: { gte: startDate } };
+  if (projectId) leadWhere.projectId = projectId;
+
   // Fetch leads within the period
   const leads = await prisma.lead.findMany({
-    where: { createdAt: { gte: startDate } },
+    where: leadWhere,
     select: {
       id: true,
       source: true,

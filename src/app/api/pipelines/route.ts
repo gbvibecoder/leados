@@ -9,6 +9,7 @@ export async function POST(req: Request) {
       type: body.type || 'leados',
       status: 'idle',
       config: JSON.stringify(body.config || {}),
+      projectId: body.projectId || null,
     },
   });
 

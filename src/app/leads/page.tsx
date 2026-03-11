@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect, Fragment } from 'react';
-import { Users, Search, ChevronRight, Mail, Phone as PhoneIcon, Calendar, Bot, Plus, X } from 'lucide-react';
+import { Users, Search, ChevronRight, Mail, Phone as PhoneIcon, Calendar, Bot, Plus, X, ShieldBan } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { leados } from '@/lib/api';
+import { useAppStore } from '@/lib/store';
+import { ProjectFilter } from '@/components/projects/project-filter';
 import { ErrorBoundary } from '@/components/layout/error-boundary';
 
 const stageColors: Record<string, string> = {
@@ -25,8 +27,20 @@ const typeIcons: Record<string, typeof Mail> = {
 };
 
 function AddLeadModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
+  const { selectedProjectId, isBlacklisted } = useAppStore();
   const [form, setForm] = useState({ name: '', email: '', company: '', phone: '', source: 'organic', stage: 'new', segment: 'smb', notes: '' });
   const [saving, setSaving] = useState(false);
+  const [blacklisted, setBlacklisted] = useState(false);
+
+  // Check blacklist when company changes
+  useEffect(() => {
+    if (form.company) {
+      const emailDomain = form.email?.split('@')[1];
+      setBlacklisted(isBlacklisted(form.company, emailDomain));
+    } else {
+      setBlacklisted(false);
+    }
+  }, [form.company, form.email, isBlacklisted]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +49,10 @@ function AddLeadModal({ onClose, onAdded }: { onClose: () => void; onAdded: () =
       await fetch('/api/leados/leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          projectId: selectedProjectId || undefined,
+        }),
       });
       onAdded();
       onClose();
@@ -53,6 +70,15 @@ function AddLeadModal({ onClose, onAdded }: { onClose: () => void; onAdded: () =
           <h2 className="text-lg font-bold text-white">Add New Lead</h2>
           <button type="button" onClick={onClose} className="text-zinc-400 hover:text-white"><X className="h-5 w-5" /></button>
         </div>
+        {selectedProjectId && (
+          <p className="text-xs text-indigo-400">Lead will be added to the currently selected project.</p>
+        )}
+        {blacklisted && (
+          <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
+            <ShieldBan className="h-4 w-4 text-red-400" />
+            <p className="text-xs text-red-400">This company is on the blacklist. Lead will still be created but flagged.</p>
+          </div>
+        )}
         <input required placeholder="Name *" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:border-indigo-500 focus:outline-none" />
         <input placeholder="Email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:border-indigo-500 focus:outline-none" />
         <input placeholder="Company" value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:border-indigo-500 focus:outline-none" />
@@ -83,6 +109,7 @@ function AddLeadModal({ onClose, onAdded }: { onClose: () => void; onAdded: () =
 }
 
 function LeadsPageInner() {
+  const { selectedProjectId, loadProjects, loadBlacklist, isBlacklisted } = useAppStore();
   const [leads, setLeads] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [stageFilter, setStageFilter] = useState('');
@@ -91,11 +118,17 @@ function LeadsPageInner() {
   const [expandedLead, setExpandedLead] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
 
+  useEffect(() => {
+    loadProjects();
+    loadBlacklist();
+  }, [loadProjects, loadBlacklist]);
+
   const fetchLeads = () => {
     setLoading(true);
     const params: Record<string, string> = {};
     if (stageFilter) params.stage = stageFilter;
     if (sourceFilter) params.source = sourceFilter;
+    if (selectedProjectId) params.projectId = selectedProjectId;
     leados.getLeads(params)
       .then(setLeads)
       .catch(() => setLeads([]))
@@ -104,7 +137,7 @@ function LeadsPageInner() {
 
   useEffect(() => {
     fetchLeads();
-  }, [stageFilter, sourceFilter]);
+  }, [stageFilter, sourceFilter, selectedProjectId]);
 
   const filtered = leads.filter(l => {
     if (!search) return true;
@@ -114,14 +147,17 @@ function LeadsPageInner() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-white">Leads / CRM</h1>
           <p className="mt-1 text-sm text-zinc-400">Manage and track all captured leads &middot; {leads.length} total</p>
         </div>
-        <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500">
-          <Plus className="h-4 w-4" /> Add Lead
-        </button>
+        <div className="flex items-center gap-3">
+          <ProjectFilter />
+          <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500">
+            <Plus className="h-4 w-4" /> Add Lead
+          </button>
+        </div>
       </div>
 
       {showAddModal && <AddLeadModal onClose={() => setShowAddModal(false)} onAdded={fetchLeads} />}
@@ -191,84 +227,100 @@ function LeadsPageInner() {
               <tr><td colSpan={6} className="px-4 py-8 text-center text-zinc-500">Loading...</td></tr>
             ) : filtered.length === 0 ? (
               <tr><td colSpan={6} className="px-4 py-8 text-center text-zinc-500">No leads found</td></tr>
-            ) : filtered.map((lead) => (
-              <Fragment key={lead.id}>
-                <tr
-                  onClick={() => setExpandedLead(expandedLead === lead.id ? null : lead.id)}
-                  className="cursor-pointer transition-colors hover:bg-zinc-800/30"
-                >
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <ChevronRight className={cn('h-3.5 w-3.5 text-zinc-500 transition-transform', expandedLead === lead.id && 'rotate-90')} />
-                      <div>
-                        <p className="font-medium text-zinc-100">{lead.name}</p>
-                        <p className="text-xs text-zinc-500">{lead.email}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-zinc-300">{lead.company}</td>
-                  <td className="px-4 py-3">
-                    <span className="rounded-md bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300">{lead.source?.replace('_', ' ')}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="h-2 w-16 overflow-hidden rounded-full bg-zinc-800">
-                        <div className={cn('h-full rounded-full', lead.score >= 80 ? 'bg-emerald-500' : lead.score >= 60 ? 'bg-amber-500' : 'bg-red-500')} style={{ width: `${lead.score}%` }} />
-                      </div>
-                      <span className="text-xs text-zinc-400">{lead.score}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium capitalize', stageColors[lead.stage] || stageColors.new)}>
-                      {lead.stage}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-zinc-500">
-                    {new Date(lead.updatedAt).toLocaleDateString()}
-                  </td>
-                </tr>
-                {expandedLead === lead.id && (
-                  <tr key={`${lead.id}_expanded`}>
-                    <td colSpan={6} className="bg-zinc-900/30 px-8 py-4">
-                      <div className="grid gap-4 md:grid-cols-2">
+            ) : filtered.map((lead) => {
+              const blacklisted = lead.company && isBlacklisted(lead.company, lead.email?.split('@')[1]);
+              return (
+                <Fragment key={lead.id}>
+                  <tr
+                    onClick={() => setExpandedLead(expandedLead === lead.id ? null : lead.id)}
+                    className={cn(
+                      'cursor-pointer transition-colors hover:bg-zinc-800/30',
+                      blacklisted && 'bg-red-950/10'
+                    )}
+                  >
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <ChevronRight className={cn('h-3.5 w-3.5 text-zinc-500 transition-transform', expandedLead === lead.id && 'rotate-90')} />
                         <div>
-                          <h4 className="mb-2 text-sm font-medium text-zinc-200">Contact Info</h4>
-                          <div className="space-y-1 text-sm text-zinc-400">
-                            {lead.email && <p className="flex items-center gap-2"><Mail className="h-3.5 w-3.5" /> {lead.email}</p>}
-                            {lead.phone && <p className="flex items-center gap-2"><PhoneIcon className="h-3.5 w-3.5" /> {lead.phone}</p>}
-                            {lead.segment && <p>Segment: <span className="capitalize text-zinc-300">{lead.segment?.replace('_', ' ')}</span></p>}
-                            {lead.notes && <p className="mt-2 text-zinc-500 italic">{lead.notes}</p>}
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-zinc-100">{lead.name}</p>
+                            {blacklisted && (
+                              <span title="Blacklisted company"><ShieldBan className="h-3.5 w-3.5 text-red-400" /></span>
+                            )}
                           </div>
-                        </div>
-                        <div>
-                          <h4 className="mb-2 text-sm font-medium text-zinc-200">Activity Timeline</h4>
-                          {lead.interactions && lead.interactions.length > 0 ? (
-                            <div className="space-y-3">
-                              {lead.interactions.map((interaction: any, i: number) => {
-                                const Icon = typeIcons[interaction.type] || Mail;
-                                return (
-                                  <div key={i} className="flex gap-3">
-                                    <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-800">
-                                      <Icon className="h-3 w-3 text-zinc-400" />
-                                    </div>
-                                    <div>
-                                      <p className="text-sm text-zinc-300">{interaction.content}</p>
-                                      <p className="text-xs text-zinc-500">{new Date(interaction.timestamp).toLocaleString()}</p>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <p className="text-sm text-zinc-500">No interactions recorded yet</p>
-                          )}
+                          <p className="text-xs text-zinc-500">{lead.email}</p>
                         </div>
                       </div>
                     </td>
+                    <td className="px-4 py-3 text-zinc-300">{lead.company}</td>
+                    <td className="px-4 py-3">
+                      <span className="rounded-md bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300">{lead.source?.replace('_', ' ')}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="h-2 w-16 overflow-hidden rounded-full bg-zinc-800">
+                          <div className={cn('h-full rounded-full', lead.score >= 80 ? 'bg-emerald-500' : lead.score >= 60 ? 'bg-amber-500' : 'bg-red-500')} style={{ width: `${lead.score}%` }} />
+                        </div>
+                        <span className="text-xs text-zinc-400">{lead.score}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium capitalize', stageColors[lead.stage] || stageColors.new)}>
+                        {lead.stage}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-zinc-500">
+                      {new Date(lead.updatedAt).toLocaleDateString()}
+                    </td>
                   </tr>
-                )}
-              </Fragment>
-            ))}
+                  {expandedLead === lead.id && (
+                    <tr key={`${lead.id}_expanded`}>
+                      <td colSpan={6} className="bg-zinc-900/30 px-8 py-4">
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <div>
+                            <h4 className="mb-2 text-sm font-medium text-zinc-200">Contact Info</h4>
+                            <div className="space-y-1 text-sm text-zinc-400">
+                              {lead.email && <p className="flex items-center gap-2"><Mail className="h-3.5 w-3.5" /> {lead.email}</p>}
+                              {lead.phone && <p className="flex items-center gap-2"><PhoneIcon className="h-3.5 w-3.5" /> {lead.phone}</p>}
+                              {lead.segment && <p>Segment: <span className="capitalize text-zinc-300">{lead.segment?.replace('_', ' ')}</span></p>}
+                              {blacklisted && (
+                                <p className="mt-2 flex items-center gap-1 text-red-400">
+                                  <ShieldBan className="h-3.5 w-3.5" /> Blacklisted company
+                                </p>
+                              )}
+                              {lead.notes && <p className="mt-2 text-zinc-500 italic">{lead.notes}</p>}
+                            </div>
+                          </div>
+                          <div>
+                            <h4 className="mb-2 text-sm font-medium text-zinc-200">Activity Timeline</h4>
+                            {lead.interactions && lead.interactions.length > 0 ? (
+                              <div className="space-y-3">
+                                {lead.interactions.map((interaction: any, i: number) => {
+                                  const Icon = typeIcons[interaction.type] || Mail;
+                                  return (
+                                    <div key={i} className="flex gap-3">
+                                      <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-800">
+                                        <Icon className="h-3 w-3 text-zinc-400" />
+                                      </div>
+                                      <div>
+                                        <p className="text-sm text-zinc-300">{interaction.content}</p>
+                                        <p className="text-xs text-zinc-500">{new Date(interaction.timestamp).toLocaleString()}</p>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-zinc-500">No interactions recorded yet</p>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>

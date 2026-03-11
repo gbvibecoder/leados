@@ -14,11 +14,28 @@ const iconMap = {
   info: { icon: Info, color: 'text-zinc-400' },
 };
 
+function formatTime(timestamp: string): string {
+  const d = new Date(timestamp);
+  const h = d.getHours().toString().padStart(2, '0');
+  const m = d.getMinutes().toString().padStart(2, '0');
+  const s = d.getSeconds().toString().padStart(2, '0');
+  return `${h}:${m}:${s}`;
+}
+
+const PLACEHOLDER_ITEM: ActivityItem = {
+  id: '1',
+  type: 'info',
+  message: 'No activity yet. Run a pipeline to get started.',
+  timestamp: '',
+};
+
 export function ActivityFeed() {
   const { activityFeed } = useAppStore();
   const [dbActivity, setDbActivity] = useState<ActivityItem[]>([]);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     leados.activity().then((items) => {
       setDbActivity(items.map((item: any) => ({
         id: item.id,
@@ -35,12 +52,7 @@ export function ActivityFeed() {
     ? activityFeed
     : dbActivity.length > 0
       ? dbActivity
-      : [{
-          id: '1',
-          type: 'info',
-          message: 'No activity yet. Run a pipeline to get started.',
-          timestamp: new Date().toISOString(),
-        }];
+      : [PLACEHOLDER_ITEM];
 
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
@@ -60,9 +72,11 @@ export function ActivityFeed() {
                   {item.agentName && (
                     <span className="text-xs text-zinc-500">{item.agentName}</span>
                   )}
-                  <span className="text-xs text-zinc-600">
-                    {new Date(item.timestamp).toLocaleTimeString()}
-                  </span>
+                  {mounted && item.timestamp && (
+                    <span className="text-xs text-zinc-600">
+                      {formatTime(item.timestamp)}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>

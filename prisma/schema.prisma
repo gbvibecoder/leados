@@ -23,6 +23,7 @@ model User {
 model Pipeline {
   id                String     @id @default(cuid())
   userId            String?
+  projectId         String?
   type              String     // 'leados'
   status            String     @default("idle") // idle | running | completed | error | paused
   config            String?    // JSON
@@ -30,6 +31,7 @@ model Pipeline {
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
   user              User?      @relation(fields: [userId], references: [id])
+  project           Project?   @relation(fields: [projectId], references: [id])
   agentRuns         AgentRun[]
 }
 
@@ -54,6 +56,7 @@ model AgentRun {
 model Lead {
   id                   String        @id @default(cuid())
   pipelineId           String?
+  projectId            String?
   name                 String
   email                String?
   company              String?
@@ -74,6 +77,9 @@ model Lead {
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
   interactions         Interaction[]
+  project              Project?      @relation(fields: [projectId], references: [id])
+
+  @@index([projectId])
 }
 
 model Interaction {
@@ -110,6 +116,19 @@ model CreativeAsset {
   performanceTag String?
   metadata       String?  // JSON
   createdAt      DateTime @default(now())
+}
+
+model Project {
+  id          String     @id @default(cuid())
+  name        String
+  description String?
+  type        String     @default("external") // internal | external
+  status      String     @default("active")   // active | archived
+  config      String?    // JSON — pre-filled offer/funnel data for internal projects
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  pipelines   Pipeline[]
+  leads       Lead[]
 }
 
 model Setting {

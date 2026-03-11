@@ -14,7 +14,7 @@ async function fetchApi<T>(url: string, options?: RequestInit): Promise<T> {
 
 // Pipeline endpoints
 export const pipelines = {
-  create: (data: { type: string; config?: Record<string, unknown> }) =>
+  create: (data: { type: string; config?: Record<string, unknown>; projectId?: string }) =>
     fetchApi<any>('/pipelines', { method: 'POST', body: JSON.stringify(data) }),
   list: () => fetchApi<any[]>('/pipelines'),
   get: (id: string) => fetchApi<any>(`/pipelines/${id}`),
@@ -35,6 +35,13 @@ export const agents = {
   runs: (id: string) => fetchApi<any[]>(`/agents/${id}/runs`),
 };
 
+// Project endpoints
+export const projects = {
+  list: () => fetchApi<any[]>('/projects'),
+  create: (data: { name: string; description?: string; type: 'internal' | 'external'; config?: Record<string, unknown> }) =>
+    fetchApi<any>('/projects', { method: 'POST', body: JSON.stringify(data) }),
+};
+
 // LeadOS endpoints
 export const leados = {
   getLeads: (params?: Record<string, string>) => {
@@ -42,6 +49,8 @@ export const leados = {
     return fetchApi<any[]>(`/leados/leads${query}`);
   },
   getLead: (id: string) => fetchApi<any>(`/leados/leads/${id}`),
+  createLead: (data: Record<string, unknown>) =>
+    fetchApi<any>('/leados/leads', { method: 'POST', body: JSON.stringify(data) }),
   updateLead: (id: string, data: Record<string, unknown>) =>
     fetchApi<any>(`/leados/leads/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   analytics: (params?: Record<string, string>) => {
