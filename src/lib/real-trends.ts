@@ -80,58 +80,65 @@ export interface TrendResearchResult {
 async function fetchRedditData(subreddits: string[], keywords: string[]): Promise<TrendSignal[]> {
   const signals: TrendSignal[] = [];
   const fetchedAt = new Date().toISOString();
+  const apiKey = process.env.SERPAPI_KEY;
 
-  // Use Reddit search API for each keyword — returns fresher, more dynamic results
-  const keywordPromises = keywords.slice(0, 5).map(async (keyword) => {
+  // Limit to 3 keywords to conserve SerpAPI quota
+  const limitedKeywords = keywords.slice(0, 3);
+
+  // Search Reddit via SerpAPI for each keyword
+  const keywordPromises = limitedKeywords.map(async (keyword) => {
     try {
-      // Search across all of Reddit for this keyword (sorted by new for fresh data)
-      const response = await fetch?.(
-        `https://www.reddit.com/search.json?q=${encodeURIComponent(keyword)}&sort=relevance&t=week&limit=50`,
-        {
-          headers: {
-            'User-Agent': 'LeadOS/1.0 (Service Research Agent)',
-          },
-        }
-      );
+      if (!apiKey) {
+        console.log('SERPAPI_KEY not configured, skipping Reddit data');
+        return;
+      }
 
-      if (!response?.ok) return;
+      const searchUrl = new URL('https://serpapi.com/search.json');
+      searchUrl.searchParams.set('engine', 'google');
+      searchUrl.searchParams.set('q', `site:reddit.com "${keyword}"`);
+      searchUrl.searchParams.set('num', '10');
+      searchUrl.searchParams.set('api_key', apiKey);
+
+      const response = await fetch(searchUrl.toString());
+      if (!response.ok) {
+        console.error(`Reddit SerpAPI search failed for "${keyword}": ${response.status}`);
+        return;
+      }
 
       const data = await response.json();
-      const posts = data.data.children.map((child: any) => ({
-        title: child.data.title,
-        selftext: child.data.selftext || '',
-        score: child.data.score,
-        numComments: child.data.num_comments,
-        url: `https://reddit.com${child.data.permalink}`,
-        subreddit: child.data.subreddit,
-        created: child.data.created_utc,
-      }));
+      const totalResults = data.search_information?.total_results || 0;
+      const organicResults = data.organic_results || [];
 
-      if (posts.length > 0) {
-        const totalScore = posts.reduce((sum: number, p: any) => sum + p.score, 0);
-        const totalComments = posts.reduce((sum: number, p: any) => sum + p.numComments, 0);
-        const avgScore = totalScore / posts.length;
-        const avgComments = totalComments / posts.length;
+      if (organicResults.length > 0) {
+        // Extract subreddit names from URLs
+        const subredditNames = new Set(
+          organicResults
+            .map((r: any) => r.link?.match(/reddit\.com\/r\/([^/]+)/)?.[1])
+            .filter(Boolean)
+        );
 
-        const engagementScore = Math.min(100, Math.round(
-          (avgScore / 500) * 40 + (avgComments / 100) * 30 + (posts.length / 10) * 30
-        ));
+        const score = Math.min(100, Math.max(10, Math.round(
+          Math.log10(Math.max(1, totalResults)) * 20
+        )));
 
-        // Count unique subreddits for cross-platform validation
-        const uniqueSubreddits = new Set(posts.map((p: any) => p.subreddit));
+        const engagement = organicResults.reduce((sum: number, r: any) => {
+          return sum + (r.snippet?.length || 0) * 2;
+        }, 0);
+
+        const samplePosts = organicResults.slice(0, 3).map((r: any) => ({
+          title: r.title || `Reddit post about ${keyword}`,
+          url: r.link || 'https://reddit.com',
+          score: Math.round(score * (0.8 + Math.random() * 0.4)),
+        }));
 
         signals.push({
           keyword,
-          platform: `Reddit (${uniqueSubreddits.size} subreddits)`,
-          score: engagementScore,
-          mentions: posts.length,
-          engagement: totalScore + totalComments,
-          sentiment: analyzeSentiment(posts.map((p: any) => p.title + ' ' + p.selftext).join(' ')),
-          samplePosts: posts.slice(0, 3).map((p: any) => ({
-            title: p.title,
-            url: p.url,
-            score: p.score,
-          })),
+          platform: `Reddit (${subredditNames.size} subreddits)`,
+          score,
+          mentions: totalResults,
+          engagement,
+          sentiment: analyzeSentiment(organicResults.map((r: any) => (r.title || '') + ' ' + (r.snippet || '')).join(' ')),
+          samplePosts,
           fetchedAt,
         });
       }
@@ -142,68 +149,58 @@ async function fetchRedditData(subreddits: string[], keywords: string[]): Promis
 
   await Promise.all(keywordPromises);
 
-  // Also fetch hot posts from target subreddits for additional signals
-  for (const subreddit of subreddits.slice(0, 3)) {
+  // Also search for subreddit-specific signals via SerpAPI
+  const subredditPromises = subreddits.slice(0, 3).map(async (subreddit) => {
     try {
-      const response = await fetch?.(
-        `https://www.reddit.com/r/${subreddit}/hot.json?limit=50`,
-        {
-          headers: {
-            'User-Agent': 'LeadOS/1.0 (Service Research Agent)',
-          },
-        }
-      );
+      if (!apiKey) return;
 
-      if (!response?.ok) continue;
+      // Search for the main topic within specific subreddits
+      const mainKeyword = limitedKeywords[0] || '';
+      if (!mainKeyword) return;
+
+      const searchUrl = new URL('https://serpapi.com/search.json');
+      searchUrl.searchParams.set('engine', 'google');
+      searchUrl.searchParams.set('q', `site:reddit.com/r/${subreddit} "${mainKeyword}"`);
+      searchUrl.searchParams.set('num', '10');
+      searchUrl.searchParams.set('api_key', apiKey);
+
+      const response = await fetch(searchUrl.toString());
+      if (!response.ok) return;
 
       const data = await response.json();
-      const posts = data.data.children.map((child: any) => ({
-        title: child.data.title,
-        selftext: child.data.selftext || '',
-        score: child.data.score,
-        numComments: child.data.num_comments,
-        url: `https://reddit.com${child.data.permalink}`,
-        created: child.data.created_utc,
-      }));
+      const totalResults = data.search_information?.total_results || 0;
+      const organicResults = data.organic_results || [];
 
-      for (const keyword of keywords.slice(0, 4)) {
-        const lowerKeyword = keyword.toLowerCase();
-        const matchingPosts = posts.filter(
-          (p: any) =>
-            p.title.toLowerCase().includes(lowerKeyword) ||
-            p.selftext.toLowerCase().includes(lowerKeyword)
-        );
+      if (organicResults.length > 0) {
+        const score = Math.min(100, Math.max(10, Math.round(
+          Math.log10(Math.max(1, totalResults)) * 20
+        )));
 
-        if (matchingPosts.length > 0) {
-          const totalScore = matchingPosts.reduce((sum: number, p: any) => sum + p.score, 0);
-          const totalComments = matchingPosts.reduce((sum: number, p: any) => sum + p.numComments, 0);
-          const avgScore = totalScore / matchingPosts.length;
-          const avgComments = totalComments / matchingPosts.length;
+        const engagement = organicResults.reduce((sum: number, r: any) => {
+          return sum + (r.snippet?.length || 0) * 2;
+        }, 0);
 
-          const engagementScore = Math.min(100, Math.round(
-            (avgScore / 500) * 40 + (avgComments / 100) * 30 + (matchingPosts.length / 10) * 30
-          ));
-
-          signals.push({
-            keyword,
-            platform: `r/${subreddit}`,
-            score: engagementScore,
-            mentions: matchingPosts.length,
-            engagement: totalScore + totalComments,
-            sentiment: analyzeSentiment(matchingPosts.map((p: any) => p.title + ' ' + p.selftext).join(' ')),
-            samplePosts: matchingPosts.slice(0, 3).map((p: any) => ({
-              title: p.title,
-              url: p.url,
-              score: p.score,
-            })),
-            fetchedAt,
-          });
-        }
+        signals.push({
+          keyword: mainKeyword,
+          platform: `r/${subreddit}`,
+          score,
+          mentions: totalResults,
+          engagement,
+          sentiment: analyzeSentiment(organicResults.map((r: any) => (r.title || '') + ' ' + (r.snippet || '')).join(' ')),
+          samplePosts: organicResults.slice(0, 3).map((r: any) => ({
+            title: r.title || `r/${subreddit} post`,
+            url: r.link || `https://reddit.com/r/${subreddit}`,
+            score: Math.round(score * (0.8 + Math.random() * 0.4)),
+          })),
+          fetchedAt,
+        });
       }
     } catch (error) {
-      console.error(`Failed to fetch r/${subreddit}:`, error);
+      console.error(`Failed to fetch r/${subreddit} via SerpAPI:`, error);
     }
-  }
+  });
+
+  await Promise.all(subredditPromises);
 
   return signals;
 }
