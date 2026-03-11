@@ -14,8 +14,8 @@ function AnalyticsPageInner() {
   const [period, setPeriod] = useState('30d');
 
   useEffect(() => {
-    leados.analytics().then(setData).catch(() => {});
-  }, []);
+    leados.analytics({ period }).then(setData).catch(() => {});
+  }, [period]);
 
   return (
     <div className="space-y-6">

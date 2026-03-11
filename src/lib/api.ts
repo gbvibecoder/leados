@@ -44,7 +44,10 @@ export const leados = {
   getLead: (id: string) => fetchApi<any>(`/leados/leads/${id}`),
   updateLead: (id: string, data: Record<string, unknown>) =>
     fetchApi<any>(`/leados/leads/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  analytics: () => fetchApi<any>('/leados/analytics'),
+  analytics: (params?: Record<string, string>) => {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    return fetchApi<any>(`/leados/analytics${query}`);
+  },
 };
 
 // Settings endpoints
