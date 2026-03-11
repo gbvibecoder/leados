@@ -208,11 +208,17 @@ export class OutboundOutreachAgent extends BaseAgent {
         },
       });
 
-      const response = await this.callClaude(SYSTEM_PROMPT, userMessage);
-      const parsed = this.safeParseLLMJson<any>(response, ['coldEmail', 'linkedIn', 'projectedMetrics']);
+      let parsed: any;
+      try {
+        const response = await this.callClaude(SYSTEM_PROMPT, userMessage);
+        parsed = this.safeParseLLMJson<any>(response, ['coldEmail', 'linkedIn', 'projectedMetrics']);
+      } catch (llmError: any) {
+        await this.log('claude_fallback', { reason: llmError.message });
+        parsed = await this.getMockOutput(inputs);
+      }
 
       // If we have real prospects from Apollo, inject them into the output
-      if (realProspects.length > 0 && parsed.prospectList) {
+      if (realProspects.length > 0) {
         parsed.prospectList = realProspects.map((p) => ({
           firstName: p.firstName,
           lastName: p.lastName,
@@ -227,9 +233,12 @@ export class OutboundOutreachAgent extends BaseAgent {
       }
 
       // Add real campaign ID if available
-      if (realCampaign?.id && parsed.coldEmail) {
-        parsed.coldEmail.campaignId = realCampaign.id;
-        parsed.coldEmail.dataSource = 'live_instantly';
+      if (realCampaign?.id) {
+        if (parsed.coldEmail) {
+          parsed.coldEmail.campaignId = realCampaign.id;
+          parsed.coldEmail.dataSource = 'live_instantly';
+        }
+        parsed.instantlyCampaignId = realCampaign.id;
       }
 
       this.status = 'done';
@@ -242,13 +251,12 @@ export class OutboundOutreachAgent extends BaseAgent {
       };
     } catch (error: any) {
       this.status = 'done';
-      await this.log('run_fallback', { reason: error.message || 'Using mock data' });
-      const mockData = await this.getMockOutput(inputs);
+      await this.log('run_error', { reason: error.message });
       return {
-        success: true,
-        data: mockData,
-        reasoning: mockData.reasoning,
-        confidence: mockData.confidence,
+        success: false,
+        data: {},
+        reasoning: `Outbound outreach failed: ${error.message}`,
+        confidence: 0,
       };
     }
   }
