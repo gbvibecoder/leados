@@ -17,6 +17,8 @@ import {
   ShieldCheck,
   LogIn,
   UserPlus,
+  Activity,
+  Users,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -88,6 +90,124 @@ export default function LandingPage() {
           backgroundImage: 'linear-gradient(rgba(255,255,255,.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.1) 1px, transparent 1px)',
           backgroundSize: '60px 60px',
         }} />
+
+        {/* Floating decorative cards */}
+        <div className="pointer-events-none absolute inset-0 hidden lg:block">
+          {/* Top-left: Lead Score card */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.8, ease: [0.25, 0.4, 0.25, 1] }}
+            className="absolute left-[5%] top-[18%]"
+          >
+            <motion.div
+              animate={{ y: [0, -8, 0] }}
+              transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+              className="rounded-xl border border-indigo-500/20 bg-zinc-900/80 backdrop-blur-md px-4 py-3 shadow-lg shadow-indigo-500/5 -rotate-3"
+            >
+              <div className="flex items-center gap-2 mb-1.5">
+                <Target className="h-3.5 w-3.5 text-indigo-400" />
+                <span className="text-[10px] font-semibold text-indigo-400 uppercase tracking-wider">Lead Score</span>
+              </div>
+              <div className="flex items-end gap-1.5">
+                <span className="text-2xl font-bold text-white">94</span>
+                <span className="text-[10px] text-emerald-400 mb-1">+12%</span>
+              </div>
+              <div className="mt-1.5 h-1 w-20 rounded-full bg-zinc-800">
+                <div className="h-full w-[94%] rounded-full bg-indigo-500" />
+              </div>
+            </motion.div>
+          </motion.div>
+
+          {/* Bottom-left: Pipeline Status card */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 1.0, ease: [0.25, 0.4, 0.25, 1] }}
+            className="absolute left-[3%] bottom-[22%]"
+          >
+            <motion.div
+              animate={{ y: [0, 6, 0] }}
+              transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
+              className="rounded-xl border border-emerald-500/20 bg-zinc-900/80 backdrop-blur-md px-4 py-3 shadow-lg shadow-emerald-500/5 rotate-2"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <Activity className="h-3.5 w-3.5 text-emerald-400" />
+                <span className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider">Pipeline</span>
+              </div>
+              <div className="space-y-1.5">
+                {[
+                  { label: 'Research', w: 'w-full', color: 'bg-emerald-500' },
+                  { label: 'Qualify', w: 'w-3/4', color: 'bg-indigo-500' },
+                  { label: 'Convert', w: 'w-1/2', color: 'bg-purple-500' },
+                ].map(s => (
+                  <div key={s.label} className="flex items-center gap-2">
+                    <span className="text-[9px] text-zinc-500 w-10">{s.label}</span>
+                    <div className="h-1 flex-1 rounded-full bg-zinc-800">
+                      <div className={`h-full ${s.w} ${s.color} rounded-full`} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+
+          {/* Top-right: AI Qualification card */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.9, ease: [0.25, 0.4, 0.25, 1] }}
+            className="absolute right-[5%] top-[20%]"
+          >
+            <motion.div
+              animate={{ y: [0, -6, 0] }}
+              transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+              className="rounded-xl border border-violet-500/20 bg-zinc-900/80 backdrop-blur-md px-4 py-3 shadow-lg shadow-violet-500/5 rotate-2"
+            >
+              <div className="flex items-center gap-2 mb-1.5">
+                <Phone className="h-3.5 w-3.5 text-violet-400" />
+                <span className="text-[10px] font-semibold text-violet-400 uppercase tracking-wider">AI Qualification</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="h-6 w-6 rounded-full bg-violet-500/20 flex items-center justify-center">
+                  <Bot className="h-3 w-3 text-violet-400" />
+                </div>
+                <div>
+                  <p className="text-[10px] text-zinc-300 font-medium">BANT Score</p>
+                  <p className="text-[9px] text-zinc-500">Voice call complete</p>
+                </div>
+                <span className="ml-2 text-sm font-bold text-violet-400">A+</span>
+              </div>
+            </motion.div>
+          </motion.div>
+
+          {/* Bottom-right: Live Data card */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 1.1, ease: [0.25, 0.4, 0.25, 1] }}
+            className="absolute right-[4%] bottom-[24%]"
+          >
+            <motion.div
+              animate={{ y: [0, 8, 0] }}
+              transition={{ duration: 5.5, repeat: Infinity, ease: 'easeInOut', delay: 1.5 }}
+              className="rounded-xl border border-cyan-500/20 bg-zinc-900/80 backdrop-blur-md px-4 py-3 shadow-lg shadow-cyan-500/5 -rotate-2"
+            >
+              <div className="flex items-center gap-2 mb-1.5">
+                <Users className="h-3.5 w-3.5 text-cyan-400" />
+                <span className="text-[10px] font-semibold text-cyan-400 uppercase tracking-wider">Live Leads</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xl font-bold text-white">2,847</span>
+                <div className="flex items-center gap-0.5">
+                  <TrendingUp className="h-3 w-3 text-emerald-400" />
+                  <span className="text-[10px] text-emerald-400 font-medium">+23%</span>
+                </div>
+              </div>
+              <p className="text-[9px] text-zinc-500 mt-0.5">This month</p>
+            </motion.div>
+          </motion.div>
+        </div>
 
         <div className="relative z-10 max-w-4xl mx-auto">
           {/* Badge */}
