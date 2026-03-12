@@ -166,29 +166,41 @@ export function FunnelBuilderOutput({ data }: Props) {
             )}
           </div>
           <div className="p-3 sm:p-4 space-y-2">
-            {funnelData.pages.map((page, idx) => (
-              <div key={idx} className="flex items-center gap-3 p-2.5 sm:p-3 bg-muted/20 rounded-lg border border-border/50">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                  page.type === 'landing' ? 'bg-blue-500/10 text-blue-400' :
-                  page.type === 'booking' ? 'bg-purple-500/10 text-purple-400' :
-                  'bg-green-500/10 text-green-400'
-                }`}>
-                  {page.type === 'landing' ? <Globe className="w-4 h-4" /> :
-                   page.type === 'booking' ? <Calendar className="w-4 h-4" /> :
-                   <CheckCircle2 className="w-4 h-4" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium truncate">{page.name}</div>
-                  <div className="text-xs text-muted-foreground truncate">{page.url}</div>
-                  {page.description && (
-                    <div className="text-xs text-muted-foreground mt-0.5 truncate">{page.description}</div>
+            {funnelData.pages.map((page, idx) => {
+              const liveUrl = page.type === 'landing' ? '/funnel'
+                : page.type === 'booking' ? '/funnel/book'
+                : page.type === 'thank-you' ? '/funnel/thank-you'
+                : null;
+              const Wrapper = liveUrl ? 'a' : 'div';
+              const wrapperProps = liveUrl ? { href: liveUrl, target: '_blank', rel: 'noopener noreferrer' } : {};
+              return (
+                <Wrapper key={idx} {...wrapperProps} className={`flex items-center gap-3 p-2.5 sm:p-3 bg-muted/20 rounded-lg border border-border/50 ${liveUrl ? 'hover:bg-muted/40 hover:border-blue-500/30 cursor-pointer transition-colors' : ''}`}>
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                    page.type === 'landing' ? 'bg-blue-500/10 text-blue-400' :
+                    page.type === 'booking' ? 'bg-purple-500/10 text-purple-400' :
+                    'bg-green-500/10 text-green-400'
+                  }`}>
+                    {page.type === 'landing' ? <Globe className="w-4 h-4" /> :
+                     page.type === 'booking' ? <Calendar className="w-4 h-4" /> :
+                     <CheckCircle2 className="w-4 h-4" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate">{page.name}</div>
+                    <div className="text-xs text-muted-foreground truncate">{liveUrl || page.url}</div>
+                    {page.description && (
+                      <div className="text-xs text-muted-foreground mt-0.5 truncate">{page.description}</div>
+                    )}
+                  </div>
+                  {liveUrl ? (
+                    <ExternalLink className="w-4 h-4 text-blue-400 shrink-0" />
+                  ) : (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-muted/40 text-muted-foreground capitalize shrink-0">
+                      {page.type}
+                    </span>
                   )}
-                </div>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-muted/40 text-muted-foreground capitalize shrink-0">
-                  {page.type}
-                </span>
-              </div>
-            ))}
+                </Wrapper>
+              );
+            })}
           </div>
         </div>
       )}
