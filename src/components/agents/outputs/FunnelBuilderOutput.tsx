@@ -17,6 +17,7 @@ import {
   ArrowRight,
   Copy,
   Check,
+  Loader2,
 } from 'lucide-react';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -38,13 +39,6 @@ interface FormField {
 interface Automation {
   trigger: string;
   action: string;
-}
-
-interface FunnelPage {
-  type: string;
-  name: string;
-  url: string;
-  description?: string;
 }
 
 interface FunnelData {
@@ -89,7 +83,7 @@ interface FunnelData {
     events: string[];
     utmParams?: string[];
   };
-  pages?: FunnelPage[];
+  pages?: { type: string; name: string; url: string; description?: string }[];
   reasoning: string;
   confidence: number;
 }
@@ -158,56 +152,6 @@ export function FunnelBuilderOutput({ data }: Props) {
         />
       </div>
 
-      {/* Funnel Pages Overview (excluding landing page — shown in Landing Page Copy) */}
-      {funnelData.pages && funnelData.pages.filter(p => p.type !== 'landing').length > 0 && (
-        <div className="border border-border rounded-lg overflow-hidden">
-          <div className="p-3 sm:p-4 bg-muted/30 flex items-center gap-2">
-            <Globe className="w-4 h-4 text-blue-400 shrink-0" />
-            <span className="font-medium text-sm sm:text-base">Funnel Pages</span>
-            {funnelData.landingPage.deployTarget && (
-              <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                {funnelData.landingPage.deployTarget}
-              </span>
-            )}
-          </div>
-          <div className="p-3 sm:p-4 space-y-2">
-            {funnelData.pages.filter(p => p.type !== 'landing').map((page, idx) => {
-              const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '');
-              const liveUrl = page.type === 'booking' ? (funnelData.bookingCalendar?.url || 'https://calendly.com/codervibe60/30min')
-                : page.type === 'thank-you' ? `${baseUrl}/funnel/thank-you`
-                : null;
-              const Wrapper = liveUrl ? 'a' : 'div';
-              const wrapperProps = liveUrl ? { href: liveUrl, target: '_blank', rel: 'noopener noreferrer' } : {};
-              return (
-                <Wrapper key={idx} {...wrapperProps} className={`flex items-center gap-3 p-2.5 sm:p-3 bg-muted/20 rounded-lg border border-border/50 ${liveUrl ? 'hover:bg-muted/40 hover:border-blue-500/30 cursor-pointer transition-colors' : ''}`}>
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                    page.type === 'booking' ? 'bg-purple-500/10 text-purple-400' :
-                    'bg-green-500/10 text-green-400'
-                  }`}>
-                    {page.type === 'booking' ? <Calendar className="w-4 h-4" /> :
-                     <CheckCircle2 className="w-4 h-4" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate">{page.name}</div>
-                    <div className="text-xs text-muted-foreground truncate">{liveUrl || page.url}</div>
-                    {page.description && (
-                      <div className="text-xs text-muted-foreground mt-0.5 truncate">{page.description}</div>
-                    )}
-                  </div>
-                  {liveUrl ? (
-                    <ExternalLink className="w-4 h-4 text-blue-400 shrink-0" />
-                  ) : (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-muted/40 text-muted-foreground capitalize shrink-0">
-                      {page.type}
-                    </span>
-                  )}
-                </Wrapper>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* Landing Page Sections */}
       <CollapsibleSection
         icon={<FileText className="w-4 h-4 text-orange-400" />}
@@ -273,53 +217,7 @@ export function FunnelBuilderOutput({ data }: Props) {
       </CollapsibleSection>
 
       {/* Lead Form */}
-      <CollapsibleSection
-        icon={<FormInput className="w-4 h-4 text-green-400" />}
-        title="Lead Capture Form"
-        subtitle={`${funnelData.leadForm.fields?.length || 0} fields`}
-      >
-        <div className="space-y-3">
-          {/* Form Preview */}
-          <div className="p-3 sm:p-4 bg-muted/20 rounded-lg border border-border/50 space-y-2.5">
-            {funnelData.leadForm.fields?.map((field, idx) => (
-              <div key={idx} className="flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-medium">{field.label || field.name}</span>
-                    {field.required && <span className="text-red-400 text-xs">*</span>}
-                  </div>
-                  <div className="mt-1 px-3 py-1.5 bg-muted/30 rounded border border-border/50 text-xs text-muted-foreground truncate">
-                    {field.placeholder || field.name}
-                  </div>
-                </div>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-muted/40 text-muted-foreground shrink-0">
-                  {field.type}
-                </span>
-              </div>
-            ))}
-            {funnelData.leadForm.submitButtonText && (
-              <div className="pt-2">
-                <div className="inline-block px-4 py-2 bg-green-600 text-white text-xs sm:text-sm rounded-lg font-medium">
-                  {funnelData.leadForm.submitButtonText}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Submit Action */}
-          <div className="p-2.5 bg-muted/10 rounded-lg border border-border/50">
-            <div className="text-xs text-muted-foreground mb-1">On Submit</div>
-            <div className="text-xs sm:text-sm break-words">{funnelData.leadForm.submitAction}</div>
-          </div>
-
-          {funnelData.leadForm.webhookUrl && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Zap className="w-3 h-3 shrink-0" />
-              <span className="min-w-0 break-all">Webhook: <code className="text-xs bg-muted/30 px-1 py-0.5 rounded break-all">{funnelData.leadForm.webhookUrl}</code></span>
-            </div>
-          )}
-        </div>
-      </CollapsibleSection>
+      <LeadCaptureForm fields={funnelData.leadForm.fields} />
 
       {/* Booking Calendar — Strategy Call */}
       <CollapsibleSection
@@ -536,6 +434,127 @@ function QuickStat({ icon, label, value }: { icon: React.ReactNode; label: strin
         <span className="text-xs">{label}</span>
       </div>
       <div className="text-lg sm:text-xl font-bold">{value}</div>
+    </div>
+  );
+}
+
+function LeadCaptureForm({ fields }: { fields: FormField[] }) {
+  const [formData, setFormData] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const res = await fetch('/api/webhooks/lead-capture', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      const result = await res.json();
+
+      if (res.ok && result.success) {
+        setSubmitted(true);
+      } else {
+        setError(result.error || 'Failed to submit. Please try again.');
+      }
+    } catch {
+      setError('Network error. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="border border-border rounded-lg overflow-hidden">
+      <div className="p-3 sm:p-4 bg-muted/30 flex items-center gap-2">
+        <FormInput className="w-4 h-4 text-green-400 shrink-0" />
+        <span className="font-medium text-sm sm:text-base">Lead Capture Form</span>
+        <span className="text-xs text-muted-foreground ml-auto">{fields?.length || 0} fields</span>
+      </div>
+      <div className="p-3 sm:p-4">
+        {submitted ? (
+          <div className="text-center py-6 space-y-3">
+            <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center mx-auto">
+              <Check className="w-6 h-6 text-green-400" />
+            </div>
+            <p className="text-green-400 font-semibold">Lead added successfully!</p>
+            <p className="text-xs text-muted-foreground">The lead has been added to your CRM table.</p>
+            <button
+              onClick={() => { setSubmitted(false); setFormData({}); }}
+              className="text-xs text-blue-400 hover:text-blue-300 underline"
+            >
+              Submit another lead
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-3">
+            {fields?.map((field, idx) => (
+              <div key={idx}>
+                <label className="text-sm font-medium mb-1 block">
+                  {field.label || field.name}
+                  {field.required && <span className="text-red-400 ml-1">*</span>}
+                </label>
+                {field.type === 'select' ? (
+                  <select
+                    required={field.required}
+                    value={formData[field.name] || ''}
+                    onChange={(e) => setFormData({ ...formData, [field.name]: e.target.value })}
+                    className="w-full bg-zinc-900 border border-border/50 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500/30"
+                  >
+                    <option value="" className="bg-zinc-900 text-zinc-400">{field.placeholder || `Select ${field.label || field.name}`}</option>
+                    {field.options?.map((opt) => (
+                      <option key={opt} value={opt} className="bg-zinc-900 text-zinc-100">{opt}</option>
+                    ))}
+                  </select>
+                ) : field.type === 'textarea' ? (
+                  <textarea
+                    required={field.required}
+                    placeholder={field.placeholder || ''}
+                    value={formData[field.name] || ''}
+                    onChange={(e) => setFormData({ ...formData, [field.name]: e.target.value })}
+                    rows={3}
+                    className="w-full bg-muted/30 border border-border/50 rounded-lg px-3 py-2 text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500/30"
+                  />
+                ) : (
+                  <input
+                    type={field.type === 'phone' ? 'tel' : field.type === 'email' ? 'email' : 'text'}
+                    required={field.required}
+                    placeholder={field.placeholder || ''}
+                    value={formData[field.name] || ''}
+                    onChange={(e) => setFormData({ ...formData, [field.name]: e.target.value })}
+                    className="w-full bg-muted/30 border border-border/50 rounded-lg px-3 py-2 text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500/30"
+                  />
+                )}
+              </div>
+            ))}
+
+            {error && (
+              <p className="text-red-400 text-xs">{error}</p>
+            )}
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full bg-green-600 hover:bg-green-500 disabled:bg-green-600/50 text-white py-2.5 rounded-lg font-medium text-sm transition-colors flex items-center justify-center gap-2"
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Submitting...
+                </>
+              ) : (
+                'Submit'
+              )}
+            </button>
+          </form>
+        )}
+      </div>
     </div>
   );
 }

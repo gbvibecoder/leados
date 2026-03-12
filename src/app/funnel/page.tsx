@@ -462,7 +462,7 @@ function FunnelPage() {
                   </>
                 ) : (
                   <>
-                    {funnelData.leadForm?.submitButtonText || 'Submit'}
+                    Submit
                     <ArrowRight className="w-5 h-5" />
                   </>
                 )}
