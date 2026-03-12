@@ -30,18 +30,29 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
 
         // Only process events for the current pipeline — ignore stale events from old runs
         const currentPipelineId = useAppStore.getState().pipeline.id;
-        if (data.pipelineId && currentPipelineId && data.pipelineId !== currentPipelineId) {
+        if (data.pipelineId && (!currentPipelineId || data.pipelineId !== currentPipelineId)) {
           return;
         }
 
         switch (type) {
           case 'agent:started': {
             // Find the agent's index in the current pipeline to set currentAgentIndex
-            const agentIdx = useAppStore.getState().pipeline.agents.findIndex(
+            const currentAgents = useAppStore.getState().pipeline.agents;
+            const agentIdx = currentAgents.findIndex(
               (a) => a.id === data.agentId
             );
             if (agentIdx >= 0) {
               setCurrentAgentIndex(agentIdx);
+            }
+            // ENFORCE SEQUENTIAL: Force-stop any other agent that was still "running"
+            // This ensures only ONE agent shows as running at a time
+            for (const a of currentAgents) {
+              if (a.id !== data.agentId && a.status === 'running') {
+                updateAgentStatus(a.id, {
+                  status: 'done',
+                  progress: 100,
+                });
+              }
             }
             updateAgentStatus(data.agentId, {
               status: 'running',
@@ -86,13 +97,21 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
               message: `${data.agentName || data.agentId} failed: ${data.error}`,
             });
             break;
-          case 'pipeline:completed':
+          case 'pipeline:completed': {
+            // Force ALL agents to done — no agent should be stuck in "running"
+            const allAgents = useAppStore.getState().pipeline.agents;
+            for (const a of allAgents) {
+              if (a.status === 'running') {
+                updateAgentStatus(a.id, { status: 'done', progress: 100 });
+              }
+            }
             updatePipelineStatus('completed');
             addActivity({
               type: 'pipeline_completed',
               message: 'LeadOS pipeline completed',
             });
             break;
+          }
         }
       });
     } catch {
