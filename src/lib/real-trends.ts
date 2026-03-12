@@ -44,6 +44,7 @@ export interface ServiceOpportunity {
   growthRate: string;
   reasoning: string;
   estimatedMarketSize: string;
+  targetAudience: string;
   targetPlatforms: string[];
   trendData: {
     redditMentions: number;
@@ -61,6 +62,7 @@ export interface TrendResearchResult {
   opportunities: ServiceOpportunity[];
   dataSourcesSummary: {
     reddit: { subredditsScanned: string[]; postsAnalyzed: number };
+    hackerNews: { storiesAnalyzed: number };
     linkedin: { postsAnalyzed: number };
     upwork: { jobsAnalyzed: number };
     googleTrends: { keywordsAnalyzed: number; avgInterest: number };
@@ -799,6 +801,9 @@ export async function fetchRealTrends(
         subredditsScanned: subreddits,
         postsAnalyzed: redditSignals.reduce((sum, s) => sum + s.mentions, 0),
       },
+      hackerNews: {
+        storiesAnalyzed: hnSignals.reduce((sum, s) => sum + s.mentions, 0),
+      },
       linkedin: {
         postsAnalyzed: linkedInSignals.reduce((sum, s) => sum + s.mentions, 0),
       },
@@ -1013,9 +1018,10 @@ function analyzeAndRankOpportunities(
     );
 
     rank++;
+    const nicheName = formatNicheName(niche);
     opportunities.push({
       rank,
-      niche: formatNicheName(niche),
+      niche: nicheName,
       demandScore,
       competitionScore,
       monetizationScore,
@@ -1023,6 +1029,7 @@ function analyzeAndRankOpportunities(
       growthRate: estimateGrowthRate(demandScore, data.totalEngagement, data.googleTrendsScore),
       reasoning: data.reasons.slice(0, 3).join('. ') || `Demand signals detected across ${data.platforms.size} platforms`,
       estimatedMarketSize: estimateMarketSize(demandScore, monetizationScore),
+      targetAudience: inferTargetAudience(niche, nicheName, demandScore, data.linkedinMentions, data.upworkJobs),
       targetPlatforms: Array.from(data.platforms).slice(0, 4),
       trendData: {
         redditMentions: data.redditMentions,
@@ -1043,6 +1050,46 @@ function analyzeAndRankOpportunities(
   });
 
   return opportunities.slice(0, 10);
+}
+
+function inferTargetAudience(niche: string, nicheName: string, demandScore: number, linkedinMentions: number, upworkJobs: number): string {
+  const audienceMap: Record<string, string> = {
+    'lead generation': 'B2B service companies (agencies, consultancies, SaaS) with 10-200 employees seeking predictable client acquisition',
+    'sales automation': 'Sales teams and revenue leaders at mid-market B2B companies ($5M-$100M ARR) looking to scale outbound',
+    'b2b': 'B2B founders, VPs of Sales, and growth teams at companies with established product-market fit',
+    'crm': 'Operations managers and sales directors at SMBs (50-500 employees) with manual or fragmented sales processes',
+    'outbound': 'SDR/BDR teams and agency owners running cold outreach at scale (1K+ contacts/month)',
+    'demand generation': 'CMOs and growth marketers at B2B SaaS companies seeking predictable pipeline',
+    'consulting': 'Independent consultants and boutique firms ($500K-$10M revenue) wanting to systematize client acquisition',
+    'agency': 'Digital marketing agency owners (5-50 person teams) looking to scale without proportional headcount',
+    'content marketing': 'Content teams at B2B companies and SaaS startups seeking organic traffic and thought leadership',
+    'seo': 'E-commerce brands and content-driven businesses dependent on organic search traffic',
+    'ppc': 'Performance marketing teams and e-commerce brands with $10K+/month ad budgets',
+    'ai': 'Tech-forward companies and startups looking to integrate AI into operations or products',
+    'automation': 'Operations leaders at growing companies (50-1000 employees) drowning in manual processes',
+    'saas': 'SaaS founders and product teams building or scaling subscription software products',
+    'machine learning': 'CTOs and data teams at companies with large datasets seeking competitive advantage through ML',
+    'social media': 'Brand marketers and DTC companies building audience-driven growth channels',
+    'ecommerce': 'E-commerce store owners ($100K-$10M revenue) seeking to improve conversion and retention',
+    'shopify': 'Shopify merchants ($50K-$5M revenue) looking to optimize store performance and marketing',
+    'dropshipping': 'First-time e-commerce entrepreneurs and side-hustle operators seeking low-overhead business models',
+  };
+
+  for (const [key, audience] of Object.entries(audienceMap)) {
+    if (niche.includes(key)) return audience;
+  }
+
+  // Generate a reasonable default based on signal strength
+  if (linkedinMentions > 100) {
+    return `B2B professionals and decision-makers actively discussing ${nicheName} solutions on LinkedIn`;
+  }
+  if (upworkJobs > 50) {
+    return `Businesses actively hiring for ${nicheName} expertise — indicating strong paid demand`;
+  }
+  if (demandScore >= 70) {
+    return `High-demand market — companies and professionals seeking ${nicheName} solutions`;
+  }
+  return `SMBs and mid-market companies with unmet needs in ${nicheName}`;
 }
 
 function normalizeNiche(keyword: string): string {

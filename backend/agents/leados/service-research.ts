@@ -26,6 +26,7 @@ Return ONLY valid JSON output (no markdown, no explanation outside JSON) with th
       "googleTrendsScore": "number 0-100 - from real Google Trends data",
       "reasoning": "string - reference actual data points from the input",
       "estimatedMarketSize": "string",
+      "targetAudience": "string - recommended target audience per service (e.g., 'B2B SaaS companies with 10-200 employees')",
       "targetPlatforms": ["string"],
       "risingQueries": ["string - actual breakout search terms from Google Trends data"]
     }
@@ -114,6 +115,7 @@ export class ServiceResearchAgent extends BaseAgent {
       if (!parsed.dataSourcesSummary) {
         parsed.dataSourcesSummary = {
           redditPostsAnalyzed: realData.dataSourcesSummary.reddit.postsAnalyzed,
+          hackerNewsStoriesAnalyzed: realData.dataSourcesSummary.hackerNews.storiesAnalyzed,
           linkedinPostsAnalyzed: realData.dataSourcesSummary.linkedin.postsAnalyzed,
           upworkJobsAnalyzed: realData.dataSourcesSummary.upwork.jobsAnalyzed,
           googleTrendsKeywords: realData.dataSourcesSummary.googleTrends.keywordsAnalyzed,
@@ -152,11 +154,13 @@ export class ServiceResearchAgent extends BaseAgent {
           googleTrendsScore: opp.trendData.googleTrendsScore,
           reasoning: opp.reasoning,
           estimatedMarketSize: opp.estimatedMarketSize,
+          targetAudience: opp.targetAudience,
           targetPlatforms: opp.targetPlatforms,
           risingQueries: opp.trendData.googleTrends?.risingQueries?.map(q => q.query) || [],
         })),
         dataSourcesSummary: {
           redditPostsAnalyzed: realData.dataSourcesSummary.reddit.postsAnalyzed,
+          hackerNewsStoriesAnalyzed: realData.dataSourcesSummary.hackerNews.storiesAnalyzed,
           linkedinPostsAnalyzed: realData.dataSourcesSummary.linkedin.postsAnalyzed,
           upworkJobsAnalyzed: realData.dataSourcesSummary.upwork.jobsAnalyzed,
           googleTrendsKeywords: realData.dataSourcesSummary.googleTrends.keywordsAnalyzed,

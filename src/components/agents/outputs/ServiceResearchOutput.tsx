@@ -38,6 +38,7 @@ interface ServiceOpportunity {
   growthRate: string;
   reasoning: string;
   estimatedMarketSize: string;
+  targetAudience?: string;
   targetPlatforms: string[];
   trendData: {
     redditMentions: number;
@@ -55,7 +56,7 @@ interface TrendResearchResult {
   opportunities: ServiceOpportunity[];
   dataSourcesSummary: {
     reddit: { subredditsScanned: string[]; postsAnalyzed: number };
-    hackerNews?: { storiesAnalyzed: number };
+    hackerNews: { storiesAnalyzed: number };
     linkedin?: { postsAnalyzed: number };
     upwork?: { jobsAnalyzed: number };
     googleTrends?: { keywordsAnalyzed: number; avgInterest: number };
@@ -204,10 +205,11 @@ export function ServiceResearchOutput({ data, isLive = false }: Props) {
       {/* Data Sources Summary */}
       {(() => {
         const reddit = formatCount(displayData.dataSourcesSummary.reddit.postsAnalyzed);
+        const hn = formatCount(displayData.dataSourcesSummary.hackerNews?.storiesAnalyzed || 0);
         const linkedin = formatCount(displayData.dataSourcesSummary.linkedin?.postsAnalyzed || 0);
         const upwork = formatCount(displayData.dataSourcesSummary.upwork?.jobsAnalyzed || 0);
         return (
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
             {/* Google Trends */}
             <div className="p-2.5 sm:p-3 bg-green-500/10 rounded-lg border border-green-500/20 overflow-hidden">
               <div className="flex items-center gap-1.5 mb-1">
@@ -237,6 +239,22 @@ export function ServiceResearchOutput({ data, isLive = false }: Props) {
                 {reddit.suffix && <span className="text-sm sm:text-base font-semibold text-orange-400/70">{reddit.suffix}</span>}
               </div>
               <div className="text-[10px] text-muted-foreground mt-0.5">Posts Analyzed</div>
+            </div>
+
+            {/* Hacker News */}
+            <div className="p-2.5 sm:p-3 bg-amber-500/10 rounded-lg border border-amber-500/20 overflow-hidden" title={`${hn.full} HN stories analyzed`}>
+              <div className="flex items-center gap-1.5 mb-1">
+                <div className="w-3.5 h-3.5 rounded-sm bg-amber-500/30 flex items-center justify-center flex-shrink-0">
+                  <span className="text-[8px] font-bold text-amber-400">Y</span>
+                </div>
+                <span className="text-[10px] sm:text-xs text-amber-400/80 font-medium uppercase tracking-wide">Hacker News</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse ml-auto flex-shrink-0" />
+              </div>
+              <div className="flex items-baseline gap-0.5">
+                <span className="text-xl sm:text-2xl font-bold text-amber-400">{hn.value}</span>
+                {hn.suffix && <span className="text-sm sm:text-base font-semibold text-amber-400/70">{hn.suffix}</span>}
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">Stories Analyzed</div>
             </div>
 
             {/* LinkedIn */}
@@ -418,6 +436,17 @@ export function ServiceResearchOutput({ data, isLive = false }: Props) {
                   <ScoreBar label="Monetization" score={opp.monetizationScore} color="purple" icon={<DollarSign className="w-3.5 h-3.5" />} />
                 </div>
 
+                {/* Target Audience */}
+                {opp.targetAudience && (
+                  <div className="p-2.5 sm:p-3 bg-indigo-500/5 rounded-lg border border-indigo-500/20">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Users className="w-3.5 h-3.5 text-indigo-400" />
+                      <span className="text-xs font-medium text-indigo-400">Recommended Target Audience</span>
+                    </div>
+                    <p className="text-xs sm:text-sm leading-relaxed break-words text-indigo-200/80">{opp.targetAudience}</p>
+                  </div>
+                )}
+
                 {/* Reasoning */}
                 <div className="p-2.5 sm:p-3 bg-muted/50 rounded-lg">
                   <div className="text-xs font-medium text-muted-foreground mb-1">Analysis</div>
@@ -427,10 +456,11 @@ export function ServiceResearchOutput({ data, isLive = false }: Props) {
                 {/* Platform Mentions */}
                 {(() => {
                   const oppReddit = formatCount(opp.trendData.redditMentions);
+                  const oppHN = formatCount(opp.trendData.hnMentions || 0);
                   const oppLinkedin = formatCount(opp.trendData.linkedinMentions || 0);
                   const oppUpwork = formatCount(opp.trendData.upworkJobs || 0);
                   return (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
                       <div className="p-2.5 sm:p-3 bg-green-500/5 rounded-lg border border-green-500/10">
                         <div className="flex items-center gap-1">
                           <Search className="w-3.5 h-3.5 text-green-400" />
@@ -445,6 +475,13 @@ export function ServiceResearchOutput({ data, isLive = false }: Props) {
                           {oppReddit.suffix && <span className="text-xs font-semibold text-orange-400/60">{oppReddit.suffix}</span>}
                         </div>
                         <div className="text-[10px] text-muted-foreground">Reddit Mentions</div>
+                      </div>
+                      <div className="p-2.5 sm:p-3 bg-amber-500/5 rounded-lg border border-amber-500/10" title={`${oppHN.full} stories`}>
+                        <div className="flex items-baseline gap-0.5">
+                          <span className="text-base sm:text-lg font-bold text-amber-400">{oppHN.value}</span>
+                          {oppHN.suffix && <span className="text-xs font-semibold text-amber-400/60">{oppHN.suffix}</span>}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground">HN Stories</div>
                       </div>
                       <div className="p-2.5 sm:p-3 bg-blue-500/5 rounded-lg border border-blue-500/10" title={`${oppLinkedin.full} posts`}>
                         <div className="flex items-baseline gap-0.5">
