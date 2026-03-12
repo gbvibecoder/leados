@@ -62,6 +62,7 @@ export default function LeadOSPage() {
     loadAgentConfig,
     globalStartFromAgentId,
     addActivity,
+    clearActivities,
   } = useAppStore();
 
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
@@ -173,12 +174,28 @@ export default function LeadOSPage() {
   const handleRunPipeline = async () => {
     setPipelineError(null);
     setAgentOutputs({});
+    setElapsedTimes({});
     updatePipelineStatus('running');
     setCurrentAgentIndex(0);
 
+    // Stop all existing timers
+    Object.keys(timerRef.current).forEach(id => {
+      clearInterval(timerRef.current[id]);
+      delete timerRef.current[id];
+    });
+
+    // Cancel any previously running pipeline so its SSE events stop
+    if (pipeline.id) {
+      try {
+        await fetch(`/api/pipelines/${pipeline.id}/pause`, { method: 'POST' });
+      } catch {
+        // ignore
+      }
+    }
+
     // Reset all agent statuses
     for (const agent of pipeline.agents) {
-      updateAgentStatus(agent.id, { status: 'idle', progress: 0, error: undefined, outputPreview: undefined });
+      updateAgentStatus(agent.id, { status: 'idle', progress: 0, error: undefined, outputPreview: undefined, lastRunTime: undefined });
     }
 
     try {
@@ -470,11 +487,27 @@ export default function LeadOSPage() {
               )}
               {hasRun && !isRunning && (
                 <button
-                  onClick={() => {
+                  onClick={async () => {
+                    // Cancel old pipeline in backend
+                    if (pipeline.id) {
+                      try {
+                        await fetch(`/api/pipelines/${pipeline.id}/pause`, { method: 'POST' });
+                      } catch {}
+                    }
+                    // Clear all agent run history from DB
+                    for (const agent of LEADOS_AGENTS) {
+                      fetch(`/api/agents/${agent.id}/runs`, { method: 'DELETE' }).catch(() => {});
+                    }
+                    // Reset frontend state
+                    Object.keys(timerRef.current).forEach(id => {
+                      clearInterval(timerRef.current[id]);
+                      delete timerRef.current[id];
+                    });
                     resetPipeline();
                     setPipelineError(null);
                     setAgentOutputs({});
                     setElapsedTimes({});
+                    clearActivities();
                   }}
                   className="flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
                 >

@@ -27,6 +27,13 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     try {
       es = connectSSE((event) => {
         const { type, data } = event;
+
+        // Only process events for the current pipeline — ignore stale events from old runs
+        const currentPipelineId = useAppStore.getState().pipeline.id;
+        if (data.pipelineId && currentPipelineId && data.pipelineId !== currentPipelineId) {
+          return;
+        }
+
         switch (type) {
           case 'agent:started': {
             // Find the agent's index in the current pipeline to set currentAgentIndex
