@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   Zap,
   Bot,
@@ -14,6 +15,8 @@ import {
   Mail,
   MousePointer,
   ShieldCheck,
+  LogIn,
+  UserPlus,
 } from 'lucide-react';
 
 const AGENTS_PREVIEW = [
@@ -42,14 +45,36 @@ const STATS = [
 export default function LandingPage() {
   const router = useRouter();
 
-  const handleGetStarted = () => {
-    router.push('/dashboard');
-  };
-
   return (
     <div className="min-h-screen bg-zinc-950 text-white overflow-x-hidden">
+      {/* Top Navigation Bar */}
+      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-lg">
+        <div className="mx-auto max-w-6xl flex items-center justify-between px-6 py-3">
+          <Link href="/" className="flex items-center gap-2">
+            <Zap className="h-6 w-6 text-indigo-400" />
+            <span className="text-lg font-bold text-white">LeadOS</span>
+          </Link>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/login"
+              className="flex items-center gap-1.5 rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition-all hover:border-zinc-500 hover:text-white"
+            >
+              <LogIn className="h-4 w-4" />
+              Log In
+            </Link>
+            <Link
+              href="/signup"
+              className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-indigo-500"
+            >
+              <UserPlus className="h-4 w-4" />
+              Sign Up
+            </Link>
+          </div>
+        </div>
+      </nav>
+
       {/* Hero Section */}
-      <section className="relative flex min-h-screen flex-col items-center justify-center px-6 py-24 text-center">
+      <section className="relative flex min-h-screen flex-col items-center justify-center px-6 py-24 text-center pt-32">
         {/* Background gradient */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 h-[800px] w-[800px] rounded-full bg-indigo-600/10 blur-[120px]" />
@@ -89,13 +114,13 @@ export default function LandingPage() {
 
           {/* CTA Buttons */}
           <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-            <button
-              onClick={handleGetStarted}
+            <Link
+              href="/signup"
               className="group flex items-center gap-3 rounded-xl bg-indigo-600 px-8 py-4 text-base font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all hover:bg-indigo-500 hover:shadow-indigo-500/40 hover:scale-[1.02] active:scale-[0.98]"
             >
-              Get Started
+              Get Started Free
               <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-            </button>
+            </Link>
             <button
               onClick={() => {
                 document.getElementById('agents-section')?.scrollIntoView({ behavior: 'smooth' });
@@ -192,22 +217,34 @@ export default function LandingPage() {
           <Zap className="mx-auto mb-4 h-10 w-10 text-indigo-400" />
           <h2 className="mb-4 text-3xl font-bold">Ready to Launch Your Pipeline?</h2>
           <p className="mb-8 text-zinc-400">
-            Configure your agents, select a project, and let LeadOS handle the rest.
+            Create your account, configure your agents, and let LeadOS handle the rest.
           </p>
-          <button
-            onClick={handleGetStarted}
-            className="group inline-flex items-center gap-3 rounded-xl bg-indigo-600 px-8 py-4 text-base font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all hover:bg-indigo-500 hover:shadow-indigo-500/40 hover:scale-[1.02] active:scale-[0.98]"
-          >
-            Get Started
-            <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-          </button>
+          <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+            <Link
+              href="/signup"
+              className="group inline-flex items-center gap-3 rounded-xl bg-indigo-600 px-8 py-4 text-base font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all hover:bg-indigo-500 hover:shadow-indigo-500/40 hover:scale-[1.02] active:scale-[0.98]"
+            >
+              Sign Up Free
+              <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+            </Link>
+            <Link
+              href="/login"
+              className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 px-8 py-4 text-base font-medium text-zinc-300 transition-all hover:border-zinc-500 hover:text-white"
+            >
+              <LogIn className="h-4 w-4" />
+              Log In
+            </Link>
+          </div>
         </div>
       </section>
 
       {/* Footer */}
       <footer className="border-t border-zinc-800/50 px-6 py-8">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <p className="text-sm text-zinc-600">LeadOS — Autonomous Service Lead Generation</p>
+          <div className="flex items-center gap-2">
+            <Zap className="h-4 w-4 text-indigo-400" />
+            <p className="text-sm text-zinc-600">LeadOS — Autonomous Service Lead Generation</p>
+          </div>
           <p className="text-xs text-zinc-700">13 Agents. One Pipeline. Zero Manual Work.</p>
         </div>
       </footer>

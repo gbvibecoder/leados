@@ -11,6 +11,7 @@ import { connectSSE } from '@/lib/api';
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isLandingPage = pathname === '/';
+  const isAuthPage = pathname === '/login' || pathname === '/signup';
   const { updateAgentStatus, updatePipelineStatus, addActivity, setCurrentAgentIndex, loadProjects, loadBlacklist } = useAppStore();
 
   // Load global state on mount
@@ -94,7 +95,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     };
   }, [updateAgentStatus, updatePipelineStatus, addActivity, setCurrentAgentIndex]);
 
-  if (isLandingPage) {
+  if (isLandingPage || isAuthPage) {
     return <>{children}</>;
   }
 
