@@ -1,8 +1,8 @@
 'use client';
 
-import { X, Play, Clock, FileJson, Terminal, MessageSquare, Send, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Play, Clock, FileJson, Terminal, MessageSquare, Send, ChevronDown, ChevronUp, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { agents as agentsApi } from '@/lib/api';
 import { ErrorBoundary } from '@/components/layout/error-boundary';
 import { AgentOutput } from './AgentOutput';
@@ -12,29 +12,53 @@ interface AgentDetailPanelProps {
   agentId: string;
   agentName: string;
   description?: string;
+  isRunning?: boolean;
+  elapsedTime?: number;
+  agentStatus?: 'idle' | 'running' | 'done' | 'error';
+  agentError?: string;
   onClose: () => void;
   onRun: () => void;
 }
 
-function AgentDetailPanelInner({ agentId, agentName, description, onClose, onRun }: AgentDetailPanelProps) {
+function formatElapsed(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
+function AgentDetailPanelInner({ agentId, agentName, description, isRunning, elapsedTime, agentStatus, agentError, onClose, onRun }: AgentDetailPanelProps) {
   const [runs, setRuns] = useState<any[]>([]);
   const [selectedRun, setSelectedRun] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [prompt, setPrompt] = useState('');
   const [historyExpanded, setHistoryExpanded] = useState(false);
+  const prevRunningRef = useRef(isRunning);
+
+  const fetchRuns = () => {
+    agentsApi.runs(agentId)
+      .then((data) => {
+        const runsList = Array.isArray(data) ? data : [];
+        setRuns(runsList);
+        if (runsList.length > 0) setSelectedRun(runsList[0]);
+      })
+      .catch(() => setRuns([]))
+      .finally(() => setLoading(false));
+  };
 
   useEffect(() => {
     setLoading(true);
     setPrompt('');
     setHistoryExpanded(false);
-    agentsApi.runs(agentId)
-      .then((data) => {
-        setRuns(Array.isArray(data) ? data : []);
-        if (data && data.length > 0) setSelectedRun(data[0]);
-      })
-      .catch(() => setRuns([]))
-      .finally(() => setLoading(false));
+    fetchRuns();
   }, [agentId]);
+
+  // Auto-refresh runs when agent finishes (running → not running)
+  useEffect(() => {
+    if (prevRunningRef.current && !isRunning) {
+      setTimeout(() => fetchRuns(), 500);
+    }
+    prevRunningRef.current = isRunning;
+  }, [isRunning]);
 
   const handleRunWithPrompt = () => {
     onRun();
@@ -75,9 +99,33 @@ function AgentDetailPanelInner({ agentId, agentName, description, onClose, onRun
             transition={{ duration: 0.25, delay: 0.1 }}
             className="flex items-center justify-between border-b border-zinc-800 px-6 py-4 shrink-0"
           >
-            <div>
-              <h3 className="text-lg font-semibold text-white">{agentName}</h3>
-              <p className="text-xs text-zinc-500 mt-0.5">{agentId}</p>
+            <div className="flex items-center gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-white">{agentName}</h3>
+                <p className="text-xs text-zinc-500 mt-0.5">{agentId}</p>
+              </div>
+              {/* Live status badge */}
+              {isRunning && (
+                <span className="flex items-center gap-1.5 text-xs font-medium text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-full px-2.5 py-1">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-400" />
+                  </span>
+                  Running
+                </span>
+              )}
+              {!isRunning && agentStatus === 'done' && (
+                <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2.5 py-1">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Completed
+                </span>
+              )}
+              {!isRunning && agentStatus === 'error' && (
+                <span className="flex items-center gap-1.5 text-xs font-medium text-red-400 bg-red-500/10 border border-red-500/20 rounded-full px-2.5 py-1">
+                  <AlertCircle className="h-3 w-3" />
+                  Failed
+                </span>
+              )}
             </div>
             <button
               onClick={onClose}
@@ -86,6 +134,79 @@ function AgentDetailPanelInner({ agentId, agentName, description, onClose, onRun
               <X className="h-5 w-5" />
             </button>
           </motion.div>
+
+          {/* Running Progress Banner */}
+          <AnimatePresence>
+            {isRunning && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                className="overflow-hidden"
+              >
+                <div className="px-6 py-4 bg-blue-500/5 border-b border-blue-500/20">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 text-blue-400 animate-spin" />
+                      <span className="text-sm font-medium text-blue-300">Agent is processing...</span>
+                    </div>
+                    {typeof elapsedTime === 'number' && (
+                      <span className="text-xs font-mono text-blue-400 bg-blue-500/10 px-2 py-1 rounded">
+                        {formatElapsed(elapsedTime)}
+                      </span>
+                    )}
+                  </div>
+                  {/* Animated progress bar */}
+                  <div className="w-full h-1.5 bg-blue-500/10 rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-500 rounded-full animate-progress-indeterminate" />
+                  </div>
+                  <p className="text-[11px] text-blue-400/60 mt-2">
+                    Analyzing data, calling APIs, and generating insights...
+                  </p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Completed Banner */}
+          <AnimatePresence>
+            {!isRunning && agentStatus === 'done' && latestRun && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                className="overflow-hidden"
+              >
+                <div className="px-6 py-3 bg-emerald-500/5 border-b border-emerald-500/20 flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                  <span className="text-sm text-emerald-300">Agent completed successfully</span>
+                  <span className="text-xs text-emerald-400/60 ml-auto">
+                    {latestRun.startedAt ? new Date(latestRun.startedAt).toLocaleString() : ''}
+                  </span>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Error Banner */}
+          <AnimatePresence>
+            {!isRunning && agentStatus === 'error' && agentError && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                className="overflow-hidden"
+              >
+                <div className="px-6 py-3 bg-red-500/5 border-b border-red-500/20 flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-red-400" />
+                  <span className="text-sm text-red-300 truncate">{agentError}</span>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Scrollable Content */}
           <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
@@ -101,7 +222,7 @@ function AgentDetailPanelInner({ agentId, agentName, description, onClose, onRun
               </motion.div>
             )}
 
-            {/* Prompt + Run — side by side on larger screens */}
+            {/* Prompt + Run */}
             <motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -118,7 +239,8 @@ function AgentDetailPanelInner({ agentId, agentName, description, onClose, onRun
                   onChange={(e) => setPrompt(e.target.value)}
                   placeholder={`Enter custom instructions for ${agentName}...`}
                   rows={2}
-                  className="w-full resize-none rounded-lg bg-transparent px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none"
+                  disabled={isRunning}
+                  className="w-full resize-none rounded-lg bg-transparent px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none disabled:opacity-50"
                 />
                 <div className="flex items-center justify-between px-2 pb-1">
                   <p className="text-[10px] text-zinc-600">Customize how this agent processes data</p>
@@ -127,11 +249,24 @@ function AgentDetailPanelInner({ agentId, agentName, description, onClose, onRun
                   )}
                 </div>
               </div>
+
+              {/* Run Button — changes based on state */}
               <button
                 onClick={handleRunWithPrompt}
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-500 transition-colors"
+                disabled={isRunning}
+                className={cn(
+                  'flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all',
+                  isRunning
+                    ? 'bg-blue-600/20 border border-blue-500/30 text-blue-300 cursor-not-allowed'
+                    : 'bg-indigo-600 text-white hover:bg-indigo-500'
+                )}
               >
-                {prompt.trim() ? (
+                {isRunning ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Running... {typeof elapsedTime === 'number' && `(${formatElapsed(elapsedTime)})`}
+                  </>
+                ) : prompt.trim() ? (
                   <>
                     <Send className="h-4 w-4" />
                     Run with Prompt
@@ -163,7 +298,7 @@ function AgentDetailPanelInner({ agentId, agentName, description, onClose, onRun
                 <div className="flex items-center justify-center py-6">
                   <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-600 border-t-indigo-500" />
                 </div>
-              ) : runs.length === 0 ? (
+              ) : runs.length === 0 && !isRunning ? (
                 <p className="py-4 text-center text-sm text-zinc-500">No runs yet — click Run Agent above to start</p>
               ) : (
                 <div className="space-y-2">
@@ -304,6 +439,18 @@ function AgentDetailPanelInner({ agentId, agentName, description, onClose, onRun
           </div>
         </div>
       </motion.div>
+
+      {/* Indeterminate progress bar animation */}
+      <style jsx>{`
+        @keyframes progress-indeterminate {
+          0% { width: 0%; margin-left: 0%; }
+          50% { width: 40%; margin-left: 30%; }
+          100% { width: 0%; margin-left: 100%; }
+        }
+        .animate-progress-indeterminate {
+          animation: progress-indeterminate 1.5s ease-in-out infinite;
+        }
+      `}</style>
     </>
   );
 }

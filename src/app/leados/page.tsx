@@ -797,6 +797,10 @@ export default function LeadOSPage() {
                 || selectedAgent
               }
               description={AGENT_META[selectedAgent]?.description}
+              isRunning={runningAgentId === selectedAgent}
+              elapsedTime={elapsedTimes[selectedAgent] || 0}
+              agentStatus={agentStatuses[selectedAgent] || 'idle'}
+              agentError={pipeline.agents.find((a) => a.id === selectedAgent)?.error}
               onClose={() => setSelectedAgent(null)}
               onRun={() => handleRunAgent(selectedAgent)}
             />
