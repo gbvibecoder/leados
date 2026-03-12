@@ -72,6 +72,7 @@ export default function LeadOSPage() {
   const [pipelineError, setPipelineError] = useState<string | null>(null);
   const [agentOutputs, setAgentOutputs] = useState<Record<string, any>>({});
   const [elapsedTimes, setElapsedTimes] = useState<Record<string, number>>({});
+  const [snackbar, setSnackbar] = useState<string | null>(null);
   const timerRef = useRef<Record<string, NodeJS.Timeout>>({});
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
@@ -115,13 +116,22 @@ export default function LeadOSPage() {
 
   const isPaused = pipeline.status === 'paused';
 
+  // Compute effective agent statuses — ENFORCES only ONE agent can be "running" at a time
+  // If the store has multiple agents as "running" (due to SSE race conditions),
+  // only the one at currentAgentIndex is truly running; others are forced to "done"
   const agentStatuses = useMemo(() => {
     const statuses: Record<string, AgentStatus> = {};
+    const currentAgent = pipeline.agents[pipeline.currentAgentIndex];
     for (const agent of pipeline.agents) {
-      statuses[agent.id] = agent.status;
+      let status = agent.status;
+      // If this agent says "running" but it's NOT the current agent, force it to "done"
+      if (status === 'running' && currentAgent && agent.id !== currentAgent.id) {
+        status = 'done';
+      }
+      statuses[agent.id] = status;
     }
     return statuses;
-  }, [pipeline.agents]);
+  }, [pipeline.agents, pipeline.currentAgentIndex]);
 
   useEffect(() => {
     loadProjects();
@@ -135,25 +145,36 @@ export default function LeadOSPage() {
     };
   }, []);
 
-  // Auto-manage timers based on agent status changes (from SSE events during pipeline runs)
+  // Auto-manage timers based on CORRECTED agent statuses (only one running at a time)
+  // Use a JSON key to detect changes without variable-length dependency arrays
+  const agentStatusKey = JSON.stringify(
+    pipeline.agents.map(a => agentStatuses[a.id] || 'idle')
+  );
   useEffect(() => {
     for (const agent of pipeline.agents) {
+      const effectiveStatus = agentStatuses[agent.id] || 'idle';
       const hasTimer = !!timerRef.current[agent.id];
-      if (agent.status === 'running' && !hasTimer && !isPaused) {
-        // Agent started (via SSE) — start its timer
-        if (!elapsedTimes[agent.id]) {
-          setElapsedTimes(prev => ({ ...prev, [agent.id]: 0 }));
+
+      if (effectiveStatus === 'running' && !hasTimer && !isPaused) {
+        // This agent is the ONLY one running — stop ALL other timers first
+        for (const otherId of Object.keys(timerRef.current)) {
+          if (otherId !== agent.id) {
+            clearInterval(timerRef.current[otherId]);
+            delete timerRef.current[otherId];
+          }
         }
+        // Start this agent's timer
+        setElapsedTimes(prev => ({ ...prev, [agent.id]: 0 }));
         timerRef.current[agent.id] = setInterval(() => {
           setElapsedTimes(prev => ({ ...prev, [agent.id]: (prev[agent.id] || 0) + 1 }));
         }, 1000);
-      } else if (agent.status !== 'running' && hasTimer) {
-        // Agent finished/errored — stop its timer
+      } else if (effectiveStatus !== 'running' && hasTimer) {
+        // Agent is no longer the running one — stop its timer
         clearInterval(timerRef.current[agent.id]);
         delete timerRef.current[agent.id];
       }
     }
-  }, [pipeline.agents, isPaused]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [agentStatusKey, isPaused]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startAgentTimer = useCallback((agentId: string) => {
     if (timerRef.current[agentId]) clearInterval(timerRef.current[agentId]);
@@ -229,8 +250,23 @@ export default function LeadOSPage() {
     }
   };
 
-  // Run a single agent with real API call
+  // Run a single agent with real API call — enforces sequential order
   const handleRunAgent = async (agentId: string) => {
+    // Block if pipeline is already running (SSE handles agent progression)
+    if (isRunning) return;
+
+    // Enforce sequential order: all previous agents must be done
+    const agentIndex = pipeline.agents.findIndex(a => a.id === agentId);
+    if (agentIndex > 0) {
+      const previousAgents = pipeline.agents.slice(0, agentIndex);
+      const allPreviousDone = previousAgents.every(a => a.status === 'done');
+      if (!allPreviousDone) {
+        const firstPending = previousAgents.find(a => a.status !== 'done');
+        setPipelineError(`Cannot run ${LEADOS_AGENTS.find(a => a.id === agentId)?.name || agentId} — ${firstPending?.name || 'previous agent'} must complete first`);
+        return;
+      }
+    }
+
     setRunningAgentId(agentId);
     setPipelineError(null);
     updateAgentStatus(agentId, { status: 'running', progress: 0, error: undefined });
@@ -301,9 +337,10 @@ export default function LeadOSPage() {
     });
   };
 
-  const completedCount = pipeline.agents.filter((a) => a.status === 'done').length;
-  const errorCount = pipeline.agents.filter((a) => a.status === 'error').length;
-  const runningCount = pipeline.agents.filter((a) => a.status === 'running').length;
+  // Use corrected agentStatuses (not raw pipeline.agents) for counts
+  const completedCount = Object.values(agentStatuses).filter(s => s === 'done').length;
+  const errorCount = Object.values(agentStatuses).filter(s => s === 'error').length;
+  const runningCount = Object.values(agentStatuses).filter(s => s === 'running').length;
   const totalAgents = pipeline.agents.length;
   const isRunning = pipeline.status === 'running';
   const hasRun = pipeline.status !== 'idle';
@@ -485,29 +522,38 @@ export default function LeadOSPage() {
                   Resume
                 </button>
               )}
-              {hasRun && !isRunning && (
+              {hasRun && (
                 <button
                   onClick={async () => {
-                    // Cancel old pipeline in backend
+                    // Cancel old pipeline in backend — set to 'cancelled' so backend loop exits
                     if (pipeline.id) {
                       try {
-                        await fetch(`/api/pipelines/${pipeline.id}/pause`, { method: 'POST' });
-                      } catch {}
+                        await fetch(`/api/pipelines/${pipeline.id}/cancel`, { method: 'POST' });
+                      } catch {
+                        // Fallback: try pause
+                        try { await fetch(`/api/pipelines/${pipeline.id}/pause`, { method: 'POST' }); } catch {}
+                      }
                     }
                     // Clear all agent run history from DB
                     for (const agent of LEADOS_AGENTS) {
                       fetch(`/api/agents/${agent.id}/runs`, { method: 'DELETE' }).catch(() => {});
                     }
-                    // Reset frontend state
+                    // Stop ALL timers
                     Object.keys(timerRef.current).forEach(id => {
                       clearInterval(timerRef.current[id]);
                       delete timerRef.current[id];
                     });
-                    resetPipeline();
+                    // Reset ALL frontend state
+                    setRunningAgentId(null);
                     setPipelineError(null);
                     setAgentOutputs({});
                     setElapsedTimes({});
                     clearActivities();
+                    // Reset pipeline LAST — this clears pipeline.id which blocks further SSE events
+                    resetPipeline();
+                    // Show success snackbar
+                    setSnackbar('Pipeline reset successfully');
+                    setTimeout(() => setSnackbar(null), 3000);
                   }}
                   className="flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
                 >
@@ -904,6 +950,22 @@ export default function LeadOSPage() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Snackbar */}
+      <AnimatePresence>
+        {snackbar && (
+          <motion.div
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 40 }}
+            transition={{ duration: 0.25, ease: [0.25, 0.4, 0.25, 1] }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white shadow-lg"
+          >
+            <Check className="h-4 w-4" />
+            {snackbar}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Indeterminate animation keyframes */}
       <style jsx>{`
