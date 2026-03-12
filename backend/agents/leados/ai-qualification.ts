@@ -189,7 +189,7 @@ export class AIQualificationAgent extends BaseAgent {
       if (emailOnlyLeads.length > 0) {
         await this.log('leads_without_valid_phone', {
           count: emailOnlyLeads.length,
-          leads: emailOnlyLeads.map(l => ({ name: l.name, phone: l.phone, reason: 'invalid_phone_format' })),
+          leads: emailOnlyLeads.map((l: any) => ({ name: l.name, phone: l.phone, reason: 'invalid_phone_format' })),
           action: 'Route to email nurture instead of voice call',
         });
       }
