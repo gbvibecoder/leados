@@ -10,27 +10,24 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    const {
-      firstName,
-      lastName,
-      workEmail,
-      company,
-      phone,
-      monthlyMarketingBudget,
-      currentMonthlyLeads,
-      // UTM params passed from the form
-      utmSource,
-      utmMedium,
-      utmCampaign,
-      // Pipeline linkage
-      pipelineId,
-    } = body;
+    // Flexible field mapping — handle various naming conventions from AI-generated forms
+    const firstName = body.firstName || body.first_name || body.fullName?.split(' ')[0] || body.name?.split(' ')[0] || '';
+    const lastName = body.lastName || body.last_name || body.fullName?.split(' ').slice(1).join(' ') || body.name?.split(' ').slice(1).join(' ') || '';
+    const workEmail = body.workEmail || body.work_email || body.email || body.businessEmail || body.business_email || '';
+    const company = body.company || body.companyName || body.company_name || body.organization || '';
+    const phone = body.phone || body.phoneNumber || body.phone_number || body.mobile || '';
+    const monthlyMarketingBudget = body.monthlyMarketingBudget || body.monthly_marketing_budget || body.budget || body.monthlyBudget || '';
+    const currentMonthlyLeads = body.currentMonthlyLeads || body.current_monthly_leads || body.monthlyLeads || body.leadVolume || '';
+    const utmSource = body.utmSource || body.utm_source || '';
+    const utmMedium = body.utmMedium || body.utm_medium || '';
+    const utmCampaign = body.utmCampaign || body.utm_campaign || '';
+    const pipelineId = body.pipelineId || body.pipeline_id || '';
 
-    const name = `${firstName || ''} ${lastName || ''}`.trim();
+    const name = `${firstName} ${lastName}`.trim();
 
     if (!name || !workEmail) {
       return NextResponse.json(
-        { error: 'First name and work email are required' },
+        { error: 'Name and email are required' },
         { status: 400 }
       );
     }

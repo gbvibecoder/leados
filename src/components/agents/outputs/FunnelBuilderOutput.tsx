@@ -40,13 +40,6 @@ interface Automation {
   action: string;
 }
 
-interface FunnelPage {
-  type: string;
-  name: string;
-  url: string;
-  description?: string;
-}
-
 interface FunnelData {
   landingPage: {
     url: string;
@@ -89,7 +82,7 @@ interface FunnelData {
     events: string[];
     utmParams?: string[];
   };
-  pages?: FunnelPage[];
+  pages?: { type: string; name: string; url: string; description?: string }[];
   reasoning: string;
   confidence: number;
 }
@@ -157,56 +150,6 @@ export function FunnelBuilderOutput({ data }: Props) {
           value={String(funnelData.tracking?.events?.length || 0)}
         />
       </div>
-
-      {/* Funnel Pages Overview (excluding landing page — shown in Landing Page Copy) */}
-      {funnelData.pages && funnelData.pages.filter(p => p.type !== 'landing').length > 0 && (
-        <div className="border border-border rounded-lg overflow-hidden">
-          <div className="p-3 sm:p-4 bg-muted/30 flex items-center gap-2">
-            <Globe className="w-4 h-4 text-blue-400 shrink-0" />
-            <span className="font-medium text-sm sm:text-base">Funnel Pages</span>
-            {funnelData.landingPage.deployTarget && (
-              <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                {funnelData.landingPage.deployTarget}
-              </span>
-            )}
-          </div>
-          <div className="p-3 sm:p-4 space-y-2">
-            {funnelData.pages.filter(p => p.type !== 'landing').map((page, idx) => {
-              const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '');
-              const liveUrl = page.type === 'booking' ? (funnelData.bookingCalendar?.url || 'https://calendly.com/codervibe60/30min')
-                : page.type === 'thank-you' ? `${baseUrl}/funnel/thank-you`
-                : null;
-              const Wrapper = liveUrl ? 'a' : 'div';
-              const wrapperProps = liveUrl ? { href: liveUrl, target: '_blank', rel: 'noopener noreferrer' } : {};
-              return (
-                <Wrapper key={idx} {...wrapperProps} className={`flex items-center gap-3 p-2.5 sm:p-3 bg-muted/20 rounded-lg border border-border/50 ${liveUrl ? 'hover:bg-muted/40 hover:border-blue-500/30 cursor-pointer transition-colors' : ''}`}>
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                    page.type === 'booking' ? 'bg-purple-500/10 text-purple-400' :
-                    'bg-green-500/10 text-green-400'
-                  }`}>
-                    {page.type === 'booking' ? <Calendar className="w-4 h-4" /> :
-                     <CheckCircle2 className="w-4 h-4" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate">{page.name}</div>
-                    <div className="text-xs text-muted-foreground truncate">{liveUrl || page.url}</div>
-                    {page.description && (
-                      <div className="text-xs text-muted-foreground mt-0.5 truncate">{page.description}</div>
-                    )}
-                  </div>
-                  {liveUrl ? (
-                    <ExternalLink className="w-4 h-4 text-blue-400 shrink-0" />
-                  ) : (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-muted/40 text-muted-foreground capitalize shrink-0">
-                      {page.type}
-                    </span>
-                  )}
-                </Wrapper>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* Landing Page Sections */}
       <CollapsibleSection
