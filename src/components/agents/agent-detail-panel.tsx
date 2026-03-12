@@ -145,23 +145,25 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
                 transition={{ duration: 0.3 }}
                 className="overflow-hidden"
               >
-                <div className="px-6 py-4 bg-blue-500/5 border-b border-blue-500/20">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 text-blue-400 animate-spin" />
-                      <span className="text-sm font-medium text-blue-300">Agent is processing...</span>
+                <div className="px-6 py-4 bg-indigo-950 border-b border-indigo-500/40">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="relative">
+                        <Loader2 className="h-5 w-5 text-indigo-400 animate-spin" />
+                      </div>
+                      <span className="text-sm font-semibold text-white">Agent is processing...</span>
                     </div>
                     {typeof elapsedTime === 'number' && (
-                      <span className="text-xs font-mono text-blue-400 bg-blue-500/10 px-2 py-1 rounded">
+                      <span className="text-xs font-mono text-white bg-indigo-500/30 border border-indigo-400/30 px-2.5 py-1 rounded-md">
                         {formatElapsed(elapsedTime)}
                       </span>
                     )}
                   </div>
                   {/* Animated progress bar */}
-                  <div className="w-full h-1.5 bg-blue-500/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-500 rounded-full animate-progress-indeterminate" />
+                  <div className="w-full h-2 bg-indigo-500/20 rounded-full overflow-hidden">
+                    <div className="h-full bg-indigo-500 rounded-full animate-progress-indeterminate" />
                   </div>
-                  <p className="text-[11px] text-blue-400/60 mt-2">
+                  <p className="text-xs text-indigo-300 mt-2">
                     Analyzing data, calling APIs, and generating insights...
                   </p>
                 </div>
