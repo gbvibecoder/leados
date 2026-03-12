@@ -9,11 +9,11 @@ class PipelineEventEmitter extends EventEmitter {
     this.emit('agent:progress', data);
   }
 
-  emitAgentCompleted(data: { agentId: string; agentName: string; pipelineType: string; outputSummary: string; timestamp: string }) {
+  emitAgentCompleted(data: { agentId: string; agentName: string; pipelineId?: string; pipelineType: string; outputSummary: string; timestamp: string }) {
     this.emit('agent:completed', data);
   }
 
-  emitAgentError(data: { agentId: string; agentName: string; pipelineType: string; error: string; timestamp: string }) {
+  emitAgentError(data: { agentId: string; agentName: string; pipelineId?: string; pipelineType: string; error: string; timestamp: string }) {
     this.emit('agent:error', data);
   }
 

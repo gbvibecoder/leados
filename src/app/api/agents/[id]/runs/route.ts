@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 import { fetchRealTrends } from '@/lib/real-trends';
 import { fetchLiveAgentData } from '@/lib/live-agent-data';
 
@@ -9,7 +10,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   // First, check database for real agent runs
   try {
-    const { prisma } = await import('@/lib/prisma');
     const dbRuns = await prisma.agentRun.findMany({
       where: { agentId: id },
       orderBy: { createdAt: 'desc' },
@@ -82,5 +82,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         completedAt: new Date().toISOString(),
       },
     ]);
+  }
+}
+
+/** DELETE /api/agents/[id]/runs — Clear all run history for this agent */
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+
+  try {
+    await prisma.agentRun.deleteMany({
+      where: { agentId: id },
+    });
+    return NextResponse.json({ success: true, message: `Cleared runs for ${id}` });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

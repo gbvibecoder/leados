@@ -34,13 +34,23 @@ function getAgents() {
   return agentMap;
 }
 
-async function checkPaused(id: string): Promise<boolean> {
+async function getPipelineStatus(id: string): Promise<string | null> {
   try {
     const p = await prisma.pipeline.findUnique({ where: { id }, select: { status: true } });
-    return p?.status === 'paused';
+    return p?.status || null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+async function checkPaused(id: string): Promise<boolean> {
+  return (await getPipelineStatus(id)) === 'paused';
+}
+
+async function checkCancelled(id: string): Promise<boolean> {
+  const status = await getPipelineStatus(id);
+  // If status is not running or paused, pipeline was cancelled/stopped
+  return status !== null && status !== 'running' && status !== 'paused';
 }
 
 async function waitWhilePaused(id: string, maxWaitMs = 600000): Promise<boolean> {
@@ -66,6 +76,9 @@ async function runPipelineInBackground(id: string, agentsToRun: string[]) {
     const agentId = agentsToRun[i];
     const agent = agents.get(agentId);
     if (!agent) continue;
+
+    // Check if pipeline was cancelled
+    if (await checkCancelled(id)) return;
 
     // Check if pipeline was paused — wait for resume
     if (await checkPaused(id)) {
@@ -125,6 +138,7 @@ async function runPipelineInBackground(id: string, agentsToRun: string[]) {
       pipelineEvents.emitAgentCompleted({
         agentId,
         agentName: agent.name,
+        pipelineId: id,
         pipelineType: 'leados',
         outputSummary: output?.reasoning || 'Completed successfully',
         timestamp: new Date().toISOString(),
@@ -149,6 +163,7 @@ async function runPipelineInBackground(id: string, agentsToRun: string[]) {
       pipelineEvents.emitAgentError({
         agentId,
         agentName: agent.name,
+        pipelineId: id,
         pipelineType: 'leados',
         error: error.message || 'Unknown error',
         timestamp: new Date().toISOString(),
