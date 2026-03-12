@@ -15,6 +15,7 @@ import {
   Eye, Zap, Clock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { AgentStatus } from '@/lib/store';
 
 const AGENT_META: Record<string, { icon: any; color: string; description: string; tools: string[] }> = {
@@ -291,7 +292,12 @@ export default function LeadOSPage() {
     <ErrorBoundary>
       <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: [0.25, 0.4, 0.25, 1] }}
+          className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
+        >
           <div>
             <h1 className="text-2xl font-bold text-white flex items-center gap-2">
               <Zap className="h-6 w-6 text-indigo-400" />
@@ -316,7 +322,7 @@ export default function LeadOSPage() {
               }}
             />
           </div>
-        </div>
+        </motion.div>
 
         {/* Internal project notice */}
         {isInternal && (
@@ -342,7 +348,12 @@ export default function LeadOSPage() {
         )}
 
         {/* Pipeline Controls */}
-        <div className="mb-6 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.1, ease: [0.25, 0.4, 0.25, 1] }}
+          className="mb-6 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
+        >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               {hasRun && (
@@ -456,11 +467,19 @@ export default function LeadOSPage() {
               </div>
             </div>
           )}
-        </div>
+        </motion.div>
 
         {/* Agent Configuration Panel */}
+        <AnimatePresence>
         {showConfig && !hasRun && (
-          <div className="mb-6 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 animate-in fade-in slide-in-from-top-2 duration-200">
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3, ease: [0.25, 0.4, 0.25, 1] }}
+            className="mb-6 overflow-hidden"
+          >
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-medium text-zinc-200">Agent Configuration</h3>
               <div className="flex gap-2">
@@ -516,10 +535,17 @@ export default function LeadOSPage() {
               })}
             </div>
           </div>
+          </motion.div>
         )}
+        </AnimatePresence>
 
         {/* Pipeline Flow — vertical phases */}
-        <div className="space-y-3">
+        <motion.div
+          initial="hidden"
+          animate="visible"
+          variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.08, delayChildren: 0.2 } } }}
+          className="space-y-3"
+        >
           {PIPELINE_PHASES.map((phase, phaseIndex) => {
             const isSkipped = skippedPhaseIds.has(phase.id);
             const phaseStatus = getPhaseStatus(phase);
@@ -534,7 +560,10 @@ export default function LeadOSPage() {
             if (!isSkipped && enabledCount === 0) return null;
 
             return (
-              <div key={phase.id}>
+              <motion.div
+                key={phase.id}
+                variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.25, 0.4, 0.25, 1] } } }}
+              >
                 {/* Phase card */}
                 <div
                   className={cn(
@@ -756,25 +785,27 @@ export default function LeadOSPage() {
                     <ArrowDown className="h-4 w-4 text-zinc-700" />
                   </div>
                 )}
-              </div>
+              </motion.div>
             );
           })}
-        </div>
+        </motion.div>
 
         {/* Agent detail panel */}
-        {selectedAgent && (
-          <AgentDetailPanel
-            agentId={selectedAgent}
-            agentName={
-              pipeline.agents.find((a) => a.id === selectedAgent)?.name
-              || LEADOS_AGENTS.find((a) => a.id === selectedAgent)?.name
-              || selectedAgent
-            }
-            description={AGENT_META[selectedAgent]?.description}
-            onClose={() => setSelectedAgent(null)}
-            onRun={() => handleRunAgent(selectedAgent)}
-          />
-        )}
+        <AnimatePresence>
+          {selectedAgent && (
+            <AgentDetailPanel
+              agentId={selectedAgent}
+              agentName={
+                pipeline.agents.find((a) => a.id === selectedAgent)?.name
+                || LEADOS_AGENTS.find((a) => a.id === selectedAgent)?.name
+                || selectedAgent
+              }
+              description={AGENT_META[selectedAgent]?.description}
+              onClose={() => setSelectedAgent(null)}
+              onRun={() => handleRunAgent(selectedAgent)}
+            />
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Indeterminate animation keyframes */}
