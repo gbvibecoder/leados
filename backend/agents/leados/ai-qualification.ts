@@ -194,12 +194,11 @@ export class AIQualificationAgent extends BaseAgent {
         });
       }
 
-      // Execute real AI voice calls via Bland AI ONLY when explicitly enabled
-      // This prevents accidental calls on every agent test run
+      // Execute real AI voice calls via Bland AI when API key is configured
       let realCallResults: any[] = [];
-      const enableLiveCalls = inputs.config?.enableLiveCalls === true;
+      const blandAvailable = blandAI.isBlandAIAvailable();
 
-      if (enableLiveCalls && blandAI.isBlandAIAvailable() && callableLeads.length > 0) {
+      if (blandAvailable && callableLeads.length > 0) {
         const niche = inputs.config?.niche || 'B2B SaaS Lead Generation';
         const leadsToCall = callableLeads.slice(0, 8);
 
@@ -270,13 +269,19 @@ export class AIQualificationAgent extends BaseAgent {
           segments: inboundData.segmentation?.segments || null,
         },
         IMPORTANT_INSTRUCTION: qualifiedLeads.length > 0
-          ? `USE ONLY the real leads provided. Do NOT invent fictional leads.
-For leads in callableLeads (valid phone): generate AI voice call results with BANT scoring.
-For leads in emailOnlyLeads (invalid/missing phone): set callStatus to "no_valid_phone", outcome to "medium_intent", and routingAction to "Route to email nurture — no valid phone for voice call". Do NOT attempt to call them.`
+          ? realCallResults.length > 0
+            ? `USE ONLY the real leads provided and the REAL call data from Bland AI. Do NOT invent fictional leads or fabricate call results. Use the actual transcript, duration, and status from the real calls to generate BANT scores.
+For leads in emailOnlyLeads (invalid/missing phone): set callStatus to "no_valid_phone", outcome to "medium_intent", and routingAction to "Route to email nurture — no valid phone for voice call".`
+            : blandAvailable
+            ? `USE ONLY the real leads provided. Real Bland AI calls were attempted for callable leads — use the call data provided.
+For leads in emailOnlyLeads (invalid/missing phone): set callStatus to "no_valid_phone", outcome to "medium_intent", and routingAction to "Route to email nurture — no valid phone for voice call".`
+            : `IMPORTANT: No voice calling API (Bland AI) is configured. Do NOT pretend calls were made.
+For ALL leads: set callStatus to "not_called", outcome to "pending_call", routingAction to "Awaiting voice qualification — Bland AI API key not configured". Generate the call script, BANT questions, and qualification thresholds but do NOT fabricate call results or scores. Set score to 0 and leave transcript empty.
+For leads in emailOnlyLeads: set callStatus to "no_valid_phone", outcome to "medium_intent", routingAction to "Route to email nurture — no valid phone for voice call".`
           : null,
         realData: {
           callResults: realCallResults.length > 0 ? realCallResults : null,
-          dataSource: realCallResults.length > 0 ? 'live_bland_ai' : 'llm_generated',
+          dataSource: realCallResults.length > 0 ? 'live_bland_ai' : blandAvailable ? 'bland_ai_attempted' : 'no_voice_api',
         },
       });
 
@@ -312,14 +317,20 @@ For leads in emailOnlyLeads (invalid/missing phone): set callStatus to "no_valid
 
           // Map outcome to stage
           // Leads without valid phone go to 'contacted' (email nurture), not disqualified
+          // Leads that were never called stay in their current stage
           const stageMap: Record<string, string> = {
             high_intent_checkout: 'qualified',
             high_intent_sales: 'qualified',
             medium_intent: 'nurture',
             low_intent: 'disqualified',
+            pending_call: '', // don't change stage
           };
           const isNoPhone = result.callStatus === 'no_valid_phone';
-          const newStage = isNoPhone ? 'contacted' : (stageMap[result.outcome] || 'contacted');
+          const isNotCalled = result.callStatus === 'not_called' || result.outcome === 'pending_call';
+          const newStage = isNotCalled ? '' : isNoPhone ? 'contacted' : (stageMap[result.outcome] || 'contacted');
+
+          // Skip DB update for leads that were never actually called
+          if (isNotCalled) continue;
 
           await prisma.lead.updateMany({
             where: { email: result.leadEmail },

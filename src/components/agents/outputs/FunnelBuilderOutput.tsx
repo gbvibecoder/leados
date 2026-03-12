@@ -444,16 +444,48 @@ function LeadCaptureForm({ fields }: { fields: FormField[] }) {
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Map AI-generated field names to standardized names the API expects
+  function buildPayload(): Record<string, string> {
+    const payload: Record<string, string> = { ...formData };
+
+    for (const field of fields || []) {
+      const val = formData[field.name];
+      if (!val) continue;
+      const label = (field.label || field.name).toLowerCase();
+      const name = field.name.toLowerCase();
+
+      // Map to standardized names based on type + label
+      if (field.type === 'email' || label.includes('email')) {
+        payload.workEmail = val;
+      } else if (field.type === 'phone' || label.includes('phone') || label.includes('mobile')) {
+        payload.phone = val;
+      } else if (label.includes('first') && label.includes('name')) {
+        payload.firstName = val;
+      } else if (label.includes('last') && label.includes('name')) {
+        payload.lastName = val;
+      } else if (label.includes('full') && label.includes('name') || (label === 'name' || name === 'name')) {
+        payload.fullName = val;
+      } else if (label.includes('company') || label.includes('organization') || label.includes('business')) {
+        payload.company = val;
+      } else if (label.includes('budget') || label.includes('revenue') || label.includes('spend')) {
+        payload.monthlyMarketingBudget = val;
+      }
+    }
+
+    return payload;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
 
     try {
+      const payload = buildPayload();
       const res = await fetch('/api/webhooks/lead-capture', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       const result = await res.json();
