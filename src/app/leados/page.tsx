@@ -8,11 +8,11 @@ import { useAppStore, DISCOVERY_AGENT_IDS, LEADOS_AGENTS } from '@/lib/store';
 import { pipelines as pipelinesApi, agents as agentsApi } from '@/lib/api';
 import { ErrorBoundary } from '@/components/layout/error-boundary';
 import {
-  Building2, Pause, Play, RotateCcw, ChevronDown, ChevronUp,
+  Building2, Pause, Play, RotateCcw, ChevronDown, ChevronUp, ChevronRight,
   Bot, Check, Loader2, AlertCircle, ArrowDown, Settings2,
   Target, Sparkles, ShieldCheck, Globe, Mail, MousePointer,
   Phone, ArrowRight, BarChart3, TrendingUp, RefreshCw,
-  Eye, Zap, Clock,
+  Eye, Zap, Clock, ExternalLink,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -642,18 +642,18 @@ export default function LeadOSPage() {
                         return (
                           <div
                             key={agent.id}
+                            onClick={() => setSelectedAgent(agent.id)}
                             className={cn(
-                              'group rounded-lg border transition-all',
-                              status === 'done' ? 'border-emerald-500/20 bg-emerald-950/5' :
+                              'group rounded-lg border transition-all cursor-pointer',
+                              status === 'done' ? 'border-emerald-500/20 bg-emerald-950/5 hover:border-emerald-500/40' :
                               status === 'running' ? 'border-blue-500/30 bg-blue-950/10' :
-                              status === 'error' ? 'border-red-500/30 bg-red-950/10' :
-                              'border-zinc-800/60 bg-zinc-900/20 hover:border-zinc-700 hover:bg-zinc-900/40'
+                              status === 'error' ? 'border-red-500/30 bg-red-950/10 hover:border-red-500/40' :
+                              'border-zinc-800/60 bg-zinc-900/20 hover:border-indigo-500/30 hover:bg-indigo-950/5'
                             )}
                           >
                             {/* Agent row */}
                             <div
-                              onClick={() => setSelectedAgent(agent.id)}
-                              className="flex items-center gap-3 px-3 py-2.5 cursor-pointer"
+                              className="flex items-center gap-3 px-3 py-2.5"
                             >
                               {/* Agent icon */}
                               <div className={cn(
@@ -720,15 +720,6 @@ export default function LeadOSPage() {
                                     {new Date(pipelineAgent.lastRunTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                   </span>
                                 )}
-                                {status === 'done' && (
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); setSelectedAgent(agent.id); }}
-                                    className="rounded-md p-1 text-emerald-400/60 hover:text-emerald-400 hover:bg-emerald-950/30 transition-all"
-                                    title="View output"
-                                  >
-                                    <Eye className="h-3 w-3" />
-                                  </button>
-                                )}
                                 {status === 'idle' && !isRunning && (
                                   <button
                                     onClick={(e) => { e.stopPropagation(); handleRunAgent(agent.id); }}
@@ -759,6 +750,8 @@ export default function LeadOSPage() {
                                     <RefreshCw className="h-3 w-3" />
                                   </button>
                                 )}
+                                {/* Always-visible detail chevron */}
+                                <ChevronRight className="h-3.5 w-3.5 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
                               </div>
                             </div>
 
