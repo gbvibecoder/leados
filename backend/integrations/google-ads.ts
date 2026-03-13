@@ -108,88 +108,201 @@ export async function getCampaignMetrics(dateRange: string = 'LAST_30_DAYS'): Pr
   return results;
 }
 
-/** Create a new campaign with a daily budget */
-export async function createCampaign(config: {
-  name: string;
-  dailyBudgetMicros: number;
-  biddingStrategy?: string;
-}): Promise<{ campaignId: string; budgetId: string }> {
+/** Helper for Google Ads REST mutations */
+async function googleAdsMutate(endpoint: string, body: any): Promise<any> {
   const customerId = getCustomerId();
   const developerToken = getDeveloperToken();
   if (!customerId || !developerToken) throw new Error('Google Ads credentials not configured');
 
-  // Safety gate: only create campaigns if explicitly enabled
+  const accessToken = await getAccessToken();
+  const url = `https://googleads.googleapis.com/${ADS_API_VERSION}/customers/${customerId}/${endpoint}`;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+      'developer-token': developerToken,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Google Ads mutation ${endpoint} failed ${res.status}: ${text}`);
+  }
+
+  return res.json();
+}
+
+/** Create a new campaign with a daily budget — starts ENABLED so it runs immediately */
+export async function createCampaign(config: {
+  name: string;
+  dailyBudgetMicros: number;
+  biddingStrategy?: string;
+}): Promise<{ campaignId: string; budgetId: string; campaignResourceName: string }> {
+  const customerId = getCustomerId();
+  if (!customerId) throw new Error('Google Ads credentials not configured');
+
   if (process.env.ENABLE_AD_MUTATIONS !== 'true') {
     console.log(`[DRY RUN] Would create Google Ads campaign: ${config.name} ($${config.dailyBudgetMicros / 1_000_000}/day)`);
-    return { campaignId: 'dry-run-campaign', budgetId: 'dry-run-budget' };
+    return { campaignId: 'dry-run-campaign', budgetId: 'dry-run-budget', campaignResourceName: `customers/${customerId}/campaigns/dry-run-campaign` };
   }
-
-  const accessToken = await getAccessToken();
 
   // Step 1: Create budget
-  const budgetRes = await fetch(
-    `https://googleads.googleapis.com/${ADS_API_VERSION}/customers/${customerId}/campaignBudgets:mutate`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-        'developer-token': developerToken,
+  const budgetData = await googleAdsMutate('campaignBudgets:mutate', {
+    operations: [{
+      create: {
+        name: `${config.name} Budget`,
+        amountMicros: String(config.dailyBudgetMicros),
+        deliveryMethod: 'STANDARD',
       },
-      body: JSON.stringify({
-        operations: [{
-          create: {
-            name: `${config.name} Budget`,
-            amountMicros: String(config.dailyBudgetMicros),
-            deliveryMethod: 'STANDARD',
-          },
-        }],
-      }),
-    }
-  );
-
-  if (!budgetRes.ok) {
-    const text = await budgetRes.text();
-    throw new Error(`Failed to create budget: ${text}`);
-  }
-
-  const budgetData = await budgetRes.json();
+    }],
+  });
   const budgetResourceName = budgetData.results?.[0]?.resourceName || '';
 
-  // Step 2: Create campaign
-  const campaignRes = await fetch(
-    `https://googleads.googleapis.com/${ADS_API_VERSION}/customers/${customerId}/campaigns:mutate`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-        'developer-token': developerToken,
+  // Step 2: Create campaign with ENABLED status
+  const campaignData = await googleAdsMutate('campaigns:mutate', {
+    operations: [{
+      create: {
+        name: config.name,
+        advertisingChannelType: 'SEARCH',
+        status: 'ENABLED',
+        campaignBudget: budgetResourceName,
+        maximizeConversions: {},
+        networkSettings: {
+          targetGoogleSearch: true,
+          targetSearchNetwork: true,
+          targetContentNetwork: false,
+        },
       },
-      body: JSON.stringify({
-        operations: [{
-          create: {
-            name: config.name,
-            advertisingChannelType: 'SEARCH',
-            status: 'PAUSED', // Start paused for safety
-            campaignBudget: budgetResourceName,
-            maximizeConversions: {},
-          },
-        }],
-      }),
-    }
-  );
-
-  if (!campaignRes.ok) {
-    const text = await campaignRes.text();
-    throw new Error(`Failed to create campaign: ${text}`);
-  }
-
-  const campaignData = await campaignRes.json();
+    }],
+  });
   const campaignResourceName = campaignData.results?.[0]?.resourceName || '';
   const campaignId = campaignResourceName.split('/').pop() || '';
 
-  return { campaignId, budgetId: budgetResourceName.split('/').pop() || '' };
+  return { campaignId, budgetId: budgetResourceName.split('/').pop() || '', campaignResourceName };
+}
+
+/** Create an ad group under a campaign */
+export async function createAdGroup(config: {
+  campaignResourceName: string;
+  name: string;
+  cpcBidMicros?: number;
+}): Promise<{ adGroupId: string; adGroupResourceName: string }> {
+  const customerId = getCustomerId();
+  if (!customerId) throw new Error('Google Ads credentials not configured');
+
+  if (process.env.ENABLE_AD_MUTATIONS !== 'true') {
+    const dryId = `dry-run-ag-${Date.now()}`;
+    return { adGroupId: dryId, adGroupResourceName: `customers/${customerId}/adGroups/${dryId}` };
+  }
+
+  const data = await googleAdsMutate('adGroups:mutate', {
+    operations: [{
+      create: {
+        name: config.name,
+        campaign: config.campaignResourceName,
+        status: 'ENABLED',
+        type: 'SEARCH_STANDARD',
+        cpcBidMicros: String(config.cpcBidMicros || 5_000_000),
+      },
+    }],
+  });
+
+  const resourceName = data.results?.[0]?.resourceName || '';
+  return { adGroupId: resourceName.split('/').pop() || '', adGroupResourceName: resourceName };
+}
+
+/** Add keywords to an ad group */
+export async function addKeywords(config: {
+  adGroupResourceName: string;
+  keywords: { text: string; matchType: 'EXACT' | 'PHRASE' | 'BROAD' }[];
+}): Promise<{ count: number }> {
+  if (process.env.ENABLE_AD_MUTATIONS !== 'true') {
+    console.log(`[DRY RUN] Would add ${config.keywords.length} keywords`);
+    return { count: config.keywords.length };
+  }
+
+  const operations = config.keywords.map(kw => ({
+    create: {
+      adGroup: config.adGroupResourceName,
+      status: 'ENABLED',
+      keywordInfo: {
+        text: kw.text,
+        matchType: kw.matchType,
+      },
+    },
+  }));
+
+  await googleAdsMutate('adGroupCriteria:mutate', { operations });
+  return { count: operations.length };
+}
+
+/** Add negative keywords at campaign level */
+export async function addNegativeKeywords(config: {
+  campaignResourceName: string;
+  keywords: string[];
+}): Promise<{ count: number }> {
+  if (process.env.ENABLE_AD_MUTATIONS !== 'true') {
+    console.log(`[DRY RUN] Would add ${config.keywords.length} negative keywords`);
+    return { count: config.keywords.length };
+  }
+
+  const operations = config.keywords.map(kw => ({
+    create: {
+      campaign: config.campaignResourceName,
+      negative: true,
+      keywordInfo: {
+        text: kw,
+        matchType: 'BROAD',
+      },
+    },
+  }));
+
+  await googleAdsMutate('campaignCriteria:mutate', { operations });
+  return { count: operations.length };
+}
+
+/** Create a Responsive Search Ad in an ad group */
+export async function createResponsiveSearchAd(config: {
+  adGroupResourceName: string;
+  headlines: string[];
+  descriptions: string[];
+  finalUrl: string;
+  path1?: string;
+  path2?: string;
+}): Promise<{ adId: string }> {
+  if (process.env.ENABLE_AD_MUTATIONS !== 'true') {
+    console.log(`[DRY RUN] Would create RSA with ${config.headlines.length} headlines`);
+    return { adId: 'dry-run-ad' };
+  }
+
+  const data = await googleAdsMutate('adGroupAds:mutate', {
+    operations: [{
+      create: {
+        adGroup: config.adGroupResourceName,
+        status: 'ENABLED',
+        ad: {
+          responsiveSearchAd: {
+            headlines: config.headlines.slice(0, 15).map((text, i) => ({
+              text: text.substring(0, 30),
+              pinnedField: i < 3 ? undefined : undefined,
+            })),
+            descriptions: config.descriptions.slice(0, 4).map(text => ({
+              text: text.substring(0, 90),
+            })),
+            path1: config.path1?.substring(0, 15),
+            path2: config.path2?.substring(0, 15),
+          },
+          finalUrls: [config.finalUrl],
+        },
+      },
+    }],
+  });
+
+  const resourceName = data.results?.[0]?.resourceName || '';
+  return { adId: resourceName.split('/').pop() || '' };
 }
 
 /** Pause a campaign */

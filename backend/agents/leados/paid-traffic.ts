@@ -273,33 +273,161 @@ export class PaidTrafficAgent extends BaseAgent {
       const response = await this.callClaude(SYSTEM_PROMPT, JSON.stringify(enrichedInput));
       const parsed = this.safeParseLLMJson<any>(response, ['googleAds', 'metaAds']);
 
-      // Step 4: Create real campaigns if APIs available
+      // Step 4: Create FULL campaign structure in Google Ads
       if (googleAds.isGoogleAdsAvailable() && parsed.googleAds) {
         try {
           const dailyBudget = parsed.googleAds.dailyBudget || 100;
-          const result = await googleAds.createCampaign({
+          const landingUrl = funnelData.landingPage?.url || offerData.landingPageUrl || 'https://leados.com';
+
+          // 4a: Create campaign (ENABLED)
+          await this.log('google_ads_creating', { phase: 'Creating ENABLED campaign with budget' });
+          const campaign = await googleAds.createCampaign({
             name: parsed.googleAds.campaignName || 'LeadOS Google Campaign',
             dailyBudgetMicros: dailyBudget * 1_000_000,
           });
-          parsed.googleAds._campaignId = result.campaignId;
-          parsed.googleAds._budgetId = result.budgetId;
+          parsed.googleAds._campaignId = campaign.campaignId;
+          parsed.googleAds._budgetId = campaign.budgetId;
+          parsed.googleAds._status = 'ENABLED';
           parsed.googleAds._createdInGoogleAds = true;
-          await this.log('google_ads_campaign_created', { campaignId: result.campaignId });
+          await this.log('google_ads_campaign_created', { campaignId: campaign.campaignId });
+
+          // 4b: Add negative keywords at campaign level
+          if (parsed.googleAds.negativeKeywords?.length > 0) {
+            try {
+              await googleAds.addNegativeKeywords({
+                campaignResourceName: campaign.campaignResourceName,
+                keywords: parsed.googleAds.negativeKeywords,
+              });
+              await this.log('google_ads_negatives_added', { count: parsed.googleAds.negativeKeywords.length });
+            } catch (err: any) {
+              await this.log('google_ads_negatives_failed', { error: err.message });
+            }
+          }
+
+          // 4c: Create ad groups with keywords and RSAs
+          const adGroups = parsed.googleAds.adGroups || [];
+          parsed.googleAds._adGroups = [];
+          for (const ag of adGroups) {
+            try {
+              // Create ad group
+              const agResult = await googleAds.createAdGroup({
+                campaignResourceName: campaign.campaignResourceName,
+                name: ag.name,
+              });
+              await this.log('google_ads_adgroup_created', { name: ag.name, id: agResult.adGroupId });
+
+              // Add keywords to ad group
+              const agKeywords = (ag.keywords || []).map((kw: string) => ({
+                text: kw,
+                matchType: 'PHRASE' as const,
+              }));
+              // Also add exact match for each keyword
+              const exactKeywords = (ag.keywords || []).map((kw: string) => ({
+                text: kw,
+                matchType: 'EXACT' as const,
+              }));
+
+              if (agKeywords.length > 0) {
+                await googleAds.addKeywords({
+                  adGroupResourceName: agResult.adGroupResourceName,
+                  keywords: [...agKeywords, ...exactKeywords],
+                });
+                await this.log('google_ads_keywords_added', { adGroup: ag.name, count: agKeywords.length + exactKeywords.length });
+              }
+
+              // Create Responsive Search Ad
+              if (ag.adCopy) {
+                const adResult = await googleAds.createResponsiveSearchAd({
+                  adGroupResourceName: agResult.adGroupResourceName,
+                  headlines: ag.adCopy.headlines || [],
+                  descriptions: ag.adCopy.descriptions || [],
+                  finalUrl: landingUrl,
+                });
+                await this.log('google_ads_rsa_created', { adGroup: ag.name, adId: adResult.adId });
+              }
+
+              parsed.googleAds._adGroups.push({
+                name: ag.name,
+                adGroupId: agResult.adGroupId,
+                keywordsCount: agKeywords.length + exactKeywords.length,
+                status: 'ENABLED',
+              });
+            } catch (err: any) {
+              await this.log('google_ads_adgroup_failed', { adGroup: ag.name, error: err.message });
+            }
+          }
         } catch (err: any) {
           await this.log('google_ads_create_failed', { error: err.message });
         }
       }
 
+      // Step 5: Create FULL campaign structure in Meta Ads
       if (metaAds.isMetaAdsAvailable() && parsed.metaAds) {
         try {
-          const result = await metaAds.createCampaign({
+          const landingUrl = funnelData.landingPage?.url || offerData.landingPageUrl || 'https://leados.com';
+
+          // 5a: Create campaign (ACTIVE)
+          await this.log('meta_creating', { phase: 'Creating ACTIVE Meta campaign' });
+          const campaign = await metaAds.createCampaign({
             name: parsed.metaAds.campaignName || 'LeadOS Meta Campaign',
             objective: 'OUTCOME_LEADS',
             dailyBudget: parsed.metaAds.dailyBudget || 50,
+            status: 'ACTIVE',
           });
-          parsed.metaAds._campaignId = result.campaignId;
+          parsed.metaAds._campaignId = campaign.campaignId;
+          parsed.metaAds._status = 'ACTIVE';
           parsed.metaAds._createdInMeta = true;
-          await this.log('meta_campaign_created', { campaignId: result.campaignId });
+          await this.log('meta_campaign_created', { campaignId: campaign.campaignId });
+
+          // 5b: Create ad sets with ads
+          const adSets = parsed.metaAds.adSets || [];
+          parsed.metaAds._adSets = [];
+          for (const adSet of adSets) {
+            try {
+              const adSetResult = await metaAds.createAdSet({
+                campaignId: campaign.campaignId,
+                name: adSet.name,
+                dailyBudget: adSet.dailyBudget || 20,
+                targeting: {
+                  geoLocations: { countries: ['US'] },
+                  ageMin: 25,
+                  ageMax: 55,
+                },
+              });
+              await this.log('meta_adset_created', { name: adSet.name, id: adSetResult.adSetId });
+
+              // Create ads for each creative in the ad set
+              const creatives = adSet.creatives || [];
+              const adIds: string[] = [];
+              for (const creative of creatives) {
+                try {
+                  const adResult = await metaAds.createAd({
+                    adSetId: adSetResult.adSetId,
+                    name: creative.name,
+                    creativeData: {
+                      title: creative.hook?.substring(0, 100) || adSet.name,
+                      body: creative.hook || `Discover ${parsed.metaAds.campaignName}`,
+                      linkUrl: landingUrl,
+                      callToAction: 'LEARN_MORE',
+                    },
+                  });
+                  adIds.push(adResult.adId);
+                  await this.log('meta_ad_created', { creative: creative.name, adId: adResult.adId });
+                } catch (err: any) {
+                  await this.log('meta_ad_failed', { creative: creative.name, error: err.message });
+                }
+              }
+
+              parsed.metaAds._adSets.push({
+                name: adSet.name,
+                adSetId: adSetResult.adSetId,
+                adsCount: adIds.length,
+                status: 'ACTIVE',
+              });
+            } catch (err: any) {
+              await this.log('meta_adset_failed', { adSet: adSet.name, error: err.message });
+            }
+          }
         } catch (err: any) {
           await this.log('meta_create_failed', { error: err.message });
         }

@@ -94,6 +94,11 @@ export function PaidTrafficOutput({ data }: Props) {
   const totalAdSets = metaAds.adSets?.length || 0;
   const totalCreatives = metaAds.adSets?.reduce((sum: number, s: any) => sum + (s.creatives?.length || 0), 0) || 0;
 
+  const googleLive = !!googleAds._createdInGoogleAds;
+  const metaLive = !!metaAds._createdInMeta;
+  const googleStatus = googleAds._status || (googleLive ? 'ENABLED' : 'PLANNED');
+  const metaStatus = metaAds._status || (metaLive ? 'ACTIVE' : 'PLANNED');
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -111,6 +116,47 @@ export function PaidTrafficOutput({ data }: Props) {
           </span>
         )}
       </div>
+
+      {/* Live Campaign Status Banner */}
+      {(googleLive || metaLive) && (
+        <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+            </span>
+            <span className="text-sm font-semibold text-green-400">Live Campaigns Running</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            {googleLive && (
+              <div className="flex items-center gap-2 p-2 bg-green-500/5 rounded border border-green-500/10">
+                <Search className="w-3.5 h-3.5 text-green-400" />
+                <div>
+                  <span className="font-medium text-green-400">Google Ads</span>
+                  <span className="ml-2 px-1.5 py-0.5 text-[10px] bg-green-500/20 text-green-400 rounded">{googleStatus}</span>
+                  {googleAds._campaignId && <div className="text-muted-foreground mt-0.5">ID: {googleAds._campaignId}</div>}
+                  {googleAds._adGroups?.length > 0 && (
+                    <div className="text-muted-foreground">{googleAds._adGroups.length} ad groups live</div>
+                  )}
+                </div>
+              </div>
+            )}
+            {metaLive && (
+              <div className="flex items-center gap-2 p-2 bg-blue-500/5 rounded border border-blue-500/10">
+                <Eye className="w-3.5 h-3.5 text-blue-400" />
+                <div>
+                  <span className="font-medium text-blue-400">Meta Ads</span>
+                  <span className="ml-2 px-1.5 py-0.5 text-[10px] bg-blue-500/20 text-blue-400 rounded">{metaStatus}</span>
+                  {metaAds._campaignId && <div className="text-muted-foreground mt-0.5">ID: {metaAds._campaignId}</div>}
+                  {metaAds._adSets?.length > 0 && (
+                    <div className="text-muted-foreground">{metaAds._adSets.length} ad sets live</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Projections Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">

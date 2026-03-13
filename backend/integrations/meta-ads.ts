@@ -100,12 +100,11 @@ export async function getAdSetInsights(campaignId: string): Promise<any[]> {
   return data.data || [];
 }
 
-/** Create a new campaign */
+/** Create a new campaign — starts ACTIVE so it runs immediately */
 export async function createCampaign(config: MetaCampaignConfig): Promise<{ campaignId: string }> {
   const adAccountId = getAdAccountId();
   if (!adAccountId) throw new Error('META_AD_ACCOUNT_ID not configured');
 
-  // Safety gate
   if (process.env.ENABLE_AD_MUTATIONS !== 'true') {
     console.log(`[DRY RUN] Would create Meta campaign: ${config.name} ($${config.dailyBudget}/day)`);
     return { campaignId: 'dry-run-meta-campaign' };
@@ -116,12 +115,120 @@ export async function createCampaign(config: MetaCampaignConfig): Promise<{ camp
     body: JSON.stringify({
       name: config.name,
       objective: config.objective || 'OUTCOME_LEADS',
-      status: config.status || 'PAUSED', // Start paused for safety
+      status: config.status || 'ACTIVE',
       special_ad_categories: [],
     }),
   });
 
   return { campaignId: data.id || '' };
+}
+
+/** Create an ad set under a campaign */
+export async function createAdSet(config: {
+  campaignId: string;
+  name: string;
+  dailyBudget: number;
+  targeting: {
+    geoLocations?: { countries: string[] };
+    interests?: { id: string; name: string }[];
+    ageMin?: number;
+    ageMax?: number;
+  };
+  optimizationGoal?: string;
+  billingEvent?: string;
+  bidAmount?: number;
+}): Promise<{ adSetId: string }> {
+  const adAccountId = getAdAccountId();
+  if (!adAccountId) throw new Error('META_AD_ACCOUNT_ID not configured');
+
+  if (process.env.ENABLE_AD_MUTATIONS !== 'true') {
+    console.log(`[DRY RUN] Would create Meta ad set: ${config.name} ($${config.dailyBudget}/day)`);
+    return { adSetId: 'dry-run-adset' };
+  }
+
+  const targeting: any = {
+    geo_locations: config.targeting.geoLocations || { countries: ['US'] },
+    age_min: config.targeting.ageMin || 25,
+    age_max: config.targeting.ageMax || 55,
+  };
+  if (config.targeting.interests?.length) {
+    targeting.flexible_spec = [{ interests: config.targeting.interests }];
+  }
+
+  const data = await metaFetch(`/act_${adAccountId}/adsets`, {
+    method: 'POST',
+    body: JSON.stringify({
+      name: config.name,
+      campaign_id: config.campaignId,
+      daily_budget: Math.round(config.dailyBudget * 100), // Meta uses cents
+      optimization_goal: config.optimizationGoal || 'LEAD_GENERATION',
+      billing_event: config.billingEvent || 'IMPRESSIONS',
+      bid_amount: config.bidAmount ? Math.round(config.bidAmount * 100) : undefined,
+      targeting,
+      status: 'ACTIVE',
+    }),
+  });
+
+  return { adSetId: data.id || '' };
+}
+
+/** Create an ad under an ad set */
+export async function createAd(config: {
+  adSetId: string;
+  name: string;
+  creativeData: {
+    title: string;
+    body: string;
+    linkUrl: string;
+    callToAction?: string;
+    imageUrl?: string;
+  };
+}): Promise<{ adId: string }> {
+  const adAccountId = getAdAccountId();
+  if (!adAccountId) throw new Error('META_AD_ACCOUNT_ID not configured');
+
+  if (process.env.ENABLE_AD_MUTATIONS !== 'true') {
+    console.log(`[DRY RUN] Would create Meta ad: ${config.name}`);
+    return { adId: 'dry-run-ad' };
+  }
+
+  // Step 1: Create ad creative
+  const creativePayload: any = {
+    name: `${config.name} Creative`,
+    object_story_spec: {
+      link_data: {
+        link: config.creativeData.linkUrl,
+        message: config.creativeData.body,
+        name: config.creativeData.title,
+        call_to_action: {
+          type: config.creativeData.callToAction || 'LEARN_MORE',
+          value: { link: config.creativeData.linkUrl },
+        },
+      },
+    },
+  };
+  if (config.creativeData.imageUrl) {
+    creativePayload.object_story_spec.link_data.picture = config.creativeData.imageUrl;
+  }
+
+  const creativeData = await metaFetch(`/act_${adAccountId}/adcreatives`, {
+    method: 'POST',
+    body: JSON.stringify(creativePayload),
+  });
+  const creativeId = creativeData.id || '';
+
+  // Step 2: Create ad linking to creative and ad set
+  const adData = await metaFetch(`/act_${adAccountId}/ads`, {
+    method: 'POST',
+    body: JSON.stringify({
+      name: config.name,
+      adset_id: config.adSetId,
+      creative: { creative_id: creativeId },
+      status: 'ACTIVE',
+    }),
+  });
+
+  return { adId: adData.id || '' };
 }
 
 /** Pause a campaign */
