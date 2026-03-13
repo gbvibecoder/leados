@@ -145,9 +145,9 @@ export class OutboundOutreachAgent extends BaseAgent {
     try {
       // Extract upstream agent data for context-aware outreach
       const previousOutputs = inputs.previousOutputs || {};
-      const offerData = previousOutputs['offer-engineering']?.data || previousOutputs['offer-engineering'] || {};
-      const contentData = previousOutputs['content-creative']?.data || previousOutputs['content-creative'] || {};
-      const validationData = previousOutputs['validation']?.data || previousOutputs['validation'] || {};
+      const offerData = previousOutputs['offer-engineering']?.offer || previousOutputs['offer-engineering'] || {};
+      const contentData = previousOutputs['content-creative'] || {};
+      const validationData = previousOutputs['validation'] || {};
 
       // Check if validation said NO-GO
       if (validationData.decision === 'NO-GO') {

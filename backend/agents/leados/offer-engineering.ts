@@ -109,7 +109,7 @@ export class OfferEngineeringAgent extends BaseAgent {
     let dataSourcesSummary: any = null;
 
     if (serviceResearchOutput) {
-      const srData = serviceResearchOutput.data || serviceResearchOutput;
+      const srData = serviceResearchOutput;
       allOpportunities = srData.opportunities || [];
       dataSourcesSummary = srData.dataSourcesSummary;
       topOpportunity = allOpportunities[0] || null;

@@ -132,10 +132,10 @@ export class SalesRoutingAgent extends BaseAgent {
 
     try {
       const previousOutputs = inputs.previousOutputs || {};
-      const qualificationData = previousOutputs['ai-qualification']?.data || previousOutputs['ai-qualification'] || {};
-      const inboundData = previousOutputs['inbound-capture']?.data || previousOutputs['inbound-capture'] || {};
-      const offerData = previousOutputs['offer-engineering']?.data || previousOutputs['offer-engineering'] || {};
-      const validationData = previousOutputs['validation']?.data || previousOutputs['validation'] || {};
+      const qualificationData = previousOutputs['ai-qualification'] || {};
+      const inboundData = previousOutputs['inbound-capture'] || {};
+      const offerData = previousOutputs['offer-engineering'] || {};
+      const validationData = previousOutputs['validation'] || {};
 
       // Check if validation said NO-GO
       if (validationData.decision === 'NO-GO') {
@@ -208,7 +208,7 @@ export class SalesRoutingAgent extends BaseAgent {
 
   private getMockOutput(inputs: AgentInput): any {
     const previousOutputs = inputs.previousOutputs || {};
-    const qualificationData = previousOutputs['ai-qualification']?.data || previousOutputs['ai-qualification'] || {};
+    const qualificationData = previousOutputs['ai-qualification'] || {};
     const callResults = qualificationData.callResults || [];
 
     // Route each qualified lead based on their outcome from Agent 9

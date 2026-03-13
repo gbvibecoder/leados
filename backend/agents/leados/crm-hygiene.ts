@@ -74,12 +74,12 @@ export class CRMHygieneAgent extends BaseAgent {
 
     try {
       const previousOutputs = inputs.previousOutputs || {};
-      const inboundData = previousOutputs['inbound-capture']?.data || previousOutputs['inbound-capture'] || {};
-      const qualificationData = previousOutputs['ai-qualification']?.data || previousOutputs['ai-qualification'] || {};
-      const routingData = previousOutputs['sales-routing']?.data || previousOutputs['sales-routing'] || {};
-      const trackingData = previousOutputs['tracking-attribution']?.data || previousOutputs['tracking-attribution'] || {};
-      const perfData = previousOutputs['performance-optimization']?.data || previousOutputs['performance-optimization'] || {};
-      const validationData = previousOutputs['validation']?.data || previousOutputs['validation'] || {};
+      const inboundData = previousOutputs['inbound-capture'] || {};
+      const qualificationData = previousOutputs['ai-qualification'] || {};
+      const routingData = previousOutputs['sales-routing'] || {};
+      const trackingData = previousOutputs['tracking-attribution'] || {};
+      const perfData = previousOutputs['performance-optimization'] || {};
+      const validationData = previousOutputs['validation'] || {};
 
       // NO-GO gate
       if (validationData.decision === 'NO-GO') {
@@ -208,8 +208,8 @@ export class CRMHygieneAgent extends BaseAgent {
 
   private getMockOutput(inputs: AgentInput): any {
     const previousOutputs = inputs.previousOutputs || {};
-    const routingData = previousOutputs['sales-routing']?.data || {};
-    const trackingData = previousOutputs['tracking-attribution']?.data || {};
+    const routingData = previousOutputs['sales-routing'] || {};
+    const trackingData = previousOutputs['tracking-attribution'] || {};
 
     const totalRecords = 1247;
     const duplicatesFound = 23;

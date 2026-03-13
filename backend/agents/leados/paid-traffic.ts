@@ -156,13 +156,13 @@ export class PaidTrafficAgent extends BaseAgent {
     await this.log('run_started', { inputs });
 
     // ── Extract upstream data ──────────────────────────────────────
-    const serviceData = inputs.previousOutputs?.['service-research']?.data || {};
-    const offerData = inputs.previousOutputs?.['offer-engineering']?.data?.offer
-      || inputs.previousOutputs?.['offer-engineering']?.data
+    const serviceData = inputs.previousOutputs?.['service-research'] || {};
+    const offerData = inputs.previousOutputs?.['offer-engineering']?.offer
+      || inputs.previousOutputs?.['offer-engineering']
       || {};
-    const validationData = inputs.previousOutputs?.['validation']?.data || {};
-    const funnelData = inputs.previousOutputs?.['funnel-builder']?.data || {};
-    const contentData = inputs.previousOutputs?.['content-creative']?.data || {};
+    const validationData = inputs.previousOutputs?.['validation'] || {};
+    const funnelData = inputs.previousOutputs?.['funnel-builder'] || {};
+    const contentData = inputs.previousOutputs?.['content-creative'] || {};
 
     // Block on NO-GO
     const decision = validationData.decision || 'GO';

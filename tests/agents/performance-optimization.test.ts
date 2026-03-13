@@ -235,7 +235,7 @@ describe('PerformanceOptimizationAgent', () => {
       pipelineId: 'test-019',
       config: {},
       previousOutputs: {
-        validation: { data: { decision: 'NO-GO' } },
+        validation: { decision: 'NO-GO' },
       },
     });
 

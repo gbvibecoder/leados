@@ -166,7 +166,7 @@ describe('OutboundOutreachAgent', () => {
       pipelineId: 'test-pipeline-010',
       config: {},
       previousOutputs: {
-        validation: { data: { decision: 'NO-GO' } },
+        validation: { decision: 'NO-GO' },
       },
     });
 

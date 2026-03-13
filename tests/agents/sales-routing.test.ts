@@ -233,7 +233,7 @@ describe('SalesRoutingAgent', () => {
       pipelineId: 'test-019',
       config: {},
       previousOutputs: {
-        validation: { data: { decision: 'NO-GO' } },
+        validation: { decision: 'NO-GO' },
       },
     });
 
@@ -249,43 +249,41 @@ describe('SalesRoutingAgent', () => {
       config: {},
       previousOutputs: {
         'ai-qualification': {
-          data: {
-            callResults: [
-              {
-                leadName: 'Test Hot Lead',
-                leadEmail: 'hot@example.com',
-                company: 'HotCo',
-                phone: '+1-555-0001',
-                callStatus: 'completed',
-                score: 90,
-                bantBreakdown: { budget: 28, authority: 25, need: 22, timeline: 15 },
-                outcome: 'high_intent_checkout',
-                routingAction: 'Send checkout link',
-              },
-              {
-                leadName: 'Test Warm Lead',
-                leadEmail: 'warm@example.com',
-                company: 'WarmCo',
-                phone: '+1-555-0002',
-                callStatus: 'completed',
-                score: 75,
-                bantBreakdown: { budget: 20, authority: 20, need: 20, timeline: 15 },
-                outcome: 'high_intent_sales',
-                routingAction: 'Book sales call',
-              },
-              {
-                leadName: 'Test Cold Lead',
-                leadEmail: 'cold@example.com',
-                company: 'ColdCo',
-                phone: '+1-555-0003',
-                callStatus: 'completed',
-                score: 30,
-                bantBreakdown: { budget: 5, authority: 10, need: 10, timeline: 5 },
-                outcome: 'low_intent',
-                routingAction: 'Disqualify',
-              },
-            ],
-          },
+          callResults: [
+            {
+              leadName: 'Test Hot Lead',
+              leadEmail: 'hot@example.com',
+              company: 'HotCo',
+              phone: '+1-555-0001',
+              callStatus: 'completed',
+              score: 90,
+              bantBreakdown: { budget: 28, authority: 25, need: 22, timeline: 15 },
+              outcome: 'high_intent_checkout',
+              routingAction: 'Send checkout link',
+            },
+            {
+              leadName: 'Test Warm Lead',
+              leadEmail: 'warm@example.com',
+              company: 'WarmCo',
+              phone: '+1-555-0002',
+              callStatus: 'completed',
+              score: 75,
+              bantBreakdown: { budget: 20, authority: 20, need: 20, timeline: 15 },
+              outcome: 'high_intent_sales',
+              routingAction: 'Book sales call',
+            },
+            {
+              leadName: 'Test Cold Lead',
+              leadEmail: 'cold@example.com',
+              company: 'ColdCo',
+              phone: '+1-555-0003',
+              callStatus: 'completed',
+              score: 30,
+              bantBreakdown: { budget: 5, authority: 10, need: 10, timeline: 5 },
+              outcome: 'low_intent',
+              routingAction: 'Disqualify',
+            },
+          ],
         },
       },
     });

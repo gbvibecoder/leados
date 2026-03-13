@@ -247,10 +247,10 @@ export class FunnelBuilderAgent extends BaseAgent {
     await this.log('run_started', { inputs });
 
     // Extract upstream data
-    const offerData = inputs.previousOutputs?.['offer-engineering']?.data?.offer
-      || inputs.previousOutputs?.['offer-engineering']?.data
+    const offerData = inputs.previousOutputs?.['offer-engineering']?.offer
+      || inputs.previousOutputs?.['offer-engineering']
       || {};
-    const validationData = inputs.previousOutputs?.['validation']?.data || {};
+    const validationData = inputs.previousOutputs?.['validation'] || {};
 
     // Only proceed if validation decision is GO or CONDITIONAL
     const decision = validationData.decision || 'GO';
@@ -376,10 +376,10 @@ export class FunnelBuilderAgent extends BaseAgent {
   }
 
   private getMockOutput(inputs: AgentInput): any {
-    const offerData = inputs.previousOutputs?.['offer-engineering']?.data?.offer
-      || inputs.previousOutputs?.['offer-engineering']?.data
+    const offerData = inputs.previousOutputs?.['offer-engineering']?.offer
+      || inputs.previousOutputs?.['offer-engineering']
       || {};
-    const validationData = inputs.previousOutputs?.['validation']?.data || {};
+    const validationData = inputs.previousOutputs?.['validation'] || {};
 
     const serviceName = offerData.serviceName || 'LeadFlow AI';
     const headline = offerData.transformationPromise || 'Double Your Qualified Leads in 90 Days';

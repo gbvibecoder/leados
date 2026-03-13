@@ -141,11 +141,11 @@ export class InboundCaptureAgent extends BaseAgent {
     try {
       // Extract upstream agent data
       const previousOutputs = inputs.previousOutputs || {};
-      const offerData = previousOutputs['offer-engineering']?.data || previousOutputs['offer-engineering'] || {};
-      const funnelData = previousOutputs['funnel-builder']?.data || previousOutputs['funnel-builder'] || {};
-      const paidTrafficData = previousOutputs['paid-traffic']?.data || previousOutputs['paid-traffic'] || {};
-      const outboundData = previousOutputs['outbound-outreach']?.data || previousOutputs['outbound-outreach'] || {};
-      const validationData = previousOutputs['validation']?.data || previousOutputs['validation'] || {};
+      const offerData = previousOutputs['offer-engineering'] || {};
+      const funnelData = previousOutputs['funnel-builder'] || {};
+      const paidTrafficData = previousOutputs['paid-traffic'] || {};
+      const outboundData = previousOutputs['outbound-outreach'] || {};
+      const validationData = previousOutputs['validation'] || {};
 
       // Check if validation said NO-GO
       if (validationData.decision === 'NO-GO') {

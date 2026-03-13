@@ -138,12 +138,12 @@ export class TrackingAttributionAgent extends BaseAgent {
 
     try {
       const previousOutputs = inputs.previousOutputs || {};
-      const funnelData = previousOutputs['funnel-builder']?.data || previousOutputs['funnel-builder'] || {};
-      const paidTrafficData = previousOutputs['paid-traffic']?.data || previousOutputs['paid-traffic'] || {};
-      const outboundData = previousOutputs['outbound-outreach']?.data || previousOutputs['outbound-outreach'] || {};
-      const inboundData = previousOutputs['inbound-capture']?.data || previousOutputs['inbound-capture'] || {};
-      const routingData = previousOutputs['sales-routing']?.data || previousOutputs['sales-routing'] || {};
-      const validationData = previousOutputs['validation']?.data || previousOutputs['validation'] || {};
+      const funnelData = previousOutputs['funnel-builder'] || {};
+      const paidTrafficData = previousOutputs['paid-traffic'] || {};
+      const outboundData = previousOutputs['outbound-outreach'] || {};
+      const inboundData = previousOutputs['inbound-capture'] || {};
+      const routingData = previousOutputs['sales-routing'] || {};
+      const validationData = previousOutputs['validation'] || {};
 
       if (validationData.decision === 'NO-GO') {
         this.status = 'done';
@@ -240,8 +240,8 @@ export class TrackingAttributionAgent extends BaseAgent {
 
   private getMockOutput(inputs: AgentInput): any {
     const previousOutputs = inputs.previousOutputs || {};
-    const inboundData = previousOutputs['inbound-capture']?.data || {};
-    const routingData = previousOutputs['sales-routing']?.data || {};
+    const inboundData = previousOutputs['inbound-capture'] || {};
+    const routingData = previousOutputs['sales-routing'] || {};
 
     const channelAttribution = this.generateChannelAttribution();
     const leadJourneys = this.generateLeadJourneys();

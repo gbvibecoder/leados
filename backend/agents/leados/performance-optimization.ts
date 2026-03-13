@@ -147,10 +147,10 @@ export class PerformanceOptimizationAgent extends BaseAgent {
 
     try {
       const previousOutputs = inputs.previousOutputs || {};
-      const paidTrafficData = previousOutputs['paid-traffic']?.data || previousOutputs['paid-traffic'] || {};
-      const qualificationData = previousOutputs['ai-qualification']?.data || previousOutputs['ai-qualification'] || {};
-      const trackingData = previousOutputs['tracking-attribution']?.data || previousOutputs['tracking-attribution'] || {};
-      const validationData = previousOutputs['validation']?.data || previousOutputs['validation'] || {};
+      const paidTrafficData = previousOutputs['paid-traffic'] || {};
+      const qualificationData = previousOutputs['ai-qualification'] || {};
+      const trackingData = previousOutputs['tracking-attribution'] || {};
+      const validationData = previousOutputs['validation'] || {};
 
       if (validationData.decision === 'NO-GO') {
         this.status = 'done';
@@ -272,7 +272,7 @@ export class PerformanceOptimizationAgent extends BaseAgent {
 
   private getMockOutput(inputs: AgentInput): any {
     const previousOutputs = inputs.previousOutputs || {};
-    const trackingData = previousOutputs['tracking-attribution']?.data || {};
+    const trackingData = previousOutputs['tracking-attribution'] || {};
 
     const campaignAnalysis = [
       {

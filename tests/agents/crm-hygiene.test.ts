@@ -325,7 +325,7 @@ describe('CRMHygieneAgent', () => {
       pipelineId: 'test-026',
       config: {},
       previousOutputs: {
-        validation: { data: { decision: 'NO-GO' } },
+        validation: { decision: 'NO-GO' },
       },
     });
 

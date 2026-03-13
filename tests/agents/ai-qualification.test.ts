@@ -262,7 +262,7 @@ describe('AIQualificationAgent', () => {
       pipelineId: 'test-021',
       config: {},
       previousOutputs: {
-        validation: { data: { decision: 'NO-GO' } },
+        validation: { decision: 'NO-GO' },
       },
     });
 

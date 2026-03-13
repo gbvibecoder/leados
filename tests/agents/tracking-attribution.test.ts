@@ -260,7 +260,7 @@ describe('TrackingAttributionAgent', () => {
       pipelineId: 'test-018',
       config: {},
       previousOutputs: {
-        validation: { data: { decision: 'NO-GO' } },
+        validation: { decision: 'NO-GO' },
       },
     });
 

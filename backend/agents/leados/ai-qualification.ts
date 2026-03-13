@@ -126,9 +126,9 @@ export class AIQualificationAgent extends BaseAgent {
 
     try {
       const previousOutputs = inputs.previousOutputs || {};
-      const offerData = previousOutputs['offer-engineering']?.data || previousOutputs['offer-engineering'] || {};
-      const inboundData = previousOutputs['inbound-capture']?.data || previousOutputs['inbound-capture'] || {};
-      const validationData = previousOutputs['validation']?.data || previousOutputs['validation'] || {};
+      const offerData = previousOutputs['offer-engineering'] || {};
+      const inboundData = previousOutputs['inbound-capture'] || {};
+      const validationData = previousOutputs['validation'] || {};
 
       if (validationData.decision === 'NO-GO') {
         this.status = 'done';
@@ -410,7 +410,7 @@ For leads in emailOnlyLeads: set callStatus to "no_valid_phone", outcome to "med
   private async getMockOutput(inputs: AgentInput): Promise<any> {
     // Get leads from upstream or use mock leads (only call leads with score >= 60)
     const previousOutputs = inputs.previousOutputs || {};
-    const inboundData = previousOutputs['inbound-capture']?.data || previousOutputs['inbound-capture'] || {};
+    const inboundData = previousOutputs['inbound-capture'] || {};
     const qualifiedLeads = inboundData.leadsProcessed?.filter((l: any) => l.score >= 60) || [];
 
     // If no upstream leads, use mock leads that would qualify
