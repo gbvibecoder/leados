@@ -68,9 +68,32 @@ async function waitWhilePaused(id: string, maxWaitMs = 600000): Promise<boolean>
   }
 }
 
-async function runPipelineInBackground(id: string, agentsToRun: string[]) {
+async function runPipelineInBackground(id: string, agentsToRun: string[], projectData?: { name: string; url?: string; type: string; description?: string; config?: any }) {
   const agents = getAgents();
   const previousOutputs: Record<string, any> = {};
+
+  // Build project config to pass to each agent
+  const projectConfig: Record<string, any> = {};
+  if (projectData) {
+    projectConfig.projectName = projectData.name;
+    projectConfig.projectType = projectData.type;
+    if (projectData.url) projectConfig.projectUrl = projectData.url;
+    if (projectData.description) projectConfig.projectDescription = projectData.description;
+
+    // Map project name/description into fields agents look for (focus, niche, serviceNiche)
+    // so agents automatically research/generate for this specific project
+    if (projectData.name) {
+      projectConfig.focus = projectData.name;
+      projectConfig.niche = projectData.name;
+      projectConfig.serviceNiche = projectData.name;
+    }
+
+    // Merge any extra config from the project (e.g. enabledAgentIds, url, budget overrides)
+    if (projectData.config) {
+      const cfg = typeof projectData.config === 'string' ? JSON.parse(projectData.config) : projectData.config;
+      Object.assign(projectConfig, cfg);
+    }
+  }
 
   for (let i = 0; i < agentsToRun.length; i++) {
     const agentId = agentsToRun[i];
@@ -114,7 +137,7 @@ async function runPipelineInBackground(id: string, agentsToRun: string[]) {
           agentId,
           agentName: agent.name,
           status: 'running',
-          inputsJson: JSON.stringify({}),
+          inputsJson: JSON.stringify(projectConfig),
           startedAt: new Date(),
         },
       });
@@ -125,7 +148,7 @@ async function runPipelineInBackground(id: string, agentsToRun: string[]) {
     try {
       const output = await agent.run({
         pipelineId: id,
-        config: {},
+        config: projectConfig,
         previousOutputs,
       });
 
@@ -220,25 +243,42 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   // Check project type and config
   let isInternal = false;
   let enabledAgentIds: string[] | null = null;
+  let projectData: { name: string; url?: string; type: string; description?: string; config?: any } | undefined;
   try {
     const pipeline = await prisma.pipeline.findUnique({
       where: { id },
       include: { project: true },
     });
-    if (pipeline?.project?.type === 'internal') {
-      isInternal = true;
-    }
-    // Read project-level agent config
-    if (pipeline?.project?.config) {
-      try {
-        const config = typeof pipeline.project.config === 'string'
-          ? JSON.parse(pipeline.project.config)
-          : pipeline.project.config;
-        if (Array.isArray(config.enabledAgentIds)) {
-          enabledAgentIds = config.enabledAgentIds;
+    if (pipeline?.project) {
+      const proj = pipeline.project;
+      if (proj.type === 'internal') {
+        isInternal = true;
+      }
+      projectData = {
+        name: proj.name,
+        type: proj.type,
+        description: proj.description || undefined,
+        config: proj.config || undefined,
+      };
+      // Extract URL from config if present
+      if (proj.config) {
+        try {
+          const parsedCfg = typeof proj.config === 'string' ? JSON.parse(proj.config) : proj.config;
+          if (parsedCfg.url) projectData.url = parsedCfg.url;
+        } catch { /* ignore */ }
+      }
+      // Read project-level agent config
+      if (proj.config) {
+        try {
+          const config = typeof proj.config === 'string'
+            ? JSON.parse(proj.config)
+            : proj.config;
+          if (Array.isArray(config.enabledAgentIds)) {
+            enabledAgentIds = config.enabledAgentIds;
+          }
+        } catch {
+          // ignore parse errors
         }
-      } catch {
-        // ignore parse errors
       }
     }
   } catch {
@@ -268,7 +308,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   // Run pipeline in background — don't block the HTTP response
-  runPipelineInBackground(id, agentsToRun).catch((err) => {
+  runPipelineInBackground(id, agentsToRun, projectData).catch((err) => {
     console.error('Pipeline background run failed:', err);
   });
 

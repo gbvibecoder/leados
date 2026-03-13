@@ -37,6 +37,29 @@ export async function POST(req: Request) {
       );
     }
 
+    // Validate URL is reachable if provided
+    const url = body.config?.url;
+    if (url) {
+      try {
+        const res = await fetch(url, {
+          method: 'HEAD',
+          signal: AbortSignal.timeout(8000),
+          redirect: 'follow',
+        });
+        if (!res.ok && res.status >= 400) {
+          return NextResponse.json(
+            { error: `URL not reachable — got status ${res.status}. Please enter a valid, live URL.` },
+            { status: 400 }
+          );
+        }
+      } catch {
+        return NextResponse.json(
+          { error: 'URL not reachable. Please check the URL and try again.' },
+          { status: 400 }
+          );
+      }
+    }
+
     const project = await prisma.project.create({
       data: {
         name: body.name.trim(),
