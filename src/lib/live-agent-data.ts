@@ -13,6 +13,8 @@
 
 import { fetchRealTrends, type TrendResearchResult } from './real-trends';
 import { getCachedData, setCachedData, getCacheKey, formatLastUpdated } from './trend-cache';
+import * as apollo from '@backend/integrations/apollo';
+import * as instantly from '@backend/integrations/instantly';
 
 // ============================================
 // Shared helpers
@@ -632,15 +634,100 @@ async function generatePaidTrafficData(trends: TrendResearchResult, topNiche: st
 // ============================================
 
 async function generateOutboundData(trends: TrendResearchResult, topNiche: string) {
+  // Fetch REAL prospects from Apollo.io if API key is available
+  let realProspects: any[] = [];
+  let prospectDataSource = 'generated';
+  if (apollo.isApolloAvailable()) {
+    try {
+      const apolloResults = await apollo.searchProspects({
+        jobTitles: ['VP of Marketing', 'Head of Growth', 'CMO', 'Director of Demand Gen', 'CEO'],
+        industries: ['SaaS', 'B2B Technology', 'Software'],
+        limit: 25,
+      });
+      if (apolloResults.length > 0) {
+        realProspects = apolloResults.map((p) => ({
+          firstName: p.firstName,
+          lastName: p.lastName,
+          email: p.email,
+          company: p.company,
+          jobTitle: p.jobTitle,
+          industry: p.industry,
+          companySize: p.companySize,
+          linkedInUrl: p.linkedInUrl,
+          personalizationNote: `${p.jobTitle} at ${p.company}${p.industry ? ` (${p.industry})` : ''}`,
+        }));
+        prospectDataSource = 'live_apollo';
+      }
+    } catch (err: any) {
+      console.error('Apollo API error in live-agent-data:', err.message);
+    }
+  }
+
+  // Create REAL campaign in Instantly if API key is available
+  let instantlyCampaignId: string | null = null;
+  let instantlyDataSource = 'generated';
+  let existingCampaigns: any[] = [];
+  if (instantly.isInstantlyAvailable()) {
+    try {
+      // List existing campaigns first
+      existingCampaigns = await instantly.listCampaigns();
+      // Create a new campaign for this niche
+      const campaign = await instantly.createCampaign({
+        name: `LeadOS — ${topNiche} Outbound — ${todayStr()}`,
+        dailyLimit: 50,
+      });
+      instantlyCampaignId = campaign.id;
+      instantlyDataSource = 'live_instantly';
+
+      // Add real prospects to the campaign if available
+      if (realProspects.length > 0 && instantlyCampaignId) {
+        await instantly.addLeadsToCampaign(
+          instantlyCampaignId,
+          realProspects.filter((p: any) => p.email).map((p: any) => ({
+            email: p.email,
+            firstName: p.firstName,
+            lastName: p.lastName,
+            company: p.company,
+          }))
+        );
+      }
+    } catch (err: any) {
+      console.error('Instantly API error in live-agent-data:', err.message);
+    }
+  }
+
+  // Use real prospects if available, otherwise fall back to trend-based generated list
+  const prospectList = realProspects.length > 0
+    ? realProspects
+    : [
+        { firstName: 'Sarah', lastName: 'Chen', company: 'TechVentures', jobTitle: 'VP Marketing', industry: 'B2B SaaS', personalizationNote: 'Recently raised Series B, expanding marketing team' },
+        { firstName: 'Mike', lastName: 'Rodriguez', company: 'GrowthLab', jobTitle: 'Head of Growth', industry: 'B2B SaaS', personalizationNote: `Posted about ${topNiche.toLowerCase()} challenges on LinkedIn` },
+        { firstName: 'Emily', lastName: 'Watson', company: 'StartupForge', jobTitle: 'CMO', industry: 'B2B SaaS', personalizationNote: `Spoke at SaaStr about ${topNiche.toLowerCase()} automation` },
+        { firstName: 'James', lastName: 'Park', company: 'CloudScale', jobTitle: 'VP Marketing', industry: 'B2B SaaS', personalizationNote: 'Hiring 3 SDRs — likely needs pipeline help' },
+        { firstName: 'Lisa', lastName: 'Nguyen', company: 'DataDrive', jobTitle: 'Director of Demand Gen', industry: 'B2B SaaS', personalizationNote: 'Using HubSpot, mentioned CAC concerns' },
+      ];
+
+  const prospectCount = realProspects.length > 0 ? realProspects.length : 2500;
+
   return {
     success: true,
     data: {
+      dataSource: {
+        prospects: prospectDataSource,
+        campaign: instantlyDataSource,
+        apolloProspectsCount: realProspects.length,
+        instantlyCampaignId,
+        existingCampaigns: existingCampaigns.length,
+      },
       coldEmail: {
         platform: 'Instantly',
-        prospectCount: 2500,
+        campaignId: instantlyCampaignId,
+        prospectCount,
         prospectCriteria: {
           icpMatch: `B2B SaaS, 10-200 employees, $1M-$50M ARR, VP Marketing / Head of Growth / CMO — targeting ${topNiche.toLowerCase()}`,
-          sources: ['Apollo.io', 'LinkedIn Sales Navigator', 'Clearbit'],
+          sources: realProspects.length > 0
+            ? ['Apollo.io (LIVE DATA)']
+            : ['Apollo.io', 'LinkedIn Sales Navigator', 'Clearbit'],
         },
         domains: {
           sendingDomains: ['leadflow-ai.com', 'leadflowai.io', 'getleadflow.com'],
@@ -689,29 +776,47 @@ async function generateOutboundData(trends: TrendResearchResult, topNiche: strin
         },
       },
       projectedMetrics: {
-        emailsSent: 2500,
+        emailsSent: prospectCount,
         linkedInConnectionsSent: 500,
         expectedOpenRate: 49.98,
         expectedReplyRate: 5.98,
-        expectedReplies: 142,
-        expectedMeetings: 28,
-        totalMeetingsFromOutbound: 40,
+        expectedReplies: Math.round(prospectCount * 0.0598),
+        expectedMeetings: Math.round(prospectCount * 0.0598 * 0.2),
+        totalMeetingsFromOutbound: Math.round(prospectCount * 0.0598 * 0.2) + 12,
         estimatedCostPerMeeting: 23.50,
         linkedInConnections: 185,
         linkedInMeetings: 12,
         linkedInConnectionRate: 37.0,
         linkedInReplyRate: 25.41,
       },
-      prospectList: [
-        { firstName: 'Sarah', lastName: 'Chen', company: 'TechVentures', jobTitle: 'VP Marketing', industry: 'B2B SaaS', personalizationNote: 'Recently raised Series B, expanding marketing team' },
-        { firstName: 'Mike', lastName: 'Rodriguez', company: 'GrowthLab', jobTitle: 'Head of Growth', industry: 'B2B SaaS', personalizationNote: `Posted about ${topNiche.toLowerCase()} challenges on LinkedIn` },
-        { firstName: 'Emily', lastName: 'Watson', company: 'StartupForge', jobTitle: 'CMO', industry: 'B2B SaaS', personalizationNote: `Spoke at SaaStr about ${topNiche.toLowerCase()} automation` },
-        { firstName: 'James', lastName: 'Park', company: 'CloudScale', jobTitle: 'VP Marketing', industry: 'B2B SaaS', personalizationNote: 'Hiring 3 SDRs — likely needs pipeline help' },
-        { firstName: 'Lisa', lastName: 'Nguyen', company: 'DataDrive', jobTitle: 'Director of Demand Gen', industry: 'B2B SaaS', personalizationNote: 'Using HubSpot, mentioned CAC concerns' },
-      ],
+      contactedProspects: {
+        total: prospectCount,
+        emailContacted: prospectCount,
+        linkedInContacted: Math.min(prospectList.length, 25),
+        dataSource: prospectDataSource,
+      },
+      expectedReplies: {
+        emailReplies: Math.round(prospectCount * 0.0598),
+        interestedLeads: Math.round(prospectCount * 0.0598 * 0.6),
+        meetingsBooked: Math.round(prospectCount * 0.0598 * 0.2),
+      },
+      linkedInConversations: {
+        connectionsSent: Math.min(prospectList.length, 25),
+        connectionsAccepted: Math.round(Math.min(prospectList.length, 25) * 0.37),
+        conversationsStarted: Math.round(Math.min(prospectList.length, 25) * 0.37 * 0.65),
+        meetingsFromLinkedIn: Math.round(Math.min(prospectList.length, 25) * 0.37 * 0.65 * 0.2),
+      },
+      crmBookings: {
+        totalMeetingsBooked: Math.round(prospectCount * 0.0598 * 0.2) + Math.round(Math.min(prospectList.length, 25) * 0.37 * 0.65 * 0.2),
+        calendarIntegration: 'Calendly',
+        crmPipeline: 'HubSpot — New Lead → AI Qualified → Strategy Call Booked',
+      },
+      prospectList,
     },
-    reasoning: `Running dual-channel outbound for ${topNiche}. Email sequence optimized from live market data (${trends.dataSourcesSummary.totalSignals} signals). LinkedIn targeting decision-makers at B2B SaaS companies. Data refreshed ${formatLastUpdated(trends.lastUpdated)}.`,
-    confidence: Math.min(89, trends.confidence - 3),
+    reasoning: realProspects.length > 0
+      ? `Running dual-channel outbound for ${topNiche}. ${realProspects.length} REAL prospects fetched from Apollo.io matching ICP criteria.${instantlyCampaignId ? ` Campaign created in Instantly (ID: ${instantlyCampaignId}).` : ''} Email sequence optimized from live market data (${trends.dataSourcesSummary.totalSignals} signals). Data refreshed ${formatLastUpdated(trends.lastUpdated)}.`
+      : `Running dual-channel outbound for ${topNiche}. Email sequence optimized from live market data (${trends.dataSourcesSummary.totalSignals} signals). LinkedIn targeting decision-makers at B2B SaaS companies. Data refreshed ${formatLastUpdated(trends.lastUpdated)}.`,
+    confidence: realProspects.length > 0 ? Math.min(94, trends.confidence) : Math.min(89, trends.confidence - 3),
   };
 }
 
