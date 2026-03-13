@@ -207,6 +207,9 @@ export class OutboundOutreachAgent extends BaseAgent {
           instantlyCampaignId: realCampaign?.id || null,
           dataSource: realProspects.length > 0 ? 'live_apollo' : 'llm_generated',
         },
+        IMPORTANT_INSTRUCTION: realProspects.length > 0
+          ? `REAL prospect data from Apollo is provided in realData.apolloProspects. Use ONLY these real prospects in your prospectList — do NOT invent fictional prospects. Build email sequences and LinkedIn outreach around these actual people. Projected metrics should be based on the real prospect count (${realProspects.length}), not fabricated numbers.`
+          : 'No real prospect data available from Apollo. Generate realistic prospect criteria and campaign strategy, but clearly mark all prospect names as examples.',
       });
 
       let parsed: any;

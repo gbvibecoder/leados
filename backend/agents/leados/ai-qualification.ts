@@ -174,6 +174,23 @@ export class AIQualificationAgent extends BaseAgent {
         }
       }
 
+      // Enrich leads missing phone numbers by looking up from DB
+      if (qualifiedLeads.length > 0) {
+        try {
+          const { prisma } = await import('@/lib/prisma');
+          for (const lead of qualifiedLeads) {
+            if (!lead.phone && lead.email) {
+              const dbLead = await prisma.lead.findFirst({ where: { email: lead.email }, select: { phone: true } });
+              if (dbLead?.phone) lead.phone = dbLead.phone;
+            }
+            if (!lead.phone && lead.name) {
+              const dbLead = await prisma.lead.findFirst({ where: { name: lead.name }, select: { phone: true } });
+              if (dbLead?.phone) lead.phone = dbLead.phone;
+            }
+          }
+        } catch { /* continue without DB lookup */ }
+      }
+
       // Validate phone numbers — only international format (+ followed by 10+ digits) are callable
       const isValidPhone = (phone: string | null | undefined): boolean => {
         if (!phone) return false;

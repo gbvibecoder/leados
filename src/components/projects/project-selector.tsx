@@ -95,8 +95,20 @@ export function ProjectSelector({
     });
   };
 
+  const isUrlValid = (url: string) => {
+    if (!url.trim()) return false;
+    try {
+      const parsed = new URL(url.trim());
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  };
+
+  const canCreate = newName.trim() && (newType === 'internal' || isUrlValid(newUrl));
+
   const handleCreate = () => {
-    if (!newName.trim()) return;
+    if (!canCreate) return;
     onCreateProject({
       name: newName.trim(),
       description: newDescription.trim() || undefined,
@@ -133,18 +145,12 @@ export function ProjectSelector({
             ) : (
               <Globe className="h-3.5 w-3.5 text-indigo-400" />
             )}
-            <span className="max-w-[140px] truncate text-xs font-medium">{selectedProject.name}</span>
-            <span
-              onClick={(e) => { e.stopPropagation(); onSelectProject(null); setIsOpen(false); }}
-              className="rounded p-0.5 hover:bg-zinc-700"
-            >
-              <X className="h-3 w-3 text-zinc-500" />
-            </span>
+            <span className="max-w-[160px] truncate text-xs font-medium">{selectedProject.name}</span>
           </>
         ) : (
           <>
-            <FolderOpen className="h-3.5 w-3.5" />
-            <span className="text-xs">All Projects</span>
+            <FolderOpen className="h-3.5 w-3.5 text-amber-400" />
+            <span className="text-xs text-amber-400">Select Project</span>
           </>
         )}
         <ChevronDown className={cn('h-3 w-3 text-zinc-500 transition-transform', isOpen && 'rotate-180')} />
@@ -154,7 +160,7 @@ export function ProjectSelector({
       {isOpen && (
         <div className="absolute right-0 z-50 mt-1 w-80 rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl shadow-black/50">
           <div className="max-h-64 overflow-y-auto">
-            {/* No project option */}
+            {/* No project option — runs on existing DB leads */}
             <button
               onClick={() => { onSelectProject(null); setIsOpen(false); }}
               className={cn(
@@ -164,8 +170,8 @@ export function ProjectSelector({
             >
               <FolderOpen className="h-4 w-4 text-zinc-500 shrink-0" />
               <div className="min-w-0">
-                <p className="text-xs font-medium text-zinc-300">No project (full pipeline)</p>
-                <p className="text-[10px] text-zinc-600">Run all 13 agents</p>
+                <p className="text-xs font-medium text-zinc-300">No project — use existing leads</p>
+                <p className="text-[10px] text-zinc-600">Agents work on leads already in the database</p>
               </div>
             </button>
 
@@ -216,7 +222,7 @@ export function ProjectSelector({
                 placeholder="Project name"
                 className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-xs text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
                 autoFocus
-                onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                onKeyDown={(e) => e.key === 'Enter' && canCreate && handleCreate()}
               />
 
               {/* Description */}
@@ -228,15 +234,20 @@ export function ProjectSelector({
                 className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-xs text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
               />
 
-              {/* URL field */}
+              {/* URL field — required for external projects */}
               <div className="relative">
-                <Link2 className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-500" />
+                <Link2 className={cn("absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3", newType === 'external' && !newUrl.trim() ? 'text-red-400' : 'text-zinc-500')} />
                 <input
                   type="url"
                   value={newUrl}
                   onChange={(e) => setNewUrl(e.target.value)}
-                  placeholder="https://example.com"
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 pl-7 pr-2.5 py-1.5 text-xs text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
+                  placeholder={newType === 'external' ? 'https://client-website.com (required)' : 'https://example.com (optional)'}
+                  className={cn(
+                    "w-full rounded-lg border bg-zinc-800 pl-7 pr-2.5 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none",
+                    newType === 'external' && newUrl.trim() && !isUrlValid(newUrl)
+                      ? 'border-red-500/50 focus:border-red-500'
+                      : 'border-zinc-700 focus:border-indigo-500'
+                  )}
                 />
               </div>
 
@@ -358,7 +369,8 @@ export function ProjectSelector({
                 </button>
                 <button
                   onClick={handleCreate}
-                  disabled={!newName.trim()}
+                  disabled={!canCreate}
+                  title={newType === 'external' && !isUrlValid(newUrl) ? 'URL is required for external projects' : undefined}
                   className="flex-1 rounded-lg bg-indigo-600 px-2 py-1.5 text-[10px] font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
                 >
                   Create

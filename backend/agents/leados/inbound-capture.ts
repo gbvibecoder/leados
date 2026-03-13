@@ -291,6 +291,20 @@ export class InboundCaptureAgent extends BaseAgent {
       const response = await this.callClaude(SYSTEM_PROMPT, userMessage);
       const parsed = this.safeParseLLMJson<any>(response, ['crmSetup', 'scoringModel', 'segmentation']);
 
+      // Merge DB lead data (phone, source, etc.) back into LLM output — LLM often drops fields
+      if (dbLeads.length > 0 && parsed.leadsProcessed) {
+        for (const lead of parsed.leadsProcessed) {
+          const dbLead = dbLeads.find((d: any) =>
+            d.email === lead.email || (d.name && d.name.toLowerCase() === (lead.name || '').toLowerCase())
+          );
+          if (dbLead) {
+            if (!lead.phone && dbLead.phone) lead.phone = dbLead.phone;
+            if (!lead.source && dbLead.source) lead.source = dbLead.source;
+            if (!lead.channel && dbLead.channel) lead.channel = dbLead.channel;
+          }
+        }
+      }
+
       // Merge real enrichment data into LLM output leads
       if (realEnrichments.size > 0 && parsed.leadsProcessed) {
         for (const lead of parsed.leadsProcessed) {

@@ -4,6 +4,17 @@ import { prisma } from '@/lib/prisma';
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
 
+  // Verify project exists if provided
+  if (body.projectId) {
+    const project = await prisma.project.findUnique({ where: { id: body.projectId } });
+    if (!project) {
+      return NextResponse.json(
+        { error: 'Project not found. Please select a valid project.' },
+        { status: 404 }
+      );
+    }
+  }
+
   const pipeline = await prisma.pipeline.create({
     data: {
       type: body.type || 'leados',

@@ -37,8 +37,16 @@ export async function POST(req: Request) {
       );
     }
 
-    // Validate URL is reachable if provided
+    // External projects require a valid URL so agents can research the actual business
     const url = body.config?.url;
+    if (body.type === 'external' && !url) {
+      return NextResponse.json(
+        { error: 'External projects require a URL so agents can research the business.' },
+        { status: 400 }
+      );
+    }
+
+    // Validate URL is reachable if provided
     if (url) {
       try {
         const res = await fetch(url, {

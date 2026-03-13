@@ -65,7 +65,7 @@ async function apolloFetch(endpoint: string, body: Record<string, any>): Promise
   return res.json();
 }
 
-/** Search for prospects matching ICP criteria */
+/** Search for prospects matching ICP criteria, then enrich each to reveal contact details */
 export async function searchProspects(params: ApolloPersonSearchParams): Promise<ApolloPerson[]> {
   const body: Record<string, any> = {
     per_page: params.limit || 25,
@@ -78,25 +78,55 @@ export async function searchProspects(params: ApolloPersonSearchParams): Promise
   }
 
   const data = await apolloFetch('/mixed_people/api_search', body);
+  const searchResults = data.people || [];
 
-  return (data.people || []).map((p: any) => ({
-    firstName: p.first_name || '',
-    lastName: p.last_name || '',
-    email: p.email || '',
-    company: p.organization?.name || '',
-    jobTitle: p.title || '',
-    industry: p.organization?.industry || '',
-    companySize: p.organization?.estimated_num_employees
-      ? `${p.organization.estimated_num_employees} employees`
-      : 'Unknown',
-    linkedInUrl: p.linkedin_url || '',
-    phone: p.phone_numbers?.[0]?.sanitized_number || '',
-  }));
+  // Search returns obfuscated data — enrich each person via people/match to reveal emails/phones
+  const enriched: ApolloPerson[] = [];
+  for (const person of searchResults) {
+    try {
+      const match = await apolloFetch('/people/match', { id: person.id });
+      const p = match.person || {};
+      const org = p.organization || {};
+      enriched.push({
+        firstName: p.first_name || person.first_name || '',
+        lastName: p.last_name || '',
+        email: p.email || '',
+        company: org.name || person.organization?.name || '',
+        jobTitle: p.title || person.title || '',
+        industry: org.industry || '',
+        companySize: org.estimated_num_employees
+          ? `${org.estimated_num_employees} employees`
+          : 'Unknown',
+        linkedInUrl: p.linkedin_url || '',
+        phone: p.phone_numbers?.[0]?.sanitized_number || org.sanitized_phone || '',
+      });
+    } catch {
+      // If enrich fails, use whatever search returned
+      enriched.push({
+        firstName: person.first_name || '',
+        lastName: '',
+        email: '',
+        company: person.organization?.name || '',
+        jobTitle: person.title || '',
+        industry: '',
+        companySize: 'Unknown',
+        linkedInUrl: '',
+        phone: '',
+      });
+    }
+  }
+
+  return enriched;
 }
 
-/** Enrich a single contact by email */
-export async function enrichContact(email: string): Promise<ApolloEnrichmentResult> {
-  const data = await apolloFetch('/people/match', { email });
+/** Enrich a single contact by email, or by name + company */
+export async function enrichContact(email: string, firstName?: string, lastName?: string, organizationName?: string): Promise<ApolloEnrichmentResult> {
+  const matchBody: Record<string, any> = {};
+  if (email) matchBody.email = email;
+  if (firstName) matchBody.first_name = firstName;
+  if (lastName) matchBody.last_name = lastName;
+  if (organizationName) matchBody.organization_name = organizationName;
+  const data = await apolloFetch('/people/match', matchBody);
   const p = data.person || {};
   const org = p.organization || {};
 
