@@ -75,6 +75,7 @@ interface AppState {
   setProjects: (projects: Project[]) => void;
   addProject: (project: Project) => void;
   createProject: (data: { name: string; description?: string; url?: string; type: 'internal' | 'external'; enabledAgentIds?: string[] }) => Project;
+  createProjectAsync: (data: { name: string; description?: string; url?: string; type: 'internal' | 'external'; enabledAgentIds?: string[] }) => Promise<Project>;
   updateProject: (projectId: string, updates: Partial<Project>) => void;
   updateProjectConfig: (projectId: string, config: ProjectConfig) => void;
   removeProject: (projectId: string) => void;
@@ -318,6 +319,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     saveProjects(updated);
   },
   createProject: (data) => {
+    // Synchronous version — adds to local state immediately with temp ID
+    // Use createProjectAsync instead for DB-synced project creation
     const project: Project = {
       id: Math.random().toString(36).slice(2) + Date.now().toString(36),
       name: data.name,
@@ -328,6 +331,45 @@ export const useAppStore = create<AppState>((set, get) => ({
       config: data.enabledAgentIds ? { enabledAgentIds: data.enabledAgentIds } : null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+    };
+    const updated = [project, ...get().projects];
+    set({ projects: updated });
+    saveProjects(updated);
+    return project;
+  },
+  createProjectAsync: async (data) => {
+    // Save to DB first — use the real DB-generated ID
+    const res = await fetch('/api/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: data.name,
+        description: data.description,
+        type: data.type,
+        config: {
+          ...(data.url ? { url: data.url } : {}),
+          ...(data.enabledAgentIds ? { enabledAgentIds: data.enabledAgentIds } : {}),
+        },
+      }),
+    });
+    const dbProject = await res.json();
+    if (!res.ok || !dbProject?.id) {
+      throw new Error(dbProject?.error || 'Failed to create project');
+    }
+
+    const project: Project = {
+      id: dbProject.id,
+      name: dbProject.name,
+      description: dbProject.description,
+      url: data.url,
+      type: dbProject.type,
+      status: dbProject.status || 'active',
+      config: (data.url || data.enabledAgentIds) ? {
+        ...(data.url ? { url: data.url } : {}),
+        ...(data.enabledAgentIds ? { enabledAgentIds: data.enabledAgentIds } : {}),
+      } : null,
+      createdAt: dbProject.createdAt,
+      updatedAt: dbProject.updatedAt,
     };
     const updated = [project, ...get().projects];
     set({ projects: updated });
@@ -346,6 +388,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       const project = updated.find((p) => p.id === projectId);
       set({ pipeline: buildIdlePipeline(project, state.disabledAgentIds, state.globalStartFromAgentId) });
     }
+
+    // Sync to DB in background
+    const { url, config: _cfg, ...dbUpdates } = updates as any;
+    fetch(`/api/projects/${projectId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(dbUpdates),
+    }).catch(() => {});
   },
   updateProjectConfig: (projectId, config) => {
     const state = get();
@@ -359,6 +409,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (state.selectedProjectId === projectId) {
       set({ pipeline: buildIdlePipeline(updatedProject, state.disabledAgentIds, state.globalStartFromAgentId) });
     }
+
+    // Sync config to DB in background
+    fetch(`/api/projects/${projectId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ config: newConfig }),
+    }).catch(() => {});
   },
   removeProject: (projectId) => {
     const state = get();
@@ -370,6 +427,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     set(patches);
     saveProjects(updated);
+
+    // Delete from DB in background
+    fetch(`/api/projects/${projectId}`, { method: 'DELETE' }).catch(() => {
+      // ignore — localStorage already updated
+    });
   },
   selectProject: (projectId) => {
     const state = get();
@@ -381,12 +443,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     try { localStorage.setItem('leados_selected_project', projectId || ''); } catch {}
   },
   loadProjects: () => {
+    // Load from localStorage first for instant UI
     try {
       const stored = localStorage.getItem('leados_projects');
       if (stored) {
         const projects = JSON.parse(stored);
         set({ projects });
-        // Restore selected project
         const selectedId = localStorage.getItem('leados_selected_project');
         if (selectedId) {
           const project = projects.find((p: Project) => p.id === selectedId);
@@ -400,6 +462,39 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
       }
     } catch {}
+
+    // Then sync from DB — DB is the source of truth
+    fetch('/api/projects')
+      .then((res) => res.json())
+      .then((dbProjects) => {
+        if (!Array.isArray(dbProjects) || dbProjects.length === 0) return;
+        const projects: Project[] = dbProjects.map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          description: p.description,
+          url: p.url,
+          type: p.type,
+          status: p.status || 'active',
+          config: p.config,
+          createdAt: p.createdAt,
+          updatedAt: p.updatedAt,
+        }));
+        set({ projects });
+        saveProjects(projects);
+        // Re-apply selected project with DB data
+        const selectedId = localStorage.getItem('leados_selected_project');
+        if (selectedId) {
+          const project = projects.find((p) => p.id === selectedId);
+          if (project) {
+            const state = get();
+            set({
+              selectedProjectId: selectedId,
+              pipeline: buildIdlePipeline(project, state.disabledAgentIds, state.globalStartFromAgentId),
+            });
+          }
+        }
+      })
+      .catch(() => { /* DB unavailable — use localStorage */ });
   },
 
   // Blacklist

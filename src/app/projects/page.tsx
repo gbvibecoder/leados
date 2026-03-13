@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Building2, Globe, ArrowRight, Trash2, AlertTriangle, X, ChevronDown, Check, Link2, Bot } from 'lucide-react';
+import { Plus, Building2, Globe, ArrowRight, Trash2, AlertTriangle, X, ChevronDown, Check, Link2, Bot, Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppStore, DISCOVERY_AGENT_IDS, LEADOS_AGENTS } from '@/lib/store';
 import type { Project } from '@/lib/store';
@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 export default function ProjectsPage() {
   const router = useRouter();
-  const { projects, selectProject, createProject, removeProject, loadProjects } = useAppStore();
+  const { projects, selectProject, createProjectAsync, removeProject, updateProject, loadProjects } = useAppStore();
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
   const [newDescription, setNewDescription] = useState('');
@@ -21,6 +21,13 @@ export default function ProjectsPage() {
   );
   const [showAgentDropdown, setShowAgentDropdown] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [urlError, setUrlError] = useState('');
+  const [editProject, setEditProject] = useState<Project | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editUrl, setEditUrl] = useState('');
+  const [editUrlError, setEditUrlError] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -83,21 +90,94 @@ export default function ProjectsPage() {
     setSelectedAgents(new Set());
   };
 
-  const handleCreate = () => {
+  const isValidUrl = (url: string): boolean => {
+    try {
+      const parsed = new URL(url);
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  };
+
+  const handleCreate = async () => {
     if (!newName.trim()) return;
-    createProject({
-      name: newName.trim(),
-      description: newDescription.trim() || undefined,
-      url: newUrl.trim() || undefined,
-      type: newType,
-      enabledAgentIds: [...selectedAgents],
-    });
+    const trimmedUrl = newUrl.trim();
+    if (trimmedUrl && !isValidUrl(trimmedUrl)) {
+      setUrlError('Please enter a valid URL (e.g. https://example.com)');
+      return;
+    }
+    setUrlError('');
+    try {
+      await createProjectAsync({
+        name: newName.trim(),
+        description: newDescription.trim() || undefined,
+        url: trimmedUrl || undefined,
+        type: newType,
+        enabledAgentIds: [...selectedAgents],
+      });
+    } catch (err: any) {
+      // Show backend URL validation error
+      const msg = err?.message || '';
+      if (msg.toLowerCase().includes('url')) {
+        setUrlError(msg);
+      }
+      return;
+    }
     setNewName('');
     setNewDescription('');
     setNewUrl('');
+    setUrlError('');
     setNewType('internal');
     setSelectedAgents(new Set(LEADOS_AGENTS.filter(a => !DISCOVERY_AGENT_IDS.includes(a.id)).map(a => a.id)));
     setShowCreate(false);
+  };
+
+  const openEdit = (project: Project) => {
+    setEditProject(project);
+    setEditName(project.name);
+    setEditDescription(project.description || '');
+    setEditUrl(project.url || (project.config as any)?.url || '');
+    setEditUrlError('');
+  };
+
+  const handleEditSave = async () => {
+    if (!editProject || !editName.trim()) return;
+    const trimmedUrl = editUrl.trim();
+    if (trimmedUrl && !isValidUrl(trimmedUrl)) {
+      setEditUrlError('Please enter a valid URL (e.g. https://example.com)');
+      return;
+    }
+    setEditUrlError('');
+    setEditSaving(true);
+
+    // Validate URL reachability via backend
+    if (trimmedUrl) {
+      try {
+        const res = await fetch('/api/projects/validate-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: trimmedUrl }),
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          setEditUrlError(data.error || 'URL not reachable');
+          setEditSaving(false);
+          return;
+        }
+      } catch {
+        setEditUrlError('URL not reachable. Please check and try again.');
+        setEditSaving(false);
+        return;
+      }
+    }
+
+    updateProject(editProject.id, {
+      name: editName.trim(),
+      description: editDescription.trim() || undefined,
+      url: trimmedUrl || undefined,
+    });
+    setEditSaving(false);
+    setEditProject(null);
   };
 
   const handleLaunch = (project: Project) => {
@@ -177,11 +257,15 @@ export default function ProjectsPage() {
                   <input
                     type="url"
                     value={newUrl}
-                    onChange={(e) => setNewUrl(e.target.value)}
+                    onChange={(e) => { setNewUrl(e.target.value); setUrlError(''); }}
                     placeholder="https://example.com"
-                    className="w-full rounded-lg border border-zinc-700 bg-zinc-800 pl-9 pr-3 py-2 text-sm text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
+                    className={cn(
+                      "w-full rounded-lg border bg-zinc-800 pl-9 pr-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none",
+                      urlError ? "border-red-500 focus:border-red-500" : "border-zinc-700 focus:border-indigo-500"
+                    )}
                   />
                 </div>
+                {urlError && <p className="mt-1 text-xs text-red-400">{urlError}</p>}
               </div>
 
               {/* Agent dropdown */}
@@ -314,7 +398,7 @@ export default function ProjectsPage() {
               </button>
               <button
                 onClick={handleCreate}
-                disabled={!newName.trim()}
+                disabled={!newName.trim() || !!urlError}
                 className="flex-1 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
               >
                 Create Project
@@ -367,13 +451,22 @@ export default function ProjectsPage() {
                     {project.type}
                   </span>
                 </div>
-                <button
-                  onClick={() => setDeleteConfirm(project.id)}
-                  className="rounded p-1 text-zinc-600 opacity-0 transition-opacity hover:bg-zinc-800 hover:text-red-400 group-hover:opacity-100"
-                  title="Delete project"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => openEdit(project)}
+                    className="rounded p-1 text-zinc-600 opacity-0 transition-opacity hover:bg-zinc-800 hover:text-indigo-400 group-hover:opacity-100"
+                    title="Edit project"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => setDeleteConfirm(project.id)}
+                    className="rounded p-1 text-zinc-600 opacity-0 transition-opacity hover:bg-zinc-800 hover:text-red-400 group-hover:opacity-100"
+                    title="Delete project"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
 
               <h3 className="mb-1 text-base font-semibold text-white">{project.name}</h3>
@@ -414,6 +507,105 @@ export default function ProjectsPage() {
           ))}
         </motion.div>
       )}
+
+      {/* Edit project modal */}
+      <AnimatePresence>
+      {editProject && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setEditProject(null)}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            transition={{ duration: 0.25, ease: [0.25, 0.4, 0.25, 1] }}
+            className="mx-4 w-full max-w-lg rounded-xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-white">Edit Project</h3>
+              <button onClick={() => setEditProject(null)} className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1 block text-sm text-zinc-400">Name</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm text-zinc-400">Description</label>
+                <input
+                  type="text"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder="Brief description (optional)"
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm text-zinc-400">URL</label>
+                <div className="relative">
+                  <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+                  <input
+                    type="url"
+                    value={editUrl}
+                    onChange={(e) => { setEditUrl(e.target.value); setEditUrlError(''); }}
+                    placeholder="https://example.com"
+                    className={cn(
+                      "w-full rounded-lg border bg-zinc-800 pl-9 pr-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none",
+                      editUrlError ? "border-red-500 focus:border-red-500" : "border-zinc-700 focus:border-indigo-500"
+                    )}
+                  />
+                </div>
+                {editUrlError && <p className="mt-1 text-xs text-red-400">{editUrlError}</p>}
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm text-zinc-400">Type</label>
+                <div className="flex items-center gap-2 text-sm text-zinc-300">
+                  {editProject.type === 'internal' ? (
+                    <><Building2 className="h-4 w-4 text-amber-400" /> Internal</>
+                  ) : (
+                    <><Globe className="h-4 w-4 text-indigo-400" /> External</>
+                  )}
+                  <span className="text-xs text-zinc-600 ml-2">(cannot be changed)</span>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => setEditProject(null)}
+                  className="flex-1 rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-400 hover:bg-zinc-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleEditSave}
+                  disabled={!editName.trim() || !!editUrlError || editSaving}
+                  className="flex-1 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {editSaving ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+      </AnimatePresence>
 
       {/* Delete confirmation modal */}
       <AnimatePresence>
