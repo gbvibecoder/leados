@@ -2,6 +2,7 @@ import { BaseAgent, AgentInput, AgentOutput } from '../base-agent';
 import { mockInstantly } from '../../integrations/mock-data';
 import * as apollo from '../../integrations/apollo';
 import * as instantly from '../../integrations/instantly';
+import { filterBlacklisted } from '../../utils/blacklist';
 
 const SYSTEM_PROMPT = `You are the Outbound Outreach Agent for LeadOS — the Service Acquisition Machine. You operate two internal sub-agents to execute cold email campaigns and LinkedIn DM automation at scale.
 
@@ -217,9 +218,23 @@ export class OutboundOutreachAgent extends BaseAgent {
         parsed = await this.getMockOutput(inputs);
       }
 
-      // If we have real prospects from Apollo, inject them into the output
+      // Filter blacklisted companies from prospect list
+      try {
+        if (parsed.prospectList && parsed.prospectList.length > 0) {
+          const { allowed, blocked } = await filterBlacklisted(parsed.prospectList);
+          if (blocked.length > 0) {
+            await this.log('blacklist_filtered', { removed: blocked.length, companies: blocked.map((b: any) => b.company) });
+          }
+          parsed.prospectList = allowed;
+          parsed.blacklistFiltered = blocked.length;
+        }
+      } catch (err: any) {
+        await this.log('blacklist_check_error', { error: err.message });
+      }
+
+      // If we have real prospects from Apollo, inject them (after blacklist filter)
       if (realProspects.length > 0) {
-        parsed.prospectList = realProspects.map((p) => ({
+        let prospects = realProspects.map((p) => ({
           firstName: p.firstName,
           lastName: p.lastName,
           email: p.email,
@@ -230,6 +245,17 @@ export class OutboundOutreachAgent extends BaseAgent {
           linkedInUrl: p.linkedInUrl,
           personalizationNote: `${p.jobTitle} at ${p.company}`,
         }));
+
+        // Filter blacklisted from real prospects too
+        try {
+          const { allowed, blocked } = await filterBlacklisted(prospects);
+          if (blocked.length > 0) {
+            await this.log('blacklist_filtered_apollo', { removed: blocked.length });
+          }
+          prospects = allowed;
+        } catch { /* continue if blacklist check fails */ }
+
+        parsed.prospectList = prospects;
       }
 
       // Add real campaign ID if available

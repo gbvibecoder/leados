@@ -84,8 +84,8 @@ interface AppState {
 
   // Blacklist
   blacklist: BlacklistEntry[];
-  addToBlacklist: (entry: Omit<BlacklistEntry, 'id' | 'createdAt'>) => void;
-  removeFromBlacklist: (id: string) => void;
+  addToBlacklist: (entry: Omit<BlacklistEntry, 'id' | 'createdAt'>) => Promise<void>;
+  removeFromBlacklist: (id: string) => Promise<void>;
   loadBlacklist: () => void;
   isBlacklisted: (company: string, domain?: string) => boolean;
 
@@ -499,7 +499,31 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Blacklist
   blacklist: [],
-  addToBlacklist: (entry) => {
+  addToBlacklist: async (entry) => {
+    // Save to DB first, then update local state
+    try {
+      const res = await fetch('/api/leados/blacklist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entry),
+      });
+      const dbEntry = await res.json();
+      if (res.ok && dbEntry?.id) {
+        const newEntry: BlacklistEntry = {
+          id: dbEntry.id,
+          companyName: dbEntry.companyName,
+          domain: dbEntry.domain || undefined,
+          reason: dbEntry.reason || undefined,
+          createdAt: dbEntry.createdAt,
+        };
+        const updated = [newEntry, ...get().blacklist];
+        set({ blacklist: updated });
+        saveBlacklist(updated);
+        return;
+      }
+    } catch { /* fallback to local */ }
+
+    // Fallback: save locally if DB fails
     const newEntry: BlacklistEntry = {
       ...entry,
       id: Math.random().toString(36).slice(2) + Date.now().toString(36),
@@ -509,18 +533,53 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ blacklist: updated });
     saveBlacklist(updated);
   },
-  removeFromBlacklist: (id) => {
+  removeFromBlacklist: async (id) => {
+    // Remove from local state immediately
     const updated = get().blacklist.filter((e) => e.id !== id);
     set({ blacklist: updated });
     saveBlacklist(updated);
+
+    // Delete from DB in background
+    fetch(`/api/leados/blacklist?id=${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {});
   },
   loadBlacklist: () => {
+    // Load from localStorage first for instant UI
     try {
       const stored = localStorage.getItem('leados_blacklist');
       if (stored) {
         set({ blacklist: JSON.parse(stored) });
       }
     } catch {}
+
+    // Then sync from DB — DB is the source of truth
+    fetch('/api/leados/blacklist')
+      .then((res) => res.json())
+      .then((dbEntries) => {
+        if (!Array.isArray(dbEntries) || dbEntries.length === 0) {
+          // If DB has no entries but localStorage does, push local to DB
+          const local = get().blacklist;
+          if (local.length > 0) {
+            for (const entry of local) {
+              fetch('/api/leados/blacklist', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ companyName: entry.companyName, domain: entry.domain, reason: entry.reason }),
+              }).catch(() => {});
+            }
+          }
+          return;
+        }
+        const entries: BlacklistEntry[] = dbEntries.map((e: any) => ({
+          id: e.id,
+          companyName: e.companyName,
+          domain: e.domain || undefined,
+          reason: e.reason || undefined,
+          createdAt: e.createdAt,
+        }));
+        set({ blacklist: entries });
+        saveBlacklist(entries);
+      })
+      .catch(() => { /* DB unavailable — use localStorage */ });
   },
   isBlacklisted: (company, domain) => {
     const { blacklist } = get();

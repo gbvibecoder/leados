@@ -60,6 +60,17 @@ export const leados = {
   activity: () => fetchApi<any[]>('/leados/activity'),
 };
 
+// Blacklist endpoints
+export const blacklistApi = {
+  list: () => fetchApi<any[]>('/leados/blacklist'),
+  add: (data: { companyName: string; domain?: string; reason?: string }) =>
+    fetchApi<any>('/leados/blacklist', { method: 'POST', body: JSON.stringify(data) }),
+  remove: (id: string) =>
+    fetchApi<any>(`/leados/blacklist?id=${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  check: (data: { company?: string; domain?: string }) =>
+    fetchApi<{ blacklisted: boolean; match?: any }>('/leados/blacklist/check', { method: 'POST', body: JSON.stringify(data) }),
+};
+
 // Settings endpoints
 export const settings = {
   get: () => fetchApi<any>('/settings'),

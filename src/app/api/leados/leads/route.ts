@@ -40,6 +40,32 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Name and source are required' }, { status: 400 });
   }
 
+  // Check if company or email domain is blacklisted
+  let isBlacklistedCompany = false;
+  let blacklistReason = '';
+  try {
+    const blacklistEntries = await prisma.blacklist.findMany();
+    const companyLower = (company || '').toLowerCase();
+    const emailDomain = email?.split('@')[1]?.toLowerCase() || '';
+
+    for (const entry of blacklistEntries) {
+      const entryCompany = entry.companyName.toLowerCase();
+      const entryDomain = entry.domain?.toLowerCase() || '';
+
+      if (companyLower && companyLower.includes(entryCompany)) {
+        isBlacklistedCompany = true;
+        blacklistReason = `Company "${entry.companyName}" is blacklisted${entry.reason ? `: ${entry.reason}` : ''}`;
+        break;
+      }
+      if (entryDomain && emailDomain && emailDomain.includes(entryDomain)) {
+        isBlacklistedCompany = true;
+        blacklistReason = `Domain "${entry.domain}" is blacklisted${entry.reason ? `: ${entry.reason}` : ''}`;
+        break;
+      }
+    }
+  } catch { /* continue if blacklist check fails */ }
+
+  // If blacklisted, still create but flag with notes
   const lead = await prisma.lead.create({
     data: {
       name,
@@ -48,13 +74,15 @@ export async function POST(req: Request) {
       phone: phone || null,
       source,
       channel: channel || source,
-      score: score || 0,
-      stage: stage || 'new',
+      score: isBlacklistedCompany ? 0 : (score || 0),
+      stage: isBlacklistedCompany ? 'lost' : (stage || 'new'),
       segment: segment || null,
-      notes: notes || null,
+      notes: isBlacklistedCompany
+        ? `[BLACKLISTED] ${blacklistReason}${notes ? ` | ${notes}` : ''}`
+        : (notes || null),
       projectId: leadProjectId || null,
     },
   });
 
-  return NextResponse.json(lead, { status: 201 });
+  return NextResponse.json({ ...lead, blacklisted: isBlacklistedCompany }, { status: 201 });
 }

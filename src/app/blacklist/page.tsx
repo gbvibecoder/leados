@@ -14,22 +14,28 @@ function BlacklistPageInner() {
   const [domain, setDomain] = useState('');
   const [reason, setReason] = useState('');
   const [search, setSearch] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     loadBlacklist();
   }, [loadBlacklist]);
 
-  const handleAdd = () => {
-    if (!companyName.trim()) return;
-    addToBlacklist({
-      companyName: companyName.trim(),
-      domain: domain.trim() || undefined,
-      reason: reason.trim() || undefined,
-    });
-    setCompanyName('');
-    setDomain('');
-    setReason('');
-    setShowAdd(false);
+  const handleAdd = async () => {
+    if (!companyName.trim() || saving) return;
+    setSaving(true);
+    try {
+      await addToBlacklist({
+        companyName: companyName.trim(),
+        domain: domain.trim() || undefined,
+        reason: reason.trim() || undefined,
+      });
+      setCompanyName('');
+      setDomain('');
+      setReason('');
+      setShowAdd(false);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const filtered = blacklist.filter((e) => {
@@ -122,10 +128,10 @@ function BlacklistPageInner() {
             </button>
             <button
               onClick={handleAdd}
-              disabled={!companyName.trim()}
+              disabled={!companyName.trim() || saving}
               className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
             >
-              Add to Blacklist
+              {saving ? 'Saving...' : 'Add to Blacklist'}
             </button>
           </div>
         </div>
@@ -176,7 +182,7 @@ function BlacklistPageInner() {
                   </td>
                   <td className="px-4 py-3 text-right">
                     <button
-                      onClick={() => removeFromBlacklist(entry.id)}
+                      onClick={() => { removeFromBlacklist(entry.id); }}
                       className="rounded p-1 text-zinc-500 hover:bg-zinc-700 hover:text-red-400"
                       title="Remove from blacklist"
                     >

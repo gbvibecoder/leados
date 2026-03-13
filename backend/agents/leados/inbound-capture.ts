@@ -3,6 +3,7 @@ import { mockHubSpot, mockLeads } from '../../integrations/mock-data';
 import * as hubspot from '../../integrations/hubspot';
 import * as apolloApi from '../../integrations/apollo';
 import * as clearbit from '../../integrations/clearbit';
+import { filterBlacklisted } from '../../utils/blacklist';
 
 const SYSTEM_PROMPT = `You are the Inbound Lead Capture Agent for LeadOS — the central hub that receives, scores, enriches, and segments every lead entering the system from all channels.
 
@@ -307,9 +308,36 @@ export class InboundCaptureAgent extends BaseAgent {
         }
       }
 
-      // Push scored leads to real HubSpot
+      // Filter blacklisted companies from processed leads
+      if (parsed.leadsProcessed && parsed.leadsProcessed.length > 0) {
+        try {
+          const { allowed, blocked } = await filterBlacklisted(parsed.leadsProcessed);
+          if (blocked.length > 0) {
+            await this.log('blacklist_filtered', {
+              removed: blocked.length,
+              companies: blocked.map((b: any) => b.company),
+            });
+            // Mark blocked leads as blacklisted in output (don't remove, just flag)
+            for (const lead of parsed.leadsProcessed) {
+              const isBlocked = blocked.some((b: any) => b.email === lead.email || b.company === lead.company);
+              if (isBlocked) {
+                lead.blacklisted = true;
+                lead.stage = 'lost';
+                lead.segment = 'Blacklisted';
+                lead.score = 0;
+              }
+            }
+            parsed.blacklistFiltered = blocked.length;
+          }
+        } catch (err: any) {
+          await this.log('blacklist_check_error', { error: err.message });
+        }
+      }
+
+      // Push scored leads to real HubSpot (skip blacklisted)
       if (hubspot.isHubSpotAvailable() && parsed.leadsProcessed) {
-        for (const lead of parsed.leadsProcessed.slice(0, 20)) {
+        const leadsToSync = parsed.leadsProcessed.filter((l: any) => !l.blacklisted).slice(0, 20);
+        for (const lead of leadsToSync) {
           try {
             await hubspot.upsertContact({
               email: lead.email,
@@ -324,7 +352,7 @@ export class InboundCaptureAgent extends BaseAgent {
             });
           } catch { /* skip individual CRM failures */ }
         }
-        await this.log('hubspot_leads_synced', { count: Math.min(parsed.leadsProcessed.length, 20) });
+        await this.log('hubspot_leads_synced', { count: leadsToSync.length });
       }
 
       this.status = 'done';

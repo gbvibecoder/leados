@@ -54,6 +54,7 @@ export default function LeadOSPage() {
     selectedProjectId,
     selectProject,
     createProject,
+    createProjectAsync,
     loadProjects,
     disabledAgentIds,
     toggleAgent,
@@ -392,9 +393,14 @@ export default function LeadOSPage() {
               projects={projects}
               selectedProjectId={selectedProjectId}
               onSelectProject={selectProject}
-              onCreateProject={(data) => {
-                const created = createProject(data);
-                selectProject(created.id);
+              onCreateProject={async (data) => {
+                try {
+                  const created = await createProjectAsync(data);
+                  selectProject(created.id);
+                } catch {
+                  const created = createProject(data);
+                  selectProject(created.id);
+                }
               }}
             />
           </div>
