@@ -2,10 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-
-function generateToken(): string {
-  return crypto.randomBytes(32).toString('hex');
-}
+import { signToken } from '@/lib/auth';
 
 export async function POST(req: Request) {
   try {
@@ -76,8 +73,8 @@ export async function POST(req: Request) {
       );
     }
 
-    // Generate session token
-    const token = generateToken();
+    // Generate JWT token
+    const token = signToken({ userId: user.id, email: user.email });
 
     return NextResponse.json({
       token,

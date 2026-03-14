@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getUserId } from '@/lib/auth';
 
 export async function POST(req: Request) {
+  const userId = getUserId(req);
   const body = await req.json().catch(() => ({}));
 
   // Verify project exists if provided
@@ -21,6 +23,7 @@ export async function POST(req: Request) {
       status: 'idle',
       config: JSON.stringify(body.config || {}),
       projectId: body.projectId || null,
+      ...(userId && { userId }),
     },
   });
 
@@ -36,8 +39,11 @@ export async function POST(req: Request) {
   });
 }
 
-export async function GET() {
+export async function GET(req?: Request) {
+  const userId = getUserId(req || null);
+
   const pipelines = await prisma.pipeline.findMany({
+    where: { ...(userId && { userId }) },
     include: { agentRuns: { orderBy: { createdAt: 'asc' } } },
     orderBy: { createdAt: 'desc' },
     take: 20,

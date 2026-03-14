@@ -1,14 +1,19 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getUserId } from '@/lib/auth';
 
-export async function GET() {
+export async function GET(req: Request) {
+  const userId = getUserId(req);
+
   const entries = await prisma.blacklist.findMany({
+    where: { ...(userId && { userId }) },
     orderBy: { createdAt: 'desc' },
   });
   return NextResponse.json(entries);
 }
 
 export async function POST(req: Request) {
+  const userId = getUserId(req);
   const body = await req.json().catch(() => ({}));
 
   if (!body.companyName?.trim()) {
@@ -20,6 +25,7 @@ export async function POST(req: Request) {
       companyName: body.companyName.trim(),
       domain: body.domain?.trim() || null,
       reason: body.reason?.trim() || null,
+      ...(userId && { userId }),
     },
   });
 
@@ -27,6 +33,7 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const userId = getUserId(req);
   const { searchParams } = new URL(req.url);
   const id = searchParams.get('id');
 
@@ -35,6 +42,12 @@ export async function DELETE(req: Request) {
   }
 
   try {
+    if (userId) {
+      const existing = await prisma.blacklist.findFirst({ where: { id, userId } });
+      if (!existing) {
+        return NextResponse.json({ error: 'Entry not found' }, { status: 404 });
+      }
+    }
     await prisma.blacklist.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch {

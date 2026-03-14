@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { apiFetch } from '@/lib/api';
 
 export type AgentStatus = 'idle' | 'running' | 'done' | 'error';
 
@@ -356,7 +357,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   },
   createProjectAsync: async (data) => {
     // Save to DB first — use the real DB-generated ID
-    const res = await fetch('/api/projects', {
+    const res = await apiFetch('/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -408,7 +409,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
     // Sync to DB in background
     const { url, config: _cfg, ...dbUpdates } = updates as any;
-    fetch(`/api/projects/${projectId}`, {
+    apiFetch(`/api/projects/${projectId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(dbUpdates),
@@ -428,7 +429,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
     }
 
     // Sync config to DB in background
-    fetch(`/api/projects/${projectId}`, {
+    apiFetch(`/api/projects/${projectId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ config: newConfig }),
@@ -448,7 +449,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
     saveProjects(updated);
 
     // Delete from DB in background
-    fetch(`/api/projects/${projectId}`, { method: 'DELETE' }).catch(() => {
+    apiFetch(`/api/projects/${projectId}`, { method: 'DELETE' }).catch(() => {
       // ignore — localStorage already updated
     });
   },
@@ -498,7 +499,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
     } catch {}
 
     // Then sync from DB — DB is the source of truth
-    fetch('/api/projects')
+    apiFetch('/api/projects')
       .then((res) => res.json())
       .then((dbProjects) => {
         if (!Array.isArray(dbProjects) || dbProjects.length === 0) return;
@@ -540,7 +541,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   addToBlacklist: async (entry) => {
     // Save to DB first, then update local state
     try {
-      const res = await fetch('/api/leados/blacklist', {
+      const res = await apiFetch('/api/leados/blacklist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(entry),
@@ -578,7 +579,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
     saveBlacklist(updated);
 
     // Delete from DB in background
-    fetch(`/api/leados/blacklist?id=${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {});
+    apiFetch(`/api/leados/blacklist?id=${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {});
   },
   loadBlacklist: () => {
     // Load from localStorage first for instant UI
@@ -590,7 +591,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
     } catch {}
 
     // Then sync from DB — DB is the source of truth
-    fetch('/api/leados/blacklist')
+    apiFetch('/api/leados/blacklist')
       .then((res) => res.json())
       .then((dbEntries) => {
         if (!Array.isArray(dbEntries) || dbEntries.length === 0) {
@@ -598,7 +599,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
           const local = get().blacklist;
           if (local.length > 0) {
             for (const entry of local) {
-              fetch('/api/leados/blacklist', {
+              apiFetch('/api/leados/blacklist', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ companyName: entry.companyName, domain: entry.domain, reason: entry.reason }),

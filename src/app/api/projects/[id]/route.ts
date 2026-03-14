@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getUserId } from '@/lib/auth';
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const userId = getUserId(req);
 
   try {
-    const project = await prisma.project.findUnique({ where: { id } });
+    const project = await prisma.project.findFirst({
+      where: { id, ...(userId && { userId }) },
+    });
     if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
@@ -28,6 +32,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const userId = getUserId(req);
 
   try {
     const body = await req.json().catch(() => ({}));
@@ -38,6 +43,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (body.type !== undefined) data.type = body.type;
     if (body.status !== undefined) data.status = body.status;
     if (body.config !== undefined) data.config = JSON.stringify(body.config);
+
+    // Verify ownership before updating
+    if (userId) {
+      const existing = await prisma.project.findFirst({ where: { id, userId } });
+      if (!existing) {
+        return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+      }
+    }
 
     const project = await prisma.project.update({ where: { id }, data });
 
@@ -60,10 +73,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 }
 
-export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const userId = getUserId(req);
 
   try {
+    // Verify ownership before deleting
+    if (userId) {
+      const existing = await prisma.project.findFirst({ where: { id, userId } });
+      if (!existing) {
+        return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+      }
+    }
+
     // Delete related pipelines and their agent runs first
     const pipelines = await prisma.pipeline.findMany({ where: { projectId: id }, select: { id: true } });
     if (pipelines.length > 0) {

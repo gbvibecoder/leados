@@ -1,10 +1,19 @@
 import { NextResponse } from 'next/server';
 import { pipelineEvents } from '@backend/orchestrator/event-emitter';
+import { verifyToken } from '@/lib/auth';
 
 const MAX_DURATION_MS = 55000;
 const HEARTBEAT_INTERVAL_MS = 15000;
 
-export async function GET() {
+export async function GET(req: Request) {
+  // SSE connections can't use Authorization header; read token from query param
+  const url = new URL(req.url);
+  const token = url.searchParams.get('token');
+  let _userId: string | null = null;
+  if (token) {
+    const payload = verifyToken(token);
+    _userId = payload?.userId || null;
+  }
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({

@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getUserId } from '@/lib/auth';
 
 export async function GET(req: Request) {
+  const userId = getUserId(req);
   const { searchParams } = new URL(req.url);
   const stage = searchParams.get('stage');
   const source = searchParams.get('source');
@@ -10,6 +12,7 @@ export async function GET(req: Request) {
   const projectId = searchParams.get('projectId');
 
   const where: Record<string, any> = {};
+  if (userId) where.userId = userId;
   if (stage) where.stage = stage;
   if (source) where.source = source;
   if (projectId) where.projectId = projectId;
@@ -32,6 +35,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const userId = getUserId(req);
   const body = await req.json();
 
   const { name, email, company, phone, source, channel, score, stage, segment, notes, projectId: leadProjectId } = body;
@@ -81,6 +85,7 @@ export async function POST(req: Request) {
         ? `[BLACKLISTED] ${blacklistReason}${notes ? ` | ${notes}` : ''}`
         : (notes || null),
       projectId: leadProjectId || null,
+      ...(userId && { userId }),
     },
   });
 

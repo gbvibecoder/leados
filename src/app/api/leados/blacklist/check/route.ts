@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getUserId } from '@/lib/auth';
 
 /**
  * Check if a company or domain is blacklisted.
@@ -7,6 +8,7 @@ import { prisma } from '@/lib/prisma';
  * Returns: { blacklisted: boolean, match?: { companyName, domain, reason } }
  */
 export async function POST(req: Request) {
+  const userId = getUserId(req);
   const body = await req.json().catch(() => ({}));
   const company = (body.company || '').toLowerCase().trim();
   const domain = (body.domain || '').toLowerCase().trim();
@@ -15,7 +17,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ blacklisted: false });
   }
 
-  const entries = await prisma.blacklist.findMany();
+  const entries = await prisma.blacklist.findMany({
+    where: { ...(userId && { userId }) },
+  });
 
   for (const entry of entries) {
     const entryCompany = entry.companyName.toLowerCase();

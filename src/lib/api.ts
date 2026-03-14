@@ -1,7 +1,27 @@
 const API_BASE = '/api';
 
+/** Low-level fetch wrapper that injects the auth Bearer token. */
+export async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('leados_token') : null;
+  const headers = new Headers(options.headers);
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  if (!headers.has('Content-Type') && options.body) {
+    headers.set('Content-Type', 'application/json');
+  }
+  const response = await fetch(url, { ...options, headers });
+  // Auto-redirect on 401
+  if (response.status === 401 && typeof window !== 'undefined') {
+    localStorage.removeItem('leados_token');
+    localStorage.removeItem('leados_user');
+    window.location.href = '/login';
+  }
+  return response;
+}
+
 async function fetchApi<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${url}`, {
+  const res = await apiFetch(`${API_BASE}${url}`, {
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     ...options,
   });
@@ -81,7 +101,9 @@ export const settings = {
 
 // SSE connection for real-time updates
 export function connectSSE(onEvent: (event: { type: string; data: any }) => void): EventSource {
-  const es = new EventSource(`${API_BASE}/events`);
+  const token = typeof window !== 'undefined' ? localStorage.getItem('leados_token') : null;
+  const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
+  const es = new EventSource(`${API_BASE}/events${tokenParam}`);
 
   es.onmessage = (e) => {
     try {

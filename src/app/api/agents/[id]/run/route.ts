@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createLeadOSAgents } from '@backend/agents/leados/index';
+import { getUserId } from '@/lib/auth';
 
 // Singleton agent instances
 let agentMap: Map<string, any> | null = null;
@@ -31,6 +32,7 @@ const AGENT_ORDER = [
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const userId = getUserId(req);
   const body = await req.json().catch(() => ({}));
 
   const agents = getAgents();
@@ -44,7 +46,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   let pipelineId = body.pipelineId;
   if (!pipelineId) {
     const pipeline = await prisma.pipeline.create({
-      data: { type: 'leados', status: 'running' },
+      data: { type: 'leados', status: 'running', ...(userId && { userId }) },
     });
     pipelineId = pipeline.id;
   }

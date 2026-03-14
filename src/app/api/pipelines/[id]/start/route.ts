@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createLeadOSAgents } from '@backend/agents/leados/index';
 import { pipelineEvents } from '@backend/orchestrator/event-emitter';
+import { getUserId } from '@/lib/auth';
 
 // All 13 agents in pipeline order
 const ALL_AGENTS = [
@@ -239,14 +240,15 @@ async function runPipelineInBackground(id: string, agentsToRun: string[], projec
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const userId = getUserId(req);
 
   // Check project type and config
   let isInternal = false;
   let enabledAgentIds: string[] | null = null;
   let projectData: { name: string; url?: string; type: string; description?: string; config?: any } | undefined;
   try {
-    const pipeline = await prisma.pipeline.findUnique({
-      where: { id },
+    const pipeline = await prisma.pipeline.findFirst({
+      where: { id, ...(userId && { userId }) },
       include: { project: true },
     });
     if (pipeline?.project) {
