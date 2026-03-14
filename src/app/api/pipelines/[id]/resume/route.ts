@@ -71,7 +71,8 @@ async function runPipelineFromIndex(
   agentsToRun: string[],
   startIndex: number,
   previousOutputs: Record<string, any>,
-  projectData?: { name: string; url?: string; type: string; description?: string; config?: any }
+  projectData?: { name: string; url?: string; type: string; description?: string; config?: any },
+  pipelineUserId?: string | null
 ) {
   const agents = getAgents();
 
@@ -115,6 +116,7 @@ async function runPipelineFromIndex(
       agentName: agent.name,
       pipelineId: id,
       pipelineType: 'leados',
+      userId: pipelineUserId || undefined,
       timestamp: new Date().toISOString(),
     });
 
@@ -196,6 +198,7 @@ async function runPipelineFromIndex(
   pipelineEvents.emitPipelineCompleted({
     pipelineId: id,
     pipelineType: 'leados',
+    userId: pipelineUserId || undefined,
     summary: { totalAgents: agentsToRun.length, completed: agentsToRun.length },
   });
 
@@ -288,7 +291,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   } catch { /* ignore */ }
 
   // Run pipeline from where it left off
-  runPipelineFromIndex(id, agentsToRun, resumeIndex, previousOutputs, projectData).catch((err) => {
+  runPipelineFromIndex(id, agentsToRun, resumeIndex, previousOutputs, projectData, userId).catch((err) => {
     console.error('Pipeline resume failed:', err);
   });
 

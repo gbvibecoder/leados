@@ -177,16 +177,28 @@ function buildIdlePipeline(project: Project | undefined, disabledAgentIds: Set<s
   };
 }
 
+/** Get user-scoped localStorage key to isolate data between accounts */
+function userKey(key: string): string {
+  try {
+    const userStr = localStorage.getItem('leados_user');
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      if (user?.id) return `${key}_${user.id}`;
+    }
+  } catch {}
+  return key;
+}
+
 function saveDisabledAgents(ids: Set<string>) {
-  try { localStorage.setItem('leados_disabled_agents', JSON.stringify([...ids])); } catch {}
+  try { localStorage.setItem(userKey('leados_disabled_agents'), JSON.stringify([...ids])); } catch {}
 }
 
 function saveProjects(projects: Project[]) {
-  try { localStorage.setItem('leados_projects', JSON.stringify(projects)); } catch {}
+  try { localStorage.setItem(userKey('leados_projects'), JSON.stringify(projects)); } catch {}
 }
 
 function saveBlacklist(entries: BlacklistEntry[]) {
-  try { localStorage.setItem('leados_blacklist', JSON.stringify(entries)); } catch {}
+  try { localStorage.setItem(userKey('leados_blacklist'), JSON.stringify(entries)); } catch {}
 }
 
 export const useAppStore = create<AppState>()((set, get) => ({
@@ -309,7 +321,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   },
   loadAgentConfig: () => {
     try {
-      const stored = localStorage.getItem('leados_disabled_agents');
+      const stored = localStorage.getItem(userKey('leados_disabled_agents'));
       if (stored) {
         const ids = new Set<string>(JSON.parse(stored));
         const state = get();
@@ -459,7 +471,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
     // Don't reset pipeline if it's active — just switch the project ID
     if (isPipelineActive(state.pipeline)) {
       set({ selectedProjectId: projectId });
-      try { localStorage.setItem('leados_selected_project', projectId || ''); } catch {}
+      try { localStorage.setItem(userKey('leados_selected_project'), projectId || ''); } catch {}
       return;
     }
 
@@ -468,18 +480,18 @@ export const useAppStore = create<AppState>()((set, get) => ({
       selectedProjectId: projectId,
       pipeline: buildIdlePipeline(project, state.disabledAgentIds, state.globalStartFromAgentId),
     });
-    try { localStorage.setItem('leados_selected_project', projectId || ''); } catch {}
+    try { localStorage.setItem(userKey('leados_selected_project'), projectId || ''); } catch {}
   },
   loadProjects: () => {
     const pipelineBusy = isPipelineActive(get().pipeline);
 
     // Load from localStorage first for instant UI
     try {
-      const stored = localStorage.getItem('leados_projects');
+      const stored = localStorage.getItem(userKey('leados_projects'));
       if (stored) {
         const projects = JSON.parse(stored);
         set({ projects });
-        const selectedId = localStorage.getItem('leados_selected_project');
+        const selectedId = localStorage.getItem(userKey('leados_selected_project'));
         if (selectedId) {
           if (pipelineBusy) {
             // Pipeline is busy — just restore the selected project ID without resetting pipeline
@@ -517,7 +529,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
         set({ projects });
         saveProjects(projects);
         // Re-apply selected project — but NEVER reset pipeline if it's active
-        const selectedId = localStorage.getItem('leados_selected_project');
+        const selectedId = localStorage.getItem(userKey('leados_selected_project'));
         if (selectedId) {
           if (isPipelineActive(get().pipeline)) {
             set({ selectedProjectId: selectedId });
@@ -584,7 +596,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   loadBlacklist: () => {
     // Load from localStorage first for instant UI
     try {
-      const stored = localStorage.getItem('leados_blacklist');
+      const stored = localStorage.getItem(userKey('leados_blacklist'));
       if (stored) {
         set({ blacklist: JSON.parse(stored) });
       }

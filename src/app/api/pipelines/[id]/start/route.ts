@@ -69,7 +69,7 @@ async function waitWhilePaused(id: string, maxWaitMs = 600000): Promise<boolean>
   }
 }
 
-async function runPipelineInBackground(id: string, agentsToRun: string[], projectData?: { name: string; url?: string; type: string; description?: string; config?: any }) {
+async function runPipelineInBackground(id: string, agentsToRun: string[], projectData?: { name: string; url?: string; type: string; description?: string; config?: any }, pipelineUserId?: string | null) {
   const agents = getAgents();
   const previousOutputs: Record<string, any> = {};
 
@@ -126,6 +126,7 @@ async function runPipelineInBackground(id: string, agentsToRun: string[], projec
       agentName: agent.name,
       pipelineId: id,
       pipelineType: 'leados',
+      userId: pipelineUserId || undefined,
       timestamp: new Date().toISOString(),
     });
 
@@ -225,6 +226,7 @@ async function runPipelineInBackground(id: string, agentsToRun: string[], projec
   pipelineEvents.emitPipelineCompleted({
     pipelineId: id,
     pipelineType: 'leados',
+    userId: pipelineUserId || undefined,
     summary: { totalAgents: agentsToRun.length, completed: agentsToRun.length },
   });
 
@@ -310,7 +312,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   // Run pipeline in background — don't block the HTTP response
-  runPipelineInBackground(id, agentsToRun, projectData).catch((err) => {
+  runPipelineInBackground(id, agentsToRun, projectData, userId).catch((err) => {
     console.error('Pipeline background run failed:', err);
   });
 
