@@ -367,8 +367,19 @@ export class InboundCaptureAgent extends BaseAgent {
         else cold++;
       }
 
-      // Zero segmentation segment counts
-      const segments = (parsed.segmentation?.segments || []).map((seg: any) => ({ ...seg, count: 0 }));
+      // Compute real segmentation counts from actual processed leads
+      const segments = (parsed.segmentation?.segments || []).map((seg: any) => {
+        // Match leads to segments based on score ranges in criteria
+        let count = 0;
+        if (seg.name?.toLowerCase().includes('hot') || seg.name?.toLowerCase().includes('enterprise')) {
+          count = hot;
+        } else if (seg.name?.toLowerCase().includes('warm') || seg.name?.toLowerCase().includes('mid')) {
+          count = warm;
+        } else if (seg.name?.toLowerCase().includes('cold') || seg.name?.toLowerCase().includes('unqualified')) {
+          count = cold;
+        }
+        return { ...seg, count };
+      });
 
       // Zero channelBreakdown counts
       const channelBreakdown = (parsed.channelBreakdown || []).map((ch: any) => ({
@@ -391,7 +402,7 @@ export class InboundCaptureAgent extends BaseAgent {
         summary: {
           totalLeadsCaptured: realLeadCount,
           totalLeadsProcessed: realLeadCount,
-          totalEnriched: realEnrichments.size > 0 ? realEnrichments.size : 0,
+          totalEnriched: realEnrichments.size > 0 ? Math.min(realEnrichments.size, realLeadCount) : 0,
           avgLeadScore: leadsProcessed.length > 0 ? Math.round(totalScore / leadsProcessed.length) : 0,
           hotLeads: hot,
           warmLeads: warm,
