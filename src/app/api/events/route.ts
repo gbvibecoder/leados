@@ -33,12 +33,21 @@ export async function GET(req: Request) {
       // Send initial heartbeat
       send('heartbeat', { timestamp: new Date().toISOString() });
 
-      // Subscribe to pipeline events
-      const onAgentStarted = (data: any) => send('agent:started', data);
-      const onAgentProgress = (data: any) => send('agent:progress', data);
-      const onAgentCompleted = (data: any) => send('agent:completed', data);
-      const onAgentError = (data: any) => send('agent:error', data);
-      const onPipelineCompleted = (data: any) => send('pipeline:completed', data);
+      // Subscribe to pipeline events — only forward events belonging to this user
+      const shouldForward = (data: any) => {
+        // If no user auth, don't send any pipeline events
+        if (!_userId) return false;
+        // Check if event has a userId that matches
+        if (data?.userId && data.userId !== _userId) return false;
+        // If event has pipelineId, we trust it (pipeline was already user-scoped at creation)
+        return true;
+      };
+
+      const onAgentStarted = (data: any) => { if (shouldForward(data)) send('agent:started', data); };
+      const onAgentProgress = (data: any) => { if (shouldForward(data)) send('agent:progress', data); };
+      const onAgentCompleted = (data: any) => { if (shouldForward(data)) send('agent:completed', data); };
+      const onAgentError = (data: any) => { if (shouldForward(data)) send('agent:error', data); };
+      const onPipelineCompleted = (data: any) => { if (shouldForward(data)) send('pipeline:completed', data); };
 
       pipelineEvents.on('agent:started', onAgentStarted);
       pipelineEvents.on('agent:progress', onAgentProgress);

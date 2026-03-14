@@ -1,23 +1,23 @@
 import { EventEmitter } from 'events';
 
 class PipelineEventEmitter extends EventEmitter {
-  emitAgentStarted(data: { agentId: string; agentName: string; pipelineId: string; pipelineType: string; timestamp: string }) {
+  emitAgentStarted(data: { agentId: string; agentName: string; pipelineId: string; pipelineType: string; userId?: string; timestamp: string }) {
     this.emit('agent:started', data);
   }
 
-  emitAgentProgress(data: { agentId: string; pipelineType: string; message: string; percentComplete: number }) {
+  emitAgentProgress(data: { agentId: string; pipelineType: string; userId?: string; message: string; percentComplete: number }) {
     this.emit('agent:progress', data);
   }
 
-  emitAgentCompleted(data: { agentId: string; agentName: string; pipelineId?: string; pipelineType: string; outputSummary: string; timestamp: string }) {
+  emitAgentCompleted(data: { agentId: string; agentName: string; pipelineId?: string; pipelineType: string; userId?: string; outputSummary: string; timestamp: string }) {
     this.emit('agent:completed', data);
   }
 
-  emitAgentError(data: { agentId: string; agentName: string; pipelineId?: string; pipelineType: string; error: string; timestamp: string }) {
+  emitAgentError(data: { agentId: string; agentName: string; pipelineId?: string; pipelineType: string; userId?: string; error: string; timestamp: string }) {
     this.emit('agent:error', data);
   }
 
-  emitPipelineCompleted(data: { pipelineId: string; pipelineType: string; summary: Record<string, any> }) {
+  emitPipelineCompleted(data: { pipelineId: string; pipelineType: string; userId?: string; summary: Record<string, any> }) {
     this.emit('pipeline:completed', data);
   }
 }
