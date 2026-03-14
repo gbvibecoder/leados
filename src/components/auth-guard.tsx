@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
+import { useAppStore } from '@/lib/store';
 
 const PUBLIC_PATHS = ['/', '/login', '/signup'];
 
@@ -28,6 +29,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [checked, setChecked] = useState(false);
+  const lastUserIdRef = useRef<string | null>(null);
+  const resetPipeline = useAppStore((s) => s.resetPipeline);
 
   const isPublic = PUBLIC_PATHS.includes(pathname) || pathname.startsWith('/funnel');
 
@@ -54,8 +57,10 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     }
 
     // Validate that stored user JSON is valid
+    let currentUserId: string | null = null;
     try {
-      JSON.parse(user);
+      const parsed = JSON.parse(user);
+      currentUserId = parsed?.id || null;
     } catch {
       localStorage.removeItem('leados_token');
       localStorage.removeItem('leados_user');
@@ -63,8 +68,14 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    // Detect user switch — reset pipeline state when a different user logs in
+    if (lastUserIdRef.current && currentUserId && lastUserIdRef.current !== currentUserId) {
+      resetPipeline();
+    }
+    lastUserIdRef.current = currentUserId;
+
     setChecked(true);
-  }, [pathname, isPublic, router]);
+  }, [pathname, isPublic, router, resetPipeline]);
 
   if (!isPublic && !checked) {
     return (
