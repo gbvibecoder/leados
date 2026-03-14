@@ -91,3 +91,19 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ ...lead, blacklisted: isBlacklistedCompany }, { status: 201 });
 }
+
+export async function PATCH(req: Request) {
+  const body = await req.json();
+  const { fromStage, toStage } = body;
+
+  if (!fromStage || !toStage) {
+    return NextResponse.json({ error: 'fromStage and toStage are required' }, { status: 400 });
+  }
+
+  const result = await prisma.lead.updateMany({
+    where: { stage: fromStage },
+    data: { stage: toStage },
+  });
+
+  return NextResponse.json({ updated: result.count });
+}
