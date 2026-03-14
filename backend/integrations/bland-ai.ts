@@ -80,10 +80,21 @@ export async function makeCall(params: BlandCallRequest): Promise<BlandCallResul
 export async function getCallDetails(callId: string): Promise<BlandCallResult> {
   const result = await blandFetch(`/calls/${callId}`);
 
+  // Bland AI uses queue_status and completed fields in addition to status
+  // Determine real status from multiple fields
+  let status = result.status || 'in-progress';
+  if (result.completed === true && result.queue_status === 'complete') {
+    status = 'completed';
+  }
+
+  // Duration is in minutes from Bland AI — convert to seconds
+  const durationMinutes = result.call_length || 0;
+  const durationSeconds = Math.round(durationMinutes * 60);
+
   return {
     callId: result.call_id || callId,
-    status: result.status || 'completed',
-    duration: result.call_length || result.duration || 0,
+    status,
+    duration: durationSeconds,
     transcript: result.concatenated_transcript || result.transcript || '',
     recordingUrl: result.recording_url || '',
     summary: result.summary || '',
@@ -110,16 +121,37 @@ export async function analyzeCall(callId: string, questions: string[]): Promise<
   return answers;
 }
 
-/** Wait for a call to complete (polls every 10s, max 6 min) */
-export async function waitForCall(callId: string, maxWaitMs = 360000): Promise<BlandCallResult> {
+/** Wait for a call to complete with transcript (polls every 10s, max 8 min) */
+export async function waitForCall(callId: string, maxWaitMs = 480000): Promise<BlandCallResult> {
   const start = Date.now();
+
+  // Phase 1: Wait for call to finish (status becomes completed/failed/no-answer)
   while (Date.now() - start < maxWaitMs) {
     const details = await getCallDetails(callId);
-    if (details.status === 'completed' || details.status === 'failed' || details.status === 'no-answer') {
+
+    if (details.status === 'failed' || details.status === 'no-answer') {
       return details;
     }
+
+    // Call is done — now wait for transcript
+    if (details.status === 'completed' || details.status === 'ended') {
+      // Phase 2: Wait up to 60s for transcript to become available
+      for (let i = 0; i < 12; i++) {
+        const updated = await getCallDetails(callId);
+        if (updated.transcript && updated.transcript.length > 50 && updated.duration > 0) {
+          return updated;
+        }
+        await new Promise((r) => setTimeout(r, 5000));
+      }
+      // Return whatever we have after 60s
+      return await getCallDetails(callId);
+    }
+
+    // Still in progress — keep polling
     await new Promise((r) => setTimeout(r, 10000));
   }
+
+  // Timed out — get final state
   return getCallDetails(callId);
 }
 

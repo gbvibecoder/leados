@@ -196,7 +196,7 @@ export function PaidTrafficOutput({ data }: Props) {
             <span className="text-[10px] sm:text-xs text-orange-400/80 font-medium uppercase tracking-wide">Est. ROAS</span>
           </div>
           <div className="flex items-baseline gap-0.5">
-            <span className="text-xl sm:text-2xl font-bold text-orange-400">{projections.estimatedROAS || '4.2'}x</span>
+            <span className="text-xl sm:text-2xl font-bold text-orange-400">{projections.estimatedROAS || 0}x</span>
           </div>
           <div className="text-[10px] text-muted-foreground mt-0.5">Return on Ad Spend</div>
         </div>
