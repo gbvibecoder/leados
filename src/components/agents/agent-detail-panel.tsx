@@ -1,6 +1,6 @@
 'use client';
 
-import { X, Play, Clock, FileJson, Terminal, MessageSquare, Send, ChevronDown, ChevronUp, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, Play, Clock, FileJson, Terminal, MessageSquare, Send, ChevronDown, ChevronUp, Loader2, CheckCircle2, AlertCircle, Pause, RotateCcw, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect, useRef } from 'react';
 import { agents as agentsApi } from '@/lib/api';
@@ -16,8 +16,14 @@ interface AgentDetailPanelProps {
   elapsedTime?: number;
   agentStatus?: 'idle' | 'running' | 'done' | 'error';
   agentError?: string;
+  /** Name of the prerequisite agent that must complete first (null if none) */
+  prerequisiteAgent?: string | null;
+  /** Whether any other agent in the pipeline is currently running */
+  isPipelineRunning?: boolean;
   onClose: () => void;
   onRun: () => void;
+  onPause?: () => void;
+  onReset?: () => void;
 }
 
 function formatElapsed(seconds: number): string {
@@ -26,7 +32,7 @@ function formatElapsed(seconds: number): string {
   return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
-function AgentDetailPanelInner({ agentId, agentName, description, isRunning, elapsedTime, agentStatus, agentError, onClose, onRun }: AgentDetailPanelProps) {
+function AgentDetailPanelInner({ agentId, agentName, description, isRunning, elapsedTime, agentStatus, agentError, prerequisiteAgent, isPipelineRunning, onClose, onRun, onPause, onReset }: AgentDetailPanelProps) {
   const [runs, setRuns] = useState<any[]>([]);
   const [selectedRun, setSelectedRun] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -240,34 +246,83 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
                 </div>
               </div>
 
-              {/* Run Button — changes based on state */}
-              <button
-                onClick={handleRunWithPrompt}
-                disabled={isRunning}
-                className={cn(
-                  'flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all',
-                  isRunning
-                    ? 'bg-blue-600/20 border border-blue-500/30 text-blue-300 cursor-not-allowed'
-                    : 'bg-indigo-600 text-white hover:bg-indigo-500'
-                )}
-              >
-                {isRunning ? (
-                  <>
+              {/* Dependency Warning Popup */}
+              {!isRunning && prerequisiteAgent && (
+                <div className="flex items-start gap-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                  <AlertTriangle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-amber-300">Prerequisite Required</p>
+                    <p className="text-xs text-amber-400/80 mt-0.5">
+                      <span className="font-semibold">{prerequisiteAgent}</span> must complete before this agent can run. Agents execute in pipeline order.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Pipeline Running Warning */}
+              {!isRunning && !prerequisiteAgent && isPipelineRunning && (
+                <div className="flex items-start gap-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                  <Loader2 className="h-4 w-4 text-blue-400 mt-0.5 shrink-0 animate-spin" />
+                  <div>
+                    <p className="text-sm font-medium text-blue-300">Pipeline is Running</p>
+                    <p className="text-xs text-blue-400/80 mt-0.5">
+                      Another agent is currently running. Wait for it to finish or pause the pipeline first.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Run Button — disabled when running, has prerequisite, or pipeline busy */}
+              {!isRunning && (
+                <button
+                  onClick={handleRunWithPrompt}
+                  disabled={!!prerequisiteAgent || !!isPipelineRunning}
+                  className={cn(
+                    'flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all',
+                    (prerequisiteAgent || isPipelineRunning)
+                      ? 'bg-zinc-800 border border-zinc-700 text-zinc-500 cursor-not-allowed'
+                      : 'bg-indigo-600 text-white hover:bg-indigo-500'
+                  )}
+                >
+                  {prompt.trim() ? (
+                    <>
+                      <Send className="h-4 w-4" />
+                      Run with Prompt
+                    </>
+                  ) : (
+                    <>
+                      <Play className="h-4 w-4" />
+                      Run Agent
+                    </>
+                  )}
+                </button>
+              )}
+
+              {/* Pause + Reset Buttons — shown only when THIS agent is running */}
+              {isRunning && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-center gap-2 text-sm text-blue-300 py-1">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Running... {typeof elapsedTime === 'number' && `(${formatElapsed(elapsedTime)})`}
-                  </>
-                ) : prompt.trim() ? (
-                  <>
-                    <Send className="h-4 w-4" />
-                    Run with Prompt
-                  </>
-                ) : (
-                  <>
-                    <Play className="h-4 w-4" />
-                    Run Agent
-                  </>
-                )}
-              </button>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={onPause}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium bg-amber-600/20 border border-amber-500/30 text-amber-300 hover:bg-amber-600/30 transition-all"
+                    >
+                      <Pause className="h-4 w-4" />
+                      Pause Agent
+                    </button>
+                    <button
+                      onClick={onReset}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium bg-red-600/20 border border-red-500/30 text-red-300 hover:bg-red-600/30 transition-all"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      Reset Agent
+                    </button>
+                  </div>
+                </div>
+              )}
             </motion.div>
 
             {/* Run History — collapsible */}
