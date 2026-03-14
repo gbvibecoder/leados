@@ -329,6 +329,44 @@ export default function LeadOSPage() {
     }
   };
 
+  // Get the prerequisite agent name that must complete before this agent can run
+  const getPrerequisiteAgent = useCallback((agentId: string): string | null => {
+    const agentIndex = pipeline.agents.findIndex(a => a.id === agentId);
+    if (agentIndex <= 0) return null; // First agent has no prerequisite
+    const previousAgents = pipeline.agents.slice(0, agentIndex);
+    const firstPending = previousAgents.find(a => (agentStatuses[a.id] || 'idle') !== 'done');
+    if (!firstPending) return null; // All previous agents are done
+    return firstPending.name || LEADOS_AGENTS.find(a => a.id === firstPending.id)?.name || firstPending.id;
+  }, [pipeline.agents, agentStatuses]);
+
+  // Pause a specific running agent — only affects that agent, not the pipeline
+  const handlePauseAgent = useCallback((agentId: string) => {
+    stopAgentTimer(agentId);
+    updateAgentStatus(agentId, { status: 'idle', error: undefined });
+    setRunningAgentId(null);
+    addActivity({
+      type: 'info',
+      message: `${LEADOS_AGENTS.find(a => a.id === agentId)?.name || agentId} paused by user`,
+    });
+  }, [stopAgentTimer, updateAgentStatus, addActivity]);
+
+  // Reset a specific agent — clears its status and output, does not affect others
+  const handleResetAgent = useCallback((agentId: string) => {
+    stopAgentTimer(agentId);
+    updateAgentStatus(agentId, { status: 'idle', progress: 0, error: undefined, outputPreview: undefined });
+    setAgentOutputs(prev => {
+      const next = { ...prev };
+      delete next[agentId];
+      return next;
+    });
+    setElapsedTimes(prev => ({ ...prev, [agentId]: 0 }));
+    setRunningAgentId(null);
+    addActivity({
+      type: 'info',
+      message: `${LEADOS_AGENTS.find(a => a.id === agentId)?.name || agentId} reset by user`,
+    });
+  }, [stopAgentTimer, updateAgentStatus, addActivity]);
+
   const togglePhase = (phaseId: string) => {
     setExpandedPhases(prev => {
       const next = new Set(prev);
@@ -950,8 +988,12 @@ export default function LeadOSPage() {
               elapsedTime={elapsedTimes[selectedAgent] || 0}
               agentStatus={agentStatuses[selectedAgent] || 'idle'}
               agentError={pipeline.agents.find((a) => a.id === selectedAgent)?.error}
+              prerequisiteAgent={getPrerequisiteAgent(selectedAgent)}
+              isPipelineRunning={isRunning || (!!runningAgentId && runningAgentId !== selectedAgent)}
               onClose={() => setSelectedAgent(null)}
               onRun={() => handleRunAgent(selectedAgent)}
+              onPause={() => handlePauseAgent(selectedAgent)}
+              onReset={() => handleResetAgent(selectedAgent)}
             />
           )}
         </AnimatePresence>
