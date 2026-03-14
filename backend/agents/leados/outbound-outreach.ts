@@ -167,14 +167,26 @@ export class OutboundOutreachAgent extends BaseAgent {
 
       if (apollo.isApolloAvailable()) {
         try {
-          const icpTitles = offerData.icp?.titles || offerData.idealCustomerProfile?.titles || ['VP of Marketing', 'Head of Growth', 'CMO', 'CEO'];
-          const icpIndustries = offerData.icp?.industries || ['SaaS', 'B2B Technology'];
+          // Extract job titles from ICP — handle both array and comma/slash-separated string formats
+          let icpTitles: string[] = [];
+          const rawTitles = offerData.icp?.titles || offerData.idealCustomerProfile?.titles
+            || offerData.icp?.decisionMaker || offerData.idealCustomerProfile?.decisionMaker;
+          if (Array.isArray(rawTitles)) {
+            icpTitles = rawTitles;
+          } else if (typeof rawTitles === 'string') {
+            icpTitles = rawTitles.split(/[\/,]/).map((t: string) => t.trim()).filter(Boolean);
+          }
+          if (icpTitles.length === 0) {
+            icpTitles = ['VP of Marketing', 'Head of Growth', 'CMO', 'CEO'];
+          }
+
+          // Don't pass industries as tag IDs — Apollo expects numeric IDs, not strings
+          // Just search by job titles and locations for reliable results
           realProspects = await apollo.searchProspects({
             jobTitles: icpTitles,
-            industries: icpIndustries,
             limit: 25,
           });
-          await this.log('apollo_prospects_fetched', { count: realProspects.length });
+          await this.log('apollo_prospects_fetched', { count: realProspects.length, titles: icpTitles });
         } catch (err: any) {
           await this.log('apollo_error', { error: err.message });
         }
