@@ -6,6 +6,24 @@ import { Loader2 } from 'lucide-react';
 
 const PUBLIC_PATHS = ['/', '/login', '/signup'];
 
+/** Decode a JWT payload without verifying signature (client-side expiry check). */
+function decodeJwtPayload(token: string): { exp?: number } | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+function isTokenExpired(token: string): boolean {
+  const payload = decodeJwtPayload(token);
+  if (!payload?.exp) return false; // no exp claim — treat as valid
+  return Date.now() >= payload.exp * 1000;
+}
+
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -23,6 +41,14 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     const user = localStorage.getItem('leados_user');
 
     if (!token || !user) {
+      router.replace('/login');
+      return;
+    }
+
+    // Check JWT expiry
+    if (isTokenExpired(token)) {
+      localStorage.removeItem('leados_token');
+      localStorage.removeItem('leados_user');
       router.replace('/login');
       return;
     }

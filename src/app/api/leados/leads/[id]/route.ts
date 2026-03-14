@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getUserId } from '@/lib/auth';
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const lead = await prisma.lead.findUnique({
-    where: { id },
+  const userId = getUserId(req);
+
+  const lead = await prisma.lead.findFirst({
+    where: { id, ...(userId && { userId }) },
     include: { interactions: { orderBy: { timestamp: 'desc' } } },
   });
 
@@ -17,7 +20,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const userId = getUserId(req);
   const body = await req.json();
+
+  if (userId) {
+    const existing = await prisma.lead.findFirst({ where: { id, userId } });
+    if (!existing) {
+      return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+    }
+  }
 
   const lead = await prisma.lead.update({
     where: { id },
@@ -30,6 +41,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const userId = getUserId(req);
+
+  if (userId) {
+    const existing = await prisma.lead.findFirst({ where: { id, userId } });
+    if (!existing) {
+      return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+    }
+  }
+
   await prisma.lead.delete({ where: { id } });
   return NextResponse.json({ success: true });
 }

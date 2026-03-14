@@ -15,6 +15,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { apiFetch } from '@/lib/api';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -92,7 +93,7 @@ function FunnelPage() {
   async function fetchLatestFunnel() {
     try {
       // Fetch the latest funnel-builder agent run from the DB
-      const res = await fetch('/api/agents/funnel-builder/runs');
+      const res = await apiFetch('/api/agents/funnel-builder/runs');
       const runs = await res.json();
 
       // Find the latest successful run

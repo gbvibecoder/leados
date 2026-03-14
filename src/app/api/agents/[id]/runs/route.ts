@@ -2,16 +2,18 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { fetchRealTrends } from '@/lib/real-trends';
 import { fetchLiveAgentData } from '@/lib/live-agent-data';
+import { getUserId } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const userId = getUserId(req);
 
   // First, check database for real agent runs
   try {
     const dbRuns = await prisma.agentRun.findMany({
-      where: { agentId: id },
+      where: { agentId: id, ...(userId && { pipeline: { userId } }) },
       orderBy: { createdAt: 'desc' },
       take: 10,
     });
@@ -88,10 +90,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 /** DELETE /api/agents/[id]/runs — Clear all run history for this agent */
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const userId = getUserId(req);
 
   try {
     await prisma.agentRun.deleteMany({
-      where: { agentId: id },
+      where: { agentId: id, ...(userId && { pipeline: { userId } }) },
     });
     return NextResponse.json({ success: true, message: `Cleared runs for ${id}` });
   } catch (error: any) {

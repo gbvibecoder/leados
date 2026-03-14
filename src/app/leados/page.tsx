@@ -5,7 +5,7 @@ import { ProjectSelector } from '@/components/projects/project-selector';
 import { PIPELINE_PHASES } from '@/components/pipeline/pipeline-preview';
 import { AgentDetailPanel } from '@/components/agents/agent-detail-panel';
 import { useAppStore, DISCOVERY_AGENT_IDS, LEADOS_AGENTS } from '@/lib/store';
-import { pipelines as pipelinesApi, agents as agentsApi } from '@/lib/api';
+import { pipelines as pipelinesApi, agents as agentsApi, apiFetch } from '@/lib/api';
 import { ErrorBoundary } from '@/components/layout/error-boundary';
 import {
   Building2, Pause, Play, RotateCcw, ChevronDown, ChevronUp, ChevronRight,
@@ -209,7 +209,7 @@ export default function LeadOSPage() {
     // Cancel any previously running pipeline so its SSE events stop
     if (pipeline.id) {
       try {
-        await fetch(`/api/pipelines/${pipeline.id}/pause`, { method: 'POST' });
+        await apiFetch(`/api/pipelines/${pipeline.id}/pause`, { method: 'POST' });
       } catch {
         // ignore
       }
@@ -554,7 +554,7 @@ export default function LeadOSPage() {
                     // Update DB status back to running — the backend loop will auto-resume
                     if (pipeline.id) {
                       try {
-                        await fetch(`/api/pipelines/${pipeline.id}/resume`, { method: 'POST' });
+                        await apiFetch(`/api/pipelines/${pipeline.id}/resume`, { method: 'POST' });
                       } catch {
                         // ignore
                       }
@@ -572,15 +572,15 @@ export default function LeadOSPage() {
                     // Cancel old pipeline in backend — set to 'cancelled' so backend loop exits
                     if (pipeline.id) {
                       try {
-                        await fetch(`/api/pipelines/${pipeline.id}/cancel`, { method: 'POST' });
+                        await apiFetch(`/api/pipelines/${pipeline.id}/cancel`, { method: 'POST' });
                       } catch {
                         // Fallback: try pause
-                        try { await fetch(`/api/pipelines/${pipeline.id}/pause`, { method: 'POST' }); } catch {}
+                        try { await apiFetch(`/api/pipelines/${pipeline.id}/pause`, { method: 'POST' }); } catch {}
                       }
                     }
                     // Clear all agent run history from DB
                     for (const agent of LEADOS_AGENTS) {
-                      fetch(`/api/agents/${agent.id}/runs`, { method: 'DELETE' }).catch(() => {});
+                      apiFetch(`/api/agents/${agent.id}/runs`, { method: 'DELETE' }).catch(() => {});
                     }
                     // Stop ALL timers
                     Object.keys(timerRef.current).forEach(id => {

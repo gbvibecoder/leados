@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getUserId } from '@/lib/auth';
 
 export async function GET(req?: NextRequest) {
+  const userId = getUserId(req || null);
   const period = req?.nextUrl?.searchParams?.get('period') || '30d';
   const projectId = req?.nextUrl?.searchParams?.get('projectId') || null;
 
@@ -13,6 +15,7 @@ export async function GET(req?: NextRequest) {
 
   // Build where clause
   const leadWhere: Record<string, any> = { createdAt: { gte: startDate } };
+  if (userId) leadWhere.userId = userId;
   if (projectId) leadWhere.projectId = projectId;
 
   // Fetch leads within the period
@@ -29,7 +32,7 @@ export async function GET(req?: NextRequest) {
 
   // Fetch campaigns for spend data
   const campaigns = await prisma.campaign.findMany({
-    where: { createdAt: { gte: startDate } },
+    where: { createdAt: { gte: startDate }, ...(userId && { userId }) },
     select: {
       channel: true,
       spend: true,

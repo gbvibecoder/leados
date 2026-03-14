@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getUserId } from '@/lib/auth';
 
-export async function GET() {
+export async function GET(req: Request) {
+  const userId = getUserId(req);
+
   try {
     const projects = await prisma.project.findMany({
-      where: { status: 'active' },
+      where: { status: 'active', ...(userId && { userId }) },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -27,6 +30,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const userId = getUserId(req);
+
   try {
     const body = await req.json().catch(() => ({}));
 
@@ -74,6 +79,7 @@ export async function POST(req: Request) {
         description: body.description || null,
         type: body.type || 'external',
         config: body.config ? JSON.stringify(body.config) : null,
+        ...(userId && { userId }),
       },
     });
 

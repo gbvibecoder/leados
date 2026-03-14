@@ -3,7 +3,7 @@
 import { useState, useEffect, Fragment } from 'react';
 import { Users, Search, ChevronRight, Mail, Phone as PhoneIcon, Calendar, Bot, Plus, X, ShieldBan } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { leados } from '@/lib/api';
+import { leados, apiFetch } from '@/lib/api';
 import { useAppStore } from '@/lib/store';
 import { ProjectFilter } from '@/components/projects/project-filter';
 import { ErrorBoundary } from '@/components/layout/error-boundary';
@@ -47,7 +47,7 @@ function AddLeadModal({ onClose, onAdded }: { onClose: () => void; onAdded: () =
     e.preventDefault();
     setSaving(true);
     try {
-      await fetch('/api/leados/leads', {
+      await apiFetch('/api/leados/leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

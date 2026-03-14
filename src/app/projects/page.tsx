@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { useAppStore, DISCOVERY_AGENT_IDS, LEADOS_AGENTS } from '@/lib/store';
 import type { Project } from '@/lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
+import { apiFetch } from '@/lib/api';
 
 export default function ProjectsPage() {
   const router = useRouter();
@@ -153,7 +154,7 @@ export default function ProjectsPage() {
     // Validate URL reachability via backend
     if (trimmedUrl) {
       try {
-        const res = await fetch('/api/projects/validate-url', {
+        const res = await apiFetch('/api/projects/validate-url', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url: trimmedUrl }),

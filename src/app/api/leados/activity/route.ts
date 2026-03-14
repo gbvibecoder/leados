@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getUserId } from '@/lib/auth';
 
-export async function GET() {
-  // Fetch recent interactions with their lead info
+export async function GET(req: Request) {
+  const userId = getUserId(req);
+
+  // Fetch recent interactions with their lead info (scoped by userId via lead)
   const interactions = await prisma.interaction.findMany({
+    where: { ...(userId && { lead: { userId } }) },
     orderBy: { timestamp: 'desc' },
     take: 10,
     include: {
@@ -11,8 +15,9 @@ export async function GET() {
     },
   });
 
-  // Fetch recent agent runs
+  // Fetch recent agent runs (scoped by userId via pipeline)
   const agentRuns = await prisma.agentRun.findMany({
+    where: { ...(userId && { pipeline: { userId } }) },
     orderBy: { createdAt: 'desc' },
     take: 10,
     select: {

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createLeadOSAgents } from '@backend/agents/leados/index';
 import { pipelineEvents } from '@backend/orchestrator/event-emitter';
+import { getUserId } from '@/lib/auth';
 
 // All 13 agents in pipeline order
 const ALL_AGENTS = [
@@ -208,10 +209,11 @@ async function runPipelineFromIndex(
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const userId = getUserId(req);
 
   // Get pipeline with project and completed agent runs
-  const pipeline = await prisma.pipeline.findUnique({
-    where: { id },
+  const pipeline = await prisma.pipeline.findFirst({
+    where: { id, ...(userId && { userId }) },
     include: { project: true, agentRuns: { where: { status: 'done' }, orderBy: { startedAt: 'asc' } } },
   });
 
