@@ -385,6 +385,20 @@ export default function LeadOSPage() {
   const hasRun = pipeline.status !== 'idle';
   const progressPercent = totalAgents > 0 ? Math.round((completedCount / totalAgents) * 100) : 0;
 
+  // Auto-detect pipeline completion: all enabled agents are done/error, none running
+  useEffect(() => {
+    if (pipeline.status === 'running' && totalAgents > 0 && runningCount === 0 && (completedCount + errorCount) >= totalAgents) {
+      // All agents finished — update pipeline status
+      updatePipelineStatus('completed');
+      // Stop all timers
+      Object.keys(timerRef.current).forEach(id => {
+        clearInterval(timerRef.current[id]);
+        delete timerRef.current[id];
+      });
+      setRunningAgentId(null);
+    }
+  }, [pipeline.status, totalAgents, runningCount, completedCount, errorCount]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const getPhaseStatus = (phase: typeof PIPELINE_PHASES[0]) => {
     if (skippedPhaseIds.has(phase.id)) return 'skipped';
     const agents = phase.agentIds.filter(id => enabledAgentIds.has(id));
@@ -527,7 +541,7 @@ export default function LeadOSPage() {
                   {hasRun ? 'Run Again' : 'Run Pipeline'}
                 </button>
               )}
-              {isRunning && (
+              {isRunning && pipeline.status !== 'completed' && (
                 <button
                   onClick={() => {
                     updatePipelineStatus('paused');

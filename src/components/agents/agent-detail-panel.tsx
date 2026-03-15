@@ -58,13 +58,17 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
     fetchRuns();
   }, [agentId]);
 
-  // Auto-refresh runs when agent finishes (running → not running)
+  // Auto-refresh runs when agent finishes (running → done/error)
+  const prevStatusRef = useRef(agentStatus);
   useEffect(() => {
-    if (prevRunningRef.current && !isRunning) {
+    const wasRunning = prevRunningRef.current || prevStatusRef.current === 'running';
+    const nowDone = !isRunning && agentStatus !== 'running';
+    if (wasRunning && nowDone) {
       setTimeout(() => fetchRuns(), 500);
     }
     prevRunningRef.current = isRunning;
-  }, [isRunning]);
+    prevStatusRef.current = agentStatus;
+  }, [isRunning, agentStatus]);
 
   const handleRunWithPrompt = () => {
     onRun();
@@ -290,8 +294,8 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
                 </div>
               )}
 
-              {/* Another agent is running (not this one) */}
-              {!isRunning && agentStatus !== 'running' && !prerequisiteAgent && isPipelineRunning && (
+              {/* Another agent is running (not this one, and this one hasn't completed yet) */}
+              {!isRunning && agentStatus !== 'running' && agentStatus !== 'done' && !prerequisiteAgent && isPipelineRunning && (
                 <div className="flex items-start gap-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
                   <Loader2 className="h-4 w-4 text-blue-400 mt-0.5 shrink-0 animate-spin" />
                   <div>
