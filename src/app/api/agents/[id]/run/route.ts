@@ -46,7 +46,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   let pipelineId = body.pipelineId;
   if (!pipelineId) {
     const pipeline = await prisma.pipeline.create({
-      data: { type: 'leados', status: 'running', userId: userId ?? 'no-user' },
+      data: { type: 'leados', status: 'running', ...(userId && { userId }) },
     });
     pipelineId = pipeline.id;
   }

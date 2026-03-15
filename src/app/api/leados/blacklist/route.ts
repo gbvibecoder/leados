@@ -25,7 +25,7 @@ export async function POST(req: Request) {
       companyName: body.companyName.trim(),
       domain: body.domain?.trim() || null,
       reason: body.reason?.trim() || null,
-      userId: userId ?? 'no-user',
+      ...(userId && { userId }),
     },
   });
 

@@ -23,7 +23,7 @@ export async function POST(req: Request) {
       status: 'idle',
       config: JSON.stringify(body.config || {}),
       projectId: body.projectId || null,
-      userId: userId ?? 'no-user',
+      ...(userId && { userId }),
     },
   });
 

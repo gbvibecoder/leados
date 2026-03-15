@@ -79,7 +79,7 @@ export async function POST(req: Request) {
         description: body.description || null,
         type: body.type || 'external',
         config: body.config ? JSON.stringify(body.config) : null,
-        userId: userId ?? 'no-user',
+        ...(userId && { userId }),
       },
     });
 

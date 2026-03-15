@@ -11,18 +11,24 @@ export async function GET(req: Request) {
   const search = searchParams.get('search');
   const projectId = searchParams.get('projectId');
 
-  const where: Record<string, any> = { userId: userId ?? 'no-user' };
-  if (stage) where.stage = stage;
-  if (source) where.source = source;
-  if (projectId) where.projectId = projectId;
-  if (minScore) where.score = { gte: parseInt(minScore) };
-  if (search) {
-    where.OR = [
-      { name: { contains: search } },
-      { email: { contains: search } },
-      { company: { contains: search } },
-    ];
+  const conditions: Record<string, any>[] = [{ userId: userId ?? 'no-user' }];
+  if (stage) conditions.push({ stage });
+  if (source) conditions.push({ source });
+  if (projectId) {
+    // Show leads for this project AND unassigned leads (e.g. from funnel forms)
+    conditions.push({ OR: [{ projectId }, { projectId: null }] });
   }
+  if (minScore) conditions.push({ score: { gte: parseInt(minScore) } });
+  if (search) {
+    conditions.push({
+      OR: [
+        { name: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { company: { contains: search, mode: 'insensitive' } },
+      ],
+    });
+  }
+  const where = { AND: conditions };
 
   const leads = await prisma.lead.findMany({
     where,
@@ -84,7 +90,7 @@ export async function POST(req: Request) {
         ? `[BLACKLISTED] ${blacklistReason}${notes ? ` | ${notes}` : ''}`
         : (notes || null),
       projectId: leadProjectId || null,
-      userId: userId ?? 'no-user',
+      ...(userId && { userId }),
     },
   });
 
