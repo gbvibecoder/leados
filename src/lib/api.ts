@@ -15,6 +15,9 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   if (response.status === 401 && typeof window !== 'undefined') {
     localStorage.removeItem('leados_token');
     localStorage.removeItem('leados_user');
+    // Clear zustand store to prevent stale data leaking to next user
+    const { useAppStore } = await import('@/lib/store');
+    useAppStore.getState().logout();
     window.location.href = '/login';
   }
   return response;

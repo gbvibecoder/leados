@@ -250,7 +250,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   let projectData: { name: string; url?: string; type: string; description?: string; config?: any } | undefined;
   try {
     const pipeline = await prisma.pipeline.findFirst({
-      where: { id, ...(userId && { userId }) },
+      where: { id, userId: userId ?? 'no-user' },
       include: { project: true },
     });
     if (pipeline?.project) {

@@ -7,7 +7,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const userId = getUserId(req);
 
   const lead = await prisma.lead.findFirst({
-    where: { id, ...(userId && { userId }) },
+    where: { id, userId: userId ?? 'no-user' },
     include: { interactions: { orderBy: { timestamp: 'desc' } } },
   });
 

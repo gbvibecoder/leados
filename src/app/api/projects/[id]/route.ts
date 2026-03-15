@@ -8,7 +8,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   try {
     const project = await prisma.project.findFirst({
-      where: { id, ...(userId && { userId }) },
+      where: { id, userId: userId ?? 'no-user' },
     });
     if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });

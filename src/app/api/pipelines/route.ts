@@ -23,7 +23,7 @@ export async function POST(req: Request) {
       status: 'idle',
       config: JSON.stringify(body.config || {}),
       projectId: body.projectId || null,
-      ...(userId && { userId }),
+      userId: userId ?? 'no-user',
     },
   });
 
@@ -43,7 +43,7 @@ export async function GET(req?: Request) {
   const userId = getUserId(req || null);
 
   const pipelines = await prisma.pipeline.findMany({
-    where: { ...(userId && { userId }) },
+    where: { userId: userId ?? 'no-user' },
     include: { agentRuns: { orderBy: { createdAt: 'asc' } } },
     orderBy: { createdAt: 'desc' },
     take: 20,

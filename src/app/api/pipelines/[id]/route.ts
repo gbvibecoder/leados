@@ -8,7 +8,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   try {
     const pipeline = await prisma.pipeline.findFirst({
-      where: { id, ...(userId && { userId }) },
+      where: { id, userId: userId ?? 'no-user' },
       include: { agentRuns: { orderBy: { createdAt: 'asc' } } },
     });
     if (pipeline) {
@@ -39,11 +39,9 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   const { id } = await params;
   const userId = getUserId(req);
 
-  if (userId) {
-    const pipeline = await prisma.pipeline.findFirst({ where: { id, userId } });
-    if (!pipeline) {
-      return NextResponse.json({ error: 'Pipeline not found' }, { status: 404 });
-    }
+  const pipeline = await prisma.pipeline.findFirst({ where: { id, userId: userId ?? 'no-user' } });
+  if (!pipeline) {
+    return NextResponse.json({ error: 'Pipeline not found' }, { status: 404 });
   }
 
   return NextResponse.json({ deleted: true, id });

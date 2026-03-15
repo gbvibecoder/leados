@@ -7,7 +7,7 @@ export async function GET(req: Request) {
 
   try {
     const projects = await prisma.project.findMany({
-      where: { status: 'active', ...(userId && { userId }) },
+      where: { status: 'active', userId: userId ?? 'no-user' },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -79,7 +79,7 @@ export async function POST(req: Request) {
         description: body.description || null,
         type: body.type || 'external',
         config: body.config ? JSON.stringify(body.config) : null,
-        ...(userId && { userId }),
+        userId: userId ?? 'no-user',
       },
     });
 

@@ -6,7 +6,7 @@ export async function GET(req: Request) {
   const userId = getUserId(req);
 
   const entries = await prisma.blacklist.findMany({
-    where: { ...(userId && { userId }) },
+    where: { userId: userId ?? 'no-user' },
     orderBy: { createdAt: 'desc' },
   });
   return NextResponse.json(entries);
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
       companyName: body.companyName.trim(),
       domain: body.domain?.trim() || null,
       reason: body.reason?.trim() || null,
-      ...(userId && { userId }),
+      userId: userId ?? 'no-user',
     },
   });
 
@@ -42,11 +42,9 @@ export async function DELETE(req: Request) {
   }
 
   try {
-    if (userId) {
-      const existing = await prisma.blacklist.findFirst({ where: { id, userId } });
-      if (!existing) {
-        return NextResponse.json({ error: 'Entry not found' }, { status: 404 });
-      }
+    const existing = await prisma.blacklist.findFirst({ where: { id, userId: userId ?? 'no-user' } });
+    if (!existing) {
+      return NextResponse.json({ error: 'Entry not found' }, { status: 404 });
     }
     await prisma.blacklist.delete({ where: { id } });
     return NextResponse.json({ success: true });

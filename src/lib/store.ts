@@ -96,6 +96,9 @@ interface AppState {
   activityFeed: ActivityItem[];
   addActivity: (item: Omit<ActivityItem, 'id' | 'timestamp'>) => void;
   clearActivities: () => void;
+
+  /** Clear all user-specific state on logout */
+  logout: () => void;
 }
 
 export interface ActivityItem {
@@ -659,4 +662,16 @@ export const useAppStore = create<AppState>()((set, get) => ({
       ].slice(0, 50),
     })),
   clearActivities: () => set({ activityFeed: [] }),
+
+  logout: () => {
+    set({
+      projects: [],
+      selectedProjectId: null,
+      pipeline: buildIdlePipeline(undefined, new Set(), null),
+      activityFeed: [],
+      blacklist: [],
+      disabledAgentIds: new Set(),
+      globalStartFromAgentId: null,
+    });
+  },
 }));

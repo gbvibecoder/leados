@@ -11,8 +11,7 @@ export async function GET(req: Request) {
   const search = searchParams.get('search');
   const projectId = searchParams.get('projectId');
 
-  const where: Record<string, any> = {};
-  if (userId) where.userId = userId;
+  const where: Record<string, any> = { userId: userId ?? 'no-user' };
   if (stage) where.stage = stage;
   if (source) where.source = source;
   if (projectId) where.projectId = projectId;
@@ -85,7 +84,7 @@ export async function POST(req: Request) {
         ? `[BLACKLISTED] ${blacklistReason}${notes ? ` | ${notes}` : ''}`
         : (notes || null),
       projectId: leadProjectId || null,
-      ...(userId && { userId }),
+      userId: userId ?? 'no-user',
     },
   });
 

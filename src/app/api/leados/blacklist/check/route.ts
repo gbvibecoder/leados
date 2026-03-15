@@ -18,7 +18,7 @@ export async function POST(req: Request) {
   }
 
   const entries = await prisma.blacklist.findMany({
-    where: { ...(userId && { userId }) },
+    where: { userId: userId ?? 'no-user' },
   });
 
   for (const entry of entries) {

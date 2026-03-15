@@ -14,8 +14,7 @@ export async function GET(req?: NextRequest) {
   const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
   // Build where clause
-  const leadWhere: Record<string, any> = { createdAt: { gte: startDate } };
-  if (userId) leadWhere.userId = userId;
+  const leadWhere: Record<string, any> = { createdAt: { gte: startDate }, userId: userId ?? 'no-user' };
   if (projectId) leadWhere.projectId = projectId;
 
   // Fetch leads within the period
@@ -32,7 +31,7 @@ export async function GET(req?: NextRequest) {
 
   // Fetch campaigns for spend data
   const campaigns = await prisma.campaign.findMany({
-    where: { createdAt: { gte: startDate }, ...(userId && { userId }) },
+    where: { createdAt: { gte: startDate }, userId: userId ?? 'no-user' },
     select: {
       channel: true,
       spend: true,

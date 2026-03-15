@@ -216,7 +216,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   // Get pipeline with project and completed agent runs
   const pipeline = await prisma.pipeline.findFirst({
-    where: { id, ...(userId && { userId }) },
+    where: { id, userId: userId ?? 'no-user' },
     include: { project: true, agentRuns: { where: { status: 'done' }, orderBy: { startedAt: 'asc' } } },
   });
 

@@ -34,9 +34,12 @@ export function Navbar() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const logout = useAppStore((s) => s.logout);
+
   const handleLogout = () => {
     localStorage.removeItem('leados_token');
     localStorage.removeItem('leados_user');
+    logout();
     router.push('/login');
   };
 

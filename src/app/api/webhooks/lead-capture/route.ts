@@ -45,7 +45,7 @@ export async function POST(req: Request) {
 
     // Check for duplicate email (scoped to user if authenticated)
     const existingLead = await prisma.lead.findFirst({
-      where: { email: workEmail, ...(userId && { userId }) },
+      where: { email: workEmail, userId: userId ?? 'no-user' },
     });
 
     if (existingLead) {
