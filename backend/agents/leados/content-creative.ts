@@ -116,7 +116,13 @@ export class ContentCreativeAgent extends BaseAgent {
       };
 
       const response = await this.callClaude(SYSTEM_PROMPT, JSON.stringify(enrichedInput));
-      const parsed = this.safeParseLLMJson<any>(response, ['adCopies', 'hooks', 'emailSequence']);
+      let parsed: any = {};
+      try {
+        parsed = this.safeParseLLMJson<any>(response, ['adCopies', 'hooks', 'emailSequence']);
+      } catch (parseErr: any) {
+        await this.log('llm_json_parse_error', { error: parseErr.message });
+        parsed = { reasoning: `LLM JSON parse failed: ${parseErr.message}`, confidence: 0 };
+      }
 
       // Force-zero any LLM-fabricated performance metrics
       // Creative content (ad copies, hooks, emails, scripts) is OK

@@ -302,7 +302,13 @@ export class FunnelBuilderAgent extends BaseAgent {
       };
 
       const response = await this.callClaude(SYSTEM_PROMPT, JSON.stringify(enrichedInput));
-      const parsed = this.safeParseLLMJson<any>(response, ['landingPage', 'leadForm']);
+      let parsed: any = {};
+      try {
+        parsed = this.safeParseLLMJson<any>(response, ['landingPage', 'leadForm']);
+      } catch (parseErr: any) {
+        await this.log('llm_json_parse_error', { error: parseErr.message });
+        parsed = { reasoning: `LLM JSON parse failed: ${parseErr.message}`, confidence: 0 };
+      }
 
       // Force-zero any LLM-fabricated performance metrics
       // Landing page copy and form fields are creative outputs (OK)
