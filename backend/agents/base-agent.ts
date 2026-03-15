@@ -88,7 +88,7 @@ export abstract class BaseAgent {
 
         const message = await client.messages.create({
           model: 'claude-sonnet-4-6',
-          max_tokens: 8192,
+          max_tokens: 16384,
           system: systemPrompt,
           messages: [{ role: 'user', content: userMessage }],
         });
@@ -133,7 +133,7 @@ export abstract class BaseAgent {
             systemInstruction: { parts: [{ text: systemPrompt }] },
             contents: [{ parts: [{ text: userMessage }] }],
             generationConfig: {
-              maxOutputTokens: 8192,
+              maxOutputTokens: 16384,
               temperature: 0.7,
             },
           }),
