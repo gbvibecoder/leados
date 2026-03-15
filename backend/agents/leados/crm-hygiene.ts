@@ -185,7 +185,13 @@ export class CRMHygieneAgent extends BaseAgent {
       });
 
       const response = await this.callClaude(SYSTEM_PROMPT, userMessage);
-      const parsed = this.safeParseLLMJson<any>(response, ['deduplication', 'normalization']);
+      let parsed: any = {};
+      try {
+        parsed = this.safeParseLLMJson<any>(response, ['deduplication', 'normalization']);
+      } catch (parseErr: any) {
+        await this.log('llm_json_parse_error', { error: parseErr.message });
+        parsed = { reasoning: `LLM JSON parse failed: ${parseErr.message}`, confidence: 0 };
+      }
 
       // ── BUILD CLEAN OUTPUT — DO NOT trust ANY metric from LLM ──────────
       const dbLeadCount = realContacts.length;

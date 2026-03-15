@@ -273,7 +273,13 @@ export class PaidTrafficAgent extends BaseAgent {
       };
 
       const response = await this.callClaude(SYSTEM_PROMPT, JSON.stringify(enrichedInput));
-      const parsed = this.safeParseLLMJson<any>(response, ['googleAds', 'metaAds']);
+      let parsed: any = {};
+      try {
+        parsed = this.safeParseLLMJson<any>(response, ['googleAds', 'metaAds']);
+      } catch (parseErr: any) {
+        await this.log('llm_json_parse_error', { error: parseErr.message });
+        parsed = { reasoning: `LLM JSON parse failed: ${parseErr.message}`, confidence: 0 };
+      }
 
       // ── BUILD CLEAN OUTPUT — DO NOT trust ANY metric from LLM ──────────
       // Keep ONLY strategy/creative from LLM, build a new object for everything else

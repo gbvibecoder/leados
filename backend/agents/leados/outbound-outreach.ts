@@ -228,7 +228,14 @@ CRITICAL: For projectedMetrics, set ALL numeric values to 0 — no emails have b
       });
 
       const response = await this.callClaude(SYSTEM_PROMPT, userMessage);
-      const parsed = this.safeParseLLMJson<any>(response, ['coldEmail', 'linkedIn', 'projectedMetrics']);
+      let parsed: any = {};
+      try {
+        parsed = this.safeParseLLMJson<any>(response, ['coldEmail', 'linkedIn', 'projectedMetrics']);
+      } catch (parseErr: any) {
+        await this.log('llm_json_parse_error', { error: parseErr.message });
+        // Use empty defaults — cleanOutput will build from real data anyway
+        parsed = { coldEmail: {}, linkedIn: {}, projectedMetrics: {}, reasoning: `LLM JSON parse failed: ${parseErr.message}`, confidence: 0 };
+      }
 
       // ── BUILD CLEAN OUTPUT — DO NOT trust ANY metric from LLM ──────────
       // Keep ONLY strategy/creative from LLM, replace ALL metrics with a new object

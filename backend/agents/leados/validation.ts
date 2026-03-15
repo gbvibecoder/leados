@@ -67,7 +67,13 @@ export class ValidationAgent extends BaseAgent {
         previousOutputs: inputs.previousOutputs || {},
       });
       const response = await this.callClaude(SYSTEM_PROMPT, userMessage);
-      const parsed = this.safeParseLLMJson<any>(response, ['decision', 'scores']);
+      let parsed: any = {};
+      try {
+        parsed = this.safeParseLLMJson<any>(response, ['decision', 'scores']);
+      } catch (parseErr: any) {
+        await this.log('llm_json_parse_error', { error: parseErr.message });
+        parsed = { reasoning: `LLM JSON parse failed: ${parseErr.message}`, confidence: 0 };
+      }
 
       // Force-label CAC/LTV estimates — these are LLM directional guesses, not measured data
       if (parsed.cacEstimate !== undefined) {

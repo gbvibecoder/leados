@@ -184,7 +184,13 @@ export class OfferEngineeringAgent extends BaseAgent {
       await this.log('ai_offer_engineering', { phase: 'Sending market data to Claude for offer engineering' });
 
       const response = await this.callClaude(SYSTEM_PROMPT, userMessage);
-      const parsed = this.safeParseLLMJson<any>(response, ['offer']);
+      let parsed: any = {};
+      try {
+        parsed = this.safeParseLLMJson<any>(response, ['offer']);
+      } catch (parseErr: any) {
+        await this.log('llm_json_parse_error', { error: parseErr.message });
+        parsed = { reasoning: `LLM JSON parse failed: ${parseErr.message}`, confidence: 0 };
+      }
 
       // Force-zero LLM-fabricated measured metrics in the offer
       if (parsed.offer) {

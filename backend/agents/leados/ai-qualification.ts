@@ -304,7 +304,13 @@ For leads in emailOnlyLeads: set callStatus to "no_valid_phone", outcome to "med
       });
 
       const response = await this.callClaude(SYSTEM_PROMPT, userMessage);
-      const parsed = this.safeParseLLMJson<any>(response, ['callScript', 'qualificationThresholds', 'callResults']);
+      let parsed: any = {};
+      try {
+        parsed = this.safeParseLLMJson<any>(response, ['callScript', 'qualificationThresholds', 'callResults']);
+      } catch (parseErr: any) {
+        await this.log('llm_json_parse_error', { error: parseErr.message });
+        parsed = { reasoning: `LLM JSON parse failed: ${parseErr.message}`, confidence: 0 };
+      }
 
       // Force-zero LLM-fabricated call metrics when no real calls were made
       if (realCallResults.length === 0) {
