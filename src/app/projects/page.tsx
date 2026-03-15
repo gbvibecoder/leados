@@ -218,11 +218,11 @@ export default function ProjectsPage() {
       <AnimatePresence>
       {showCreate && (
         <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0 }}
-          transition={{ duration: 0.3, ease: [0.25, 0.4, 0.25, 1] }}
-          className="mb-6 overflow-hidden"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.2 }}
+          className="mb-6"
         >
         <div className="rounded-lg border border-zinc-700 bg-zinc-900 p-5">
           <h3 className="mb-4 text-lg font-medium text-white">Create Project</h3>
