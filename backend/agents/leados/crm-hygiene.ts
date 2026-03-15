@@ -55,7 +55,7 @@ RESPONSIBILITY 7: COMPLIANCE
 - Data retention: configurable policies, automated enforcement
 - Complete audit trail of all data access and modifications
 
-Return ONLY valid JSON (no markdown, no explanation outside JSON).
+Return ONLY valid JSON (no markdown, no explanation outside JSON). Your response MUST be a JSON object with these top-level keys: deduplication, normalization, validation, enrichment, lifecycle, compliance, interactions, reasoning, confidence.
 
 Data quality is the foundation of everything — bad data means bad scoring, bad routing, and wasted ad spend. Be aggressive with cleanup but conservative with merges (never lose data).
 
@@ -187,7 +187,7 @@ export class CRMHygieneAgent extends BaseAgent {
       const response = await this.callClaude(SYSTEM_PROMPT, userMessage);
       let parsed: any = {};
       try {
-        parsed = this.safeParseLLMJson<any>(response, ['deduplication', 'normalization']);
+        parsed = this.safeParseLLMJson<any>(response);
       } catch (parseErr: any) {
         await this.log('llm_json_parse_error', { error: parseErr.message });
         parsed = { reasoning: `LLM JSON parse failed: ${parseErr.message}`, confidence: 0 };
