@@ -19,7 +19,7 @@ function getDefaultSettings() {
       googleAds: { clientId: '', clientSecret: '', developerToken: '', status: 'disconnected' },
     },
     notifications: { email: true, slack: false, webhook: false },
-    agentDefaults: { maxRetries: 3, timeoutSeconds: 300, model: 'claude-sonnet-4-20250514' },
+    agentDefaults: { maxRetries: 3, timeoutSeconds: 300, model: 'claude-sonnet-4-6' },
   };
 }
 
