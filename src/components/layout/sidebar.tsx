@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -31,6 +32,14 @@ const navigation = [
 export function Sidebar() {
   const pathname = usePathname();
   const { sidebarOpen, toggleSidebar } = useAppStore();
+  const [aiEngine, setAiEngine] = useState({ model: 'Loading...', provider: '' });
+
+  useEffect(() => {
+    fetch('/api/ai-engine')
+      .then(res => res.json())
+      .then(data => setAiEngine(data))
+      .catch(() => setAiEngine({ model: 'Unknown', provider: '' }));
+  }, []);
 
   return (
     <aside
@@ -84,7 +93,7 @@ export function Sidebar() {
               <Bot className="h-4 w-4 text-indigo-400" />
               <span className="text-xs font-medium text-zinc-300">AI Engine</span>
             </div>
-            <p className="mt-1 text-xs text-zinc-500">Gemini 2.0 Flash</p>
+            <p className="mt-1 text-xs text-zinc-500">{aiEngine.model}</p>
           </div>
         </div>
       )}

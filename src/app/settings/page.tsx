@@ -190,6 +190,8 @@ function SettingsPageInner() {
               onChange={(e) => setAgentConfig({ ...agentConfig, model: e.target.value })}
               className="h-9 w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 text-sm text-zinc-200 focus:outline-none"
             >
+              <option value="claude-sonnet-4-6">Claude Sonnet 4.6 (Anthropic)</option>
+              <option value="claude-haiku-4-5">Claude Haiku 4.5 (Anthropic)</option>
               <option value="gemini-2.0-flash">Gemini 2.0 Flash (Free)</option>
               <option value="gemini-2.0-pro">Gemini 2.0 Pro (Free)</option>
               <option value="gemini-1.5-pro">Gemini 1.5 Pro (Free)</option>
