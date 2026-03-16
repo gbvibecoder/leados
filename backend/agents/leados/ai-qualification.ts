@@ -152,8 +152,9 @@ export class AIQualificationAgent extends BaseAgent {
             where: {
               stage: { notIn: ['qualified', 'nurture', 'disqualified', 'booked', 'won', 'lost'] },
               qualificationOutcome: null, // not yet qualified
+              score: { gte: 30 }, // minimum score threshold for qualification
             },
-            orderBy: { createdAt: 'desc' },
+            orderBy: { score: 'desc' },
             take: 20,
           });
           if (dbLeads.length > 0) {
@@ -164,7 +165,7 @@ export class AIQualificationAgent extends BaseAgent {
               phone: l.phone,
               source: l.source,
               channel: l.channel || 'inbound',
-              score: l.score || 50,
+              score: l.score || 0,
               segment: l.segment || 'unknown',
               stage: l.stage || 'new',
             }));

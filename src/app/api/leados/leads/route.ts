@@ -83,7 +83,7 @@ export async function POST(req: Request) {
       phone: phone || null,
       source,
       channel: channel || source,
-      score: isBlacklistedCompany ? 0 : (score || 0),
+      score: isBlacklistedCompany ? 0 : (score || calculateManualLeadScore({ email, company, phone, source, segment })),
       stage: isBlacklistedCompany ? 'lost' : (stage || 'new'),
       segment: segment || null,
       notes: isBlacklistedCompany
@@ -111,4 +111,38 @@ export async function PATCH(req: Request) {
   });
 
   return NextResponse.json({ updated: result.count });
+}
+
+/** Score manually added leads based on data completeness and quality signals */
+function calculateManualLeadScore(fields: {
+  email?: string; company?: string; phone?: string; source?: string; segment?: string;
+}): number {
+  let score = 15; // base score for manual entry
+
+  // Data completeness — more info = higher quality lead
+  if (fields.email) score += 10;
+  if (fields.company) score += 10;
+  if (fields.phone) score += 15; // shared phone = high intent
+
+  // Source scoring — higher-intent sources score more
+  const sourceScores: Record<string, number> = {
+    referral: 25,
+    organic: 15,
+    webinar: 15,
+    linkedin: 12,
+    google_ads: 10,
+    meta_ads: 8,
+    cold_email: 5,
+  };
+  if (fields.source && sourceScores[fields.source]) score += sourceScores[fields.source];
+
+  // Segment scoring — enterprise leads are more valuable
+  const segmentScores: Record<string, number> = {
+    enterprise: 15,
+    mid_market: 10,
+    smb: 5,
+  };
+  if (fields.segment && segmentScores[fields.segment]) score += segmentScores[fields.segment];
+
+  return Math.min(score, 100);
 }
