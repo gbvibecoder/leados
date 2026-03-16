@@ -17,8 +17,11 @@ export async function POST(req: Request) {
     const workEmail = body.workEmail || body.work_email || body.email || body.businessEmail || body.business_email || '';
     const company = body.company || body.companyName || body.company_name || body.organization || '';
     const phone = body.phone || body.phoneNumber || body.phone_number || body.mobile || '';
-    const monthlyMarketingBudget = body.monthlyMarketingBudget || body.monthly_marketing_budget || body.budget || body.monthlyBudget || '';
-    const currentMonthlyLeads = body.currentMonthlyLeads || body.current_monthly_leads || body.monthlyLeads || body.leadVolume || '';
+    const monthlyMarketingBudget = body.monthlyMarketingBudget || body.monthly_marketing_budget || body.budget || body.monthlyBudget || findField(body, /budget/i) || '';
+    const currentMonthlyLeads = body.currentMonthlyLeads || body.current_monthly_leads || body.monthlyLeads || body.leadVolume || findField(body, /lead.*(volume|count|month)/i) || '';
+    const annualRevenue = body.annualRevenue || body.annual_revenue || body.arr || body.currentAnnualRevenue || body.revenue || findField(body, /revenue|arr/i) || '';
+    const role = body.role || body.yourRole || body.jobTitle || body.job_title || findField(body, /role|title|position/i) || '';
+    const challenge = body.challenge || body.pipelineChallenge || body.biggestChallenge || body.primaryChallenge || findField(body, /challenge|problem|pain|struggle/i) || '';
     const utmSource = body.utmSource || body.utm_source || '';
     const utmMedium = body.utmMedium || body.utm_medium || '';
     const utmCampaign = body.utmCampaign || body.utm_campaign || '';
@@ -77,17 +80,20 @@ export async function POST(req: Request) {
         source: 'funnel',
         channel: 'landing-page',
         stage: 'new',
-        score: calculateLeadScore(monthlyMarketingBudget, currentMonthlyLeads),
-        segment: getSegment(monthlyMarketingBudget),
+        score: calculateLeadScore(body, { monthlyMarketingBudget, currentMonthlyLeads, annualRevenue, role, challenge }),
+        segment: getSegment(monthlyMarketingBudget, annualRevenue),
         utmSource: utmSource || null,
         utmMedium: utmMedium || null,
         utmCampaign: utmCampaign || null,
         pipelineId: pipelineId || null,
         ...(userId && { userId }),
-        notes: `Budget: ${monthlyMarketingBudget || 'N/A'}, Current leads: ${currentMonthlyLeads || 'N/A'}`,
+        notes: buildNotes({ monthlyMarketingBudget, currentMonthlyLeads, annualRevenue, role, challenge }),
         enrichmentData: JSON.stringify({
           monthlyMarketingBudget,
           currentMonthlyLeads,
+          annualRevenue,
+          role,
+          challenge,
           submittedAt: new Date().toISOString(),
         }),
       },
@@ -137,37 +143,100 @@ export async function POST(req: Request) {
   }
 }
 
-/** Score lead based on budget and current lead volume */
-function calculateLeadScore(budget?: string, currentLeads?: string): number {
+/** Score lead based on all available form fields (LLM-generated forms vary) */
+function calculateLeadScore(
+  rawBody: Record<string, any>,
+  extracted: { monthlyMarketingBudget?: string; currentMonthlyLeads?: string; annualRevenue?: string; role?: string; challenge?: string },
+): number {
   let score = 20; // base score for filling out a form
 
-  const budgetScores: Record<string, number> = {
-    'Under $5K': 10,
-    '$5K-$10K': 25,
-    '$10K-$25K': 40,
-    '$25K-$50K': 55,
-    '$50K+': 70,
-  };
+  // ── Budget scoring ─────────────────────────────────────────────
+  score += matchTier(extracted.monthlyMarketingBudget, [
+    [/under.*5k|<.*5/i, 10],
+    [/5k.*10k|5,?000.*10/i, 25],
+    [/10k.*25k|10,?000.*25/i, 40],
+    [/25k.*50k|25,?000.*50/i, 55],
+    [/50k|\$50|over.*50|100k|above/i, 70],
+  ]);
 
-  const leadScores: Record<string, number> = {
-    '0-50': 5,
-    '50-200': 10,
-    '200-500': 8,
-    '500+': 3, // already generating lots, may be harder to impress
-  };
+  // ── Current lead volume scoring ────────────────────────────────
+  score += matchTier(extracted.currentMonthlyLeads, [
+    [/^0|none|0.*50|under.*50|fewer/i, 5],
+    [/50.*200|100.*200/i, 10],
+    [/200.*500|300|400/i, 8],
+    [/500\+|500.*1|1,?000|over.*500/i, 3],
+  ]);
 
-  if (budget && budgetScores[budget]) score += budgetScores[budget];
-  if (currentLeads && leadScores[currentLeads]) score += leadScores[currentLeads];
+  // ── ARR scoring (maps revenue to lead quality) ─────────────────
+  score += matchTier(extracted.annualRevenue, [
+    [/pre.*revenue|<.*1m|under.*1m|0.*1m|startup|early/i, 5],
+    [/1m.*5m|1,?000,?000.*5|1M.*5M/i, 15],
+    [/5m.*10m|5,?000,?000.*10|5M.*10M/i, 25],
+    [/10m.*50m|10,?000,?000.*50|10M.*50M/i, 35],
+    [/50m|100m|\$50M|over.*50m|above.*50m/i, 45],
+  ]);
+
+  // ── Role scoring (decision-makers score higher) ────────────────
+  score += matchTier(extracted.role, [
+    [/ceo|founder|owner|president|coo|managing.*director/i, 20],
+    [/cmo|cro|vp.*market|vp.*sale|vp.*growth|head.*of/i, 18],
+    [/director|head/i, 15],
+    [/manager|lead|senior/i, 10],
+    [/coordinator|specialist|analyst|associate/i, 5],
+  ]);
+
+  // ── Challenge scoring (high-intent challenges score more) ──────
+  score += matchTier(extracted.challenge, [
+    [/not.*enough.*lead|need.*more.*lead|lead.*gen|pipeline.*empty|no.*pipeline/i, 15],
+    [/convert|conversion|close.*rate|closing/i, 12],
+    [/cost.*per.*lead|cpl|expensive.*lead|roi|roas/i, 12],
+    [/scale|scaling|growth|grow/i, 10],
+    [/quality|unqualified|bad.*lead/i, 10],
+    [/attribution|tracking|analytics/i, 5],
+  ]);
 
   return Math.min(score, 100);
 }
 
-/** Segment leads by budget tier */
-function getSegment(budget?: string): string {
-  if (!budget) return 'unknown';
-  if (budget === '$50K+' || budget === '$25K-$50K') return 'enterprise';
-  if (budget === '$10K-$25K') return 'growth';
+/** Match a value against tiered regex patterns, return first match score */
+function matchTier(value: string | undefined, tiers: [RegExp, number][]): number {
+  if (!value) return 0;
+  for (const [pattern, points] of tiers) {
+    if (pattern.test(value)) return points;
+  }
+  return 0;
+}
+
+/** Segment leads by budget or ARR tier */
+function getSegment(budget?: string, annualRevenue?: string): string {
+  const val = budget || annualRevenue || '';
+  if (!val) return 'unknown';
+  if (/50k\+|50K|25k.*50k|50m|100m|10m.*50m|enterprise/i.test(val)) return 'enterprise';
+  if (/10k.*25k|5m.*10m|1m.*5m|growth|mid/i.test(val)) return 'growth';
   return 'starter';
+}
+
+/** Build notes string from all available form fields */
+function buildNotes(fields: Record<string, string | undefined>): string {
+  const parts: string[] = [];
+  if (fields.monthlyMarketingBudget) parts.push(`Budget: ${fields.monthlyMarketingBudget}`);
+  if (fields.annualRevenue) parts.push(`ARR: ${fields.annualRevenue}`);
+  if (fields.role) parts.push(`Role: ${fields.role}`);
+  if (fields.challenge) parts.push(`Challenge: ${fields.challenge}`);
+  if (fields.currentMonthlyLeads) parts.push(`Current leads: ${fields.currentMonthlyLeads}`);
+  return parts.length > 0 ? parts.join(', ') : 'N/A';
+}
+
+/** Find the first body field whose key matches a pattern (for LLM-generated form field names) */
+function findField(body: Record<string, any>, pattern: RegExp): string | undefined {
+  const skipKeys = new Set(['firstName', 'first_name', 'lastName', 'last_name', 'fullName', 'name', 'email', 'workEmail', 'work_email', 'businessEmail', 'company', 'companyName', 'company_name', 'organization', 'phone', 'phoneNumber', 'phone_number', 'mobile', 'utmSource', 'utm_source', 'utmMedium', 'utm_medium', 'utmCampaign', 'utm_campaign', 'pipelineId', 'pipeline_id']);
+  for (const [key, value] of Object.entries(body)) {
+    if (skipKeys.has(key)) continue;
+    if (pattern.test(key) && typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+  }
+  return undefined;
 }
 
 /** Push contact to HubSpot CRM (fire-and-forget) */
