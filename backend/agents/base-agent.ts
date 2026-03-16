@@ -6,6 +6,7 @@ export interface AgentInput {
   pipelineId: string;
   config: Record<string, any>;
   previousOutputs?: Record<string, any>;
+  userId?: string | null;
 }
 
 export interface AgentOutput {

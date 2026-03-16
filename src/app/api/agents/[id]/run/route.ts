@@ -95,6 +95,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       pipelineId,
       config: body.config || {},
       previousOutputs,
+      userId,
     });
 
     // Update the run record with results

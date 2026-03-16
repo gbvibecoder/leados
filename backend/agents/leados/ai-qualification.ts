@@ -438,6 +438,7 @@ For leads in emailOnlyLeads: set callStatus to "no_valid_phone", outcome to "med
               qualificationScore: result.score || null,
               qualificationOutcome: result.outcome || null,
               routingDecision: result.routingAction || null,
+              ...(inputs.userId && { userId: inputs.userId }),
             },
           });
 

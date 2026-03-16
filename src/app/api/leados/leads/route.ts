@@ -11,7 +11,22 @@ export async function GET(req: Request) {
   const search = searchParams.get('search');
   const projectId = searchParams.get('projectId');
 
-  const conditions: Record<string, any>[] = [{ userId: userId ?? 'no-user' }];
+  // Show leads owned by this user OR leads linked to this user's pipelines
+  // This ensures leads processed by agents (which may not have userId set) still appear
+  let userPipelineIds: string[] = [];
+  if (userId) {
+    const userPipelines = await prisma.pipeline.findMany({
+      where: { userId },
+      select: { id: true },
+    });
+    userPipelineIds = userPipelines.map(p => p.id);
+  }
+
+  const ownershipCondition = userId
+    ? { OR: [{ userId }, ...(userPipelineIds.length > 0 ? [{ pipelineId: { in: userPipelineIds } }] : [])] }
+    : { userId: 'no-user' };
+
+  const conditions: Record<string, any>[] = [ownershipCondition];
   if (stage) conditions.push({ stage });
   if (source) conditions.push({ source });
   if (projectId) {
