@@ -159,11 +159,29 @@ export class InboundCaptureAgent extends BaseAgent {
         };
       }
 
-      // Fetch real leads from database first
+      // Fetch real leads from database first — scoped to this user
       let dbLeads: any[] = [];
       try {
         const { prisma } = await import('@/lib/prisma');
+
+        // Build ownership filter: leads owned by this user OR linked to user's pipelines
+        let ownershipCondition: any = { userId: 'no-user' };
+        if (inputs.userId) {
+          const userPipelines = await prisma.pipeline.findMany({
+            where: { userId: inputs.userId },
+            select: { id: true },
+          });
+          const pipelineIds = userPipelines.map((p: any) => p.id);
+          ownershipCondition = {
+            OR: [
+              { userId: inputs.userId },
+              ...(pipelineIds.length > 0 ? [{ pipelineId: { in: pipelineIds } }] : []),
+            ],
+          };
+        }
+
         dbLeads = await prisma.lead.findMany({
+          where: ownershipCondition,
           orderBy: { createdAt: 'desc' },
           take: 50,
           include: { interactions: true },

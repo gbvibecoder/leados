@@ -148,8 +148,26 @@ export class AIQualificationAgent extends BaseAgent {
       if (qualifiedLeads.length === 0) {
         try {
           const { prisma } = await import('@/lib/prisma');
+
+          // Build ownership filter: only fetch leads belonging to this user
+          let ownershipCondition: any = { userId: 'no-user' };
+          if (inputs.userId) {
+            const userPipelines = await prisma.pipeline.findMany({
+              where: { userId: inputs.userId },
+              select: { id: true },
+            });
+            const pipelineIds = userPipelines.map((p: any) => p.id);
+            ownershipCondition = {
+              OR: [
+                { userId: inputs.userId },
+                ...(pipelineIds.length > 0 ? [{ pipelineId: { in: pipelineIds } }] : []),
+              ],
+            };
+          }
+
           const dbLeads = await prisma.lead.findMany({
             where: {
+              ...ownershipCondition,
               stage: { notIn: ['qualified', 'nurture', 'disqualified', 'booked', 'won', 'lost'] },
               qualificationOutcome: null, // not yet qualified
               score: { gte: 30 }, // minimum score threshold for qualification
@@ -176,17 +194,18 @@ export class AIQualificationAgent extends BaseAgent {
         }
       }
 
-      // Enrich leads missing phone numbers by looking up from DB
+      // Enrich leads missing phone numbers by looking up from DB (scoped to user)
       if (qualifiedLeads.length > 0) {
         try {
           const { prisma } = await import('@/lib/prisma');
+          const userFilter = inputs.userId ? { userId: inputs.userId } : { userId: 'no-user' };
           for (const lead of qualifiedLeads) {
             if (!lead.phone && lead.email) {
-              const dbLead = await prisma.lead.findFirst({ where: { email: lead.email }, select: { phone: true } });
+              const dbLead = await prisma.lead.findFirst({ where: { email: lead.email, ...userFilter }, select: { phone: true } });
               if (dbLead?.phone) lead.phone = dbLead.phone;
             }
             if (!lead.phone && lead.name) {
-              const dbLead = await prisma.lead.findFirst({ where: { name: lead.name }, select: { phone: true } });
+              const dbLead = await prisma.lead.findFirst({ where: { name: lead.name, ...userFilter }, select: { phone: true } });
               if (dbLead?.phone) lead.phone = dbLead.phone;
             }
           }
@@ -430,8 +449,9 @@ For leads in emailOnlyLeads: set callStatus to "no_valid_phone", outcome to "med
           // Skip DB update for leads that were never actually called
           if (isNotCalled) continue;
 
+          const userScope = inputs.userId ? { userId: inputs.userId } : {};
           await prisma.lead.updateMany({
-            where: { email: result.leadEmail },
+            where: { email: result.leadEmail, ...userScope },
             data: {
               stage: newStage,
               score: result.score || undefined,
@@ -443,7 +463,7 @@ For leads in emailOnlyLeads: set callStatus to "no_valid_phone", outcome to "med
           });
 
           // Log the qualification call as an interaction
-          const lead = await prisma.lead.findFirst({ where: { email: result.leadEmail } });
+          const lead = await prisma.lead.findFirst({ where: { email: result.leadEmail, ...userScope } });
           if (lead) {
             await prisma.interaction.create({
               data: {
