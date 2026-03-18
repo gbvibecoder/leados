@@ -51,9 +51,10 @@ export abstract class BaseAgent {
   }
 
   /** Call LLM — tries Anthropic first, falls back to Gemini if Anthropic fails.
-   *  maxTokens: agent-specific output limit (default 8192, was 16384 — most agents need <4000 tokens) */
-  protected async callClaude(systemPrompt: string, userMessage: string, maxRetries = 3, maxTokens = 8192): Promise<string> {
+   *  maxTokens: output limit (default 16384 — safe for all agents including heavy ones like funnel-builder) */
+  protected async callClaude(systemPrompt: string, userMessage: string, maxRetries = 2, maxTokens = 16384): Promise<string> {
     let anthropicError = '';
+
     // Try Anthropic first
     const anthropicKey = process.env.ANTHROPIC_API_KEY;
     if (anthropicKey) {
@@ -85,7 +86,7 @@ export abstract class BaseAgent {
     throw new Error('No LLM API key configured — set ANTHROPIC_API_KEY or GEMINI_API_KEY');
   }
 
-  private async callAnthropic(systemPrompt: string, userMessage: string, apiKey: string, maxRetries: number, maxTokens: number = 8192): Promise<string> {
+  private async callAnthropic(systemPrompt: string, userMessage: string, apiKey: string, maxRetries: number, maxTokens: number = 16384): Promise<string> {
     let lastError: Error | null = null;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -130,7 +131,7 @@ export abstract class BaseAgent {
     throw lastError || new Error('Anthropic call failed after retries');
   }
 
-  private async callGemini(systemPrompt: string, userMessage: string, apiKey: string, maxRetries: number, maxTokens: number = 8192): Promise<string> {
+  private async callGemini(systemPrompt: string, userMessage: string, apiKey: string, maxRetries: number, maxTokens: number = 16384): Promise<string> {
     let lastError: Error | null = null;
     // Allow more retries for rate limits (free tier has 15 req/min)
     const totalAttempts = maxRetries + 3;
@@ -176,7 +177,7 @@ export abstract class BaseAgent {
 
         // For rate limits: wait longer and retry (Gemini free tier resets per minute)
         if (isRateLimit && attempt < totalAttempts) {
-          const waitSec = Math.min(15 + attempt * 10, 60); // 25s, 35s, 45s, 55s, 60s
+          const waitSec = Math.min(15 + attempt * 10, 60);
           await this.log('gemini_rate_limit_wait', { waitSeconds: waitSec, attempt });
           await new Promise(resolve => setTimeout(resolve, waitSec * 1000));
           continue;
