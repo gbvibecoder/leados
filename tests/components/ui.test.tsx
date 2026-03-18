@@ -20,7 +20,7 @@ describe('Button', () => {
 
   it('applies variant classes', () => {
     const { container } = render(<Button variant="destructive">Delete</Button>);
-    expect(container.firstChild).toHaveClass('bg-red-600');
+    expect(container.firstChild).toHaveClass('bg-red-600/80');
   });
 
   it('applies size classes', () => {
@@ -57,7 +57,7 @@ describe('Badge', () => {
 
   it('applies variant classes', () => {
     const { container } = render(<Badge variant="success">Success</Badge>);
-    expect(container.firstChild).toHaveClass('bg-emerald-600');
+    expect(container.firstChild).toHaveClass('bg-emerald-500/10');
   });
 });
 

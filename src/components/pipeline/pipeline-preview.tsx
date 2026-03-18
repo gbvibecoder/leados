@@ -89,7 +89,7 @@ export function PipelinePreview({
 }: PipelinePreviewProps) {
   return (
     <div className="mb-6">
-      <p className="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-500">
+      <p className="mb-3 text-xs font-medium uppercase tracking-wider text-gray-500">
         Pipeline Flow
       </p>
       <div className="flex items-center gap-1 overflow-x-auto pb-2">
@@ -105,22 +105,22 @@ export function PipelinePreview({
                 onClick={() => onPhaseClick?.(phase.id)}
                 className={cn(
                   'relative flex flex-col items-center rounded-xl border px-4 py-3 transition-all min-w-[110px]',
-                  status === 'skipped' && 'border-zinc-800/50 bg-zinc-900/20 opacity-40',
-                  status === 'disabled' && 'border-zinc-800/50 bg-zinc-900/30 opacity-50',
-                  status === 'idle' && !isActive && 'border-zinc-700 bg-zinc-900/50 hover:border-zinc-600',
-                  status === 'idle' && isActive && 'border-indigo-500 bg-indigo-950/30',
+                  status === 'skipped' && 'border-white/[0.03] bg-zinc-900/20 opacity-40',
+                  status === 'disabled' && 'border-white/[0.03] bg-zinc-900/30 opacity-50',
+                  status === 'idle' && !isActive && 'border-white/[0.06] bg-white/[0.02]/50 hover:border-cyan-500/20',
+                  status === 'idle' && isActive && 'border-cyan-500 bg-cyan-950/30',
                   status === 'running' && 'border-blue-500/50 bg-blue-950/20',
                   status === 'done' && 'border-emerald-500/30 bg-emerald-950/20',
                   status === 'partial' && 'border-amber-500/30 bg-amber-950/10',
-                  isStartFrom && status !== 'skipped' && 'ring-2 ring-indigo-500/40'
+                  isStartFrom && status !== 'skipped' && 'ring-2 ring-cyan-500/40'
                 )}
               >
                 {/* Status indicator */}
                 <div className={cn(
                   'mb-1.5 flex h-7 w-7 items-center justify-center rounded-full',
-                  status === 'skipped' && 'bg-zinc-800 text-zinc-600',
-                  status === 'disabled' && 'bg-zinc-800 text-zinc-600',
-                  status === 'idle' && 'bg-zinc-800 text-zinc-400',
+                  status === 'skipped' && 'bg-white/5 text-gray-600',
+                  status === 'disabled' && 'bg-white/5 text-gray-600',
+                  status === 'idle' && 'bg-white/5 text-gray-400',
                   status === 'running' && 'bg-blue-900/50 text-blue-400',
                   status === 'done' && 'bg-emerald-900/50 text-emerald-400',
                   status === 'partial' && 'bg-amber-900/50 text-amber-400',
@@ -135,17 +135,17 @@ export function PipelinePreview({
 
                 <span className={cn(
                   'text-xs font-medium whitespace-nowrap',
-                  status === 'skipped' || status === 'disabled' ? 'text-zinc-600' :
+                  status === 'skipped' || status === 'disabled' ? 'text-gray-600' :
                   status === 'done' ? 'text-emerald-400' :
                   status === 'running' ? 'text-blue-400' :
-                  isActive ? 'text-indigo-400' : 'text-zinc-300'
+                  isActive ? 'text-cyan-400' : 'text-gray-300'
                 )}>
                   {phase.shortLabel}
                 </span>
 
                 <span className={cn(
                   'mt-0.5 text-[10px]',
-                  status === 'skipped' || status === 'disabled' ? 'text-zinc-700' : 'text-zinc-500'
+                  status === 'skipped' || status === 'disabled' ? 'text-zinc-700' : 'text-gray-500'
                 )}>
                   {status === 'skipped' ? 'Skipped' :
                    status === 'disabled' ? 'Off' :
@@ -153,7 +153,7 @@ export function PipelinePreview({
                 </span>
 
                 {isStartFrom && status !== 'skipped' && (
-                  <div className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-indigo-600 px-2 py-0.5">
+                  <div className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-cyan-600 px-2 py-0.5">
                     <span className="text-[9px] font-bold uppercase text-white">Start</span>
                   </div>
                 )}

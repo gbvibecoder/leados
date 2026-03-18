@@ -8,8 +8,8 @@ export default function AnalyticsCharts({ data }: { data: any; type?: string }) 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       {/* Trends Line Chart */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
-        <h3 className="mb-4 text-sm font-semibold text-zinc-200">Lead Generation Trends</h3>
+      <div className="rounded-xl p-5">
+        <h3 className="mb-4 text-sm font-semibold text-gray-200">Lead Generation Trends</h3>
         <ResponsiveContainer width="100%" height={250}>
           <LineChart data={data.trends}>
             <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
@@ -24,8 +24,8 @@ export default function AnalyticsCharts({ data }: { data: any; type?: string }) 
       </div>
 
       {/* Funnel Bar Chart */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
-        <h3 className="mb-4 text-sm font-semibold text-zinc-200">Funnel Drop-off</h3>
+      <div className="rounded-xl p-5">
+        <h3 className="mb-4 text-sm font-semibold text-gray-200">Funnel Drop-off</h3>
         <ResponsiveContainer width="100%" height={250}>
           <BarChart data={data.funnelData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
@@ -38,8 +38,8 @@ export default function AnalyticsCharts({ data }: { data: any; type?: string }) 
       </div>
 
       {/* Lead Sources Pie */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
-        <h3 className="mb-4 text-sm font-semibold text-zinc-200">Lead Sources</h3>
+      <div className="rounded-xl p-5">
+        <h3 className="mb-4 text-sm font-semibold text-gray-200">Lead Sources</h3>
         <ResponsiveContainer width="100%" height={250}>
           <PieChart>
             <Pie
@@ -62,8 +62,8 @@ export default function AnalyticsCharts({ data }: { data: any; type?: string }) 
       </div>
 
       {/* Revenue Trend */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
-        <h3 className="mb-4 text-sm font-semibold text-zinc-200">Revenue Trend</h3>
+      <div className="rounded-xl p-5">
+        <h3 className="mb-4 text-sm font-semibold text-gray-200">Revenue Trend</h3>
         <ResponsiveContainer width="100%" height={250}>
           <LineChart data={data.trends}>
             <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />

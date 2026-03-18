@@ -104,9 +104,9 @@ export function PaidTrafficOutput({ data }: Props) {
       {/* Header */}
       <div className="flex items-center justify-between pb-3 border-b border-border">
         <div className="flex items-center gap-2">
-          <Megaphone className="w-5 h-5 text-indigo-500" />
+          <Megaphone className="w-5 h-5 text-cyan-500" />
           <h3 className="font-semibold">Paid Traffic Campaigns</h3>
-          <span className="px-2 py-0.5 text-xs bg-indigo-500/20 text-indigo-400 rounded-full">
+          <span className="px-2 py-0.5 text-xs bg-cyan-500/20 text-cyan-400 rounded-full">
             2 channels
           </span>
         </div>
@@ -461,9 +461,9 @@ export function PaidTrafficOutput({ data }: Props) {
 
       {/* Reasoning */}
       {d.reasoning && (
-        <div className="p-3 sm:p-4 bg-gradient-to-r from-indigo-500/10 to-blue-500/10 rounded-lg border border-indigo-500/20">
+        <div className="p-3 sm:p-4 bg-gradient-to-r from-indigo-500/10 to-blue-500/10 rounded-lg border border-cyan-500/20">
           <div className="flex items-center gap-2 mb-2">
-            <Sparkles className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+            <Sparkles className="w-4 h-4 text-cyan-400 flex-shrink-0" />
             <span className="text-xs sm:text-sm font-medium">Campaign Strategy</span>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed break-words">{typeof d.reasoning === 'string' ? d.reasoning : JSON.stringify(d.reasoning)}</p>

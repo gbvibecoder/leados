@@ -77,35 +77,35 @@ export default function CampaignProgress({
           const status = getStatus(s.key, step, isFailed);
 
           return (
-            <div key={i} className="flex items-center gap-3 p-3 rounded-lg hover:bg-zinc-800/50 transition-colors">
+            <div key={i} className="flex items-center gap-3 p-3 rounded-lg hover:bg-white/5/50 transition-colors">
               <div className="flex-shrink-0">
                 {status === 'success' && <CheckCircle2 className="w-5 h-5 text-green-400" />}
                 {status === 'loading' && <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />}
                 {status === 'failed' && <XCircle className="w-5 h-5 text-red-400" />}
-                {status === 'pending' && <Circle className="w-5 h-5 text-zinc-600" />}
+                {status === 'pending' && <Circle className="w-5 h-5 text-gray-600" />}
               </div>
               <div className="flex-1">
                 <p className={`text-sm font-medium ${
                   status === 'success' ? 'text-green-400' :
                   status === 'loading' ? 'text-blue-400' :
                   status === 'failed' ? 'text-red-400' :
-                  'text-zinc-500'
+                  'text-gray-500'
                 }`}>
                   Step {i + 1}: {s.label}
                 </p>
               </div>
               {/* Show IDs for completed steps */}
               {status === 'success' && i === 1 && ids.campaign_id && (
-                <span className="text-[10px] text-zinc-500 font-mono">{ids.campaign_id}</span>
+                <span className="text-[10px] text-gray-500 font-mono">{ids.campaign_id}</span>
               )}
               {status === 'success' && i === 2 && ids.adset_id && (
-                <span className="text-[10px] text-zinc-500 font-mono">{ids.adset_id}</span>
+                <span className="text-[10px] text-gray-500 font-mono">{ids.adset_id}</span>
               )}
               {status === 'success' && i === 3 && ids.creative_id && (
-                <span className="text-[10px] text-zinc-500 font-mono">{ids.creative_id}</span>
+                <span className="text-[10px] text-gray-500 font-mono">{ids.creative_id}</span>
               )}
               {status === 'success' && i === 4 && ids.ad_id && (
-                <span className="text-[10px] text-zinc-500 font-mono">{ids.ad_id}</span>
+                <span className="text-[10px] text-gray-500 font-mono">{ids.ad_id}</span>
               )}
             </div>
           );
@@ -129,32 +129,32 @@ export default function CampaignProgress({
       {step === 'ready_to_activate' && (
         <div className="p-5 bg-blue-500/10 border border-blue-500/30 rounded-xl space-y-4">
           <h3 className="text-base font-semibold text-blue-400">Ready to Launch!</h3>
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-gray-400">
             All campaign components have been created in PAUSED state. Review the IDs below and click
             Launch to set everything to ACTIVE.
           </p>
           <div className="grid grid-cols-2 gap-3 text-xs">
             {ids.campaign_id && (
-              <div className="p-2 bg-zinc-800 rounded-lg">
-                <span className="text-zinc-500">Campaign</span>
+              <div className="p-2 bg-white/5 rounded-lg">
+                <span className="text-gray-500">Campaign</span>
                 <p className="font-mono text-white mt-0.5">{ids.campaign_id}</p>
               </div>
             )}
             {ids.adset_id && (
-              <div className="p-2 bg-zinc-800 rounded-lg">
-                <span className="text-zinc-500">Ad Set</span>
+              <div className="p-2 bg-white/5 rounded-lg">
+                <span className="text-gray-500">Ad Set</span>
                 <p className="font-mono text-white mt-0.5">{ids.adset_id}</p>
               </div>
             )}
             {ids.creative_id && (
-              <div className="p-2 bg-zinc-800 rounded-lg">
-                <span className="text-zinc-500">Creative</span>
+              <div className="p-2 bg-white/5 rounded-lg">
+                <span className="text-gray-500">Creative</span>
                 <p className="font-mono text-white mt-0.5">{ids.creative_id}</p>
               </div>
             )}
             {ids.ad_id && (
-              <div className="p-2 bg-zinc-800 rounded-lg">
-                <span className="text-zinc-500">Ad</span>
+              <div className="p-2 bg-white/5 rounded-lg">
+                <span className="text-gray-500">Ad</span>
                 <p className="font-mono text-white mt-0.5">{ids.ad_id}</p>
               </div>
             )}

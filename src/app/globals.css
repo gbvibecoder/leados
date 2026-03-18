@@ -15,10 +15,10 @@ body {
   color: var(--foreground);
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar — cosmic cyan */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -26,12 +26,19 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #27272a;
-  border-radius: 3px;
+  background: rgba(0, 242, 255, 0.12);
+  border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: rgba(0, 242, 255, 0.25);
+}
+
+/* Mobile responsive fixes */
+@media (max-width: 768px) {
+  .cosmic-ring, .cosmic-ring-gold { display: none; }
+  .cosmic-grid { opacity: 0.3; }
+  .font-cinzel { letter-spacing: 0.05em; }
 }
 
 /* Animation for running agents */
@@ -42,4 +49,295 @@ body {
 
 .animate-pulse-glow {
   animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* ===== Cosmic Theme (Landing Page) ===== */
+
+html {
+  scroll-behavior: smooth;
+}
+
+.cosmic-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background:
+    radial-gradient(circle at 20% 30%, #2d004d 0%, transparent 40%),
+    radial-gradient(circle at 80% 70%, #002d2d 0%, transparent 40%),
+    #020205;
+}
+
+.cosmic-stars {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    radial-gradient(1px 1px at 5% 5%, rgba(255,255,255,0.6), transparent),
+    radial-gradient(1px 1px at 15% 25%, rgba(255,255,255,0.4), transparent),
+    radial-gradient(1px 1px at 25% 15%, rgba(255,255,255,0.5), transparent),
+    radial-gradient(1px 1px at 35% 45%, rgba(255,255,255,0.3), transparent),
+    radial-gradient(1px 1px at 45% 35%, rgba(255,255,255,0.6), transparent),
+    radial-gradient(1px 1px at 55% 55%, rgba(255,255,255,0.4), transparent),
+    radial-gradient(1px 1px at 65% 10%, rgba(255,255,255,0.5), transparent),
+    radial-gradient(1px 1px at 75% 65%, rgba(255,255,255,0.3), transparent),
+    radial-gradient(1px 1px at 85% 40%, rgba(255,255,255,0.6), transparent),
+    radial-gradient(1px 1px at 95% 85%, rgba(255,255,255,0.4), transparent),
+    radial-gradient(1px 1px at 10% 70%, rgba(255,255,255,0.5), transparent),
+    radial-gradient(1px 1px at 30% 80%, rgba(255,255,255,0.3), transparent),
+    radial-gradient(1px 1px at 50% 90%, rgba(255,255,255,0.4), transparent),
+    radial-gradient(1px 1px at 70% 20%, rgba(255,255,255,0.5), transparent),
+    radial-gradient(1px 1px at 90% 60%, rgba(255,255,255,0.3), transparent),
+    radial-gradient(1.5px 1.5px at 20% 40%, rgba(0,242,255,0.5), transparent),
+    radial-gradient(1.5px 1.5px at 60% 70%, rgba(0,242,255,0.4), transparent),
+    radial-gradient(1.5px 1.5px at 80% 30%, rgba(216,180,254,0.4), transparent);
+  background-size: 200px 200px;
+  opacity: 0.6;
+}
+
+.cosmic-grid {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(circle at center, black 20%, transparent 70%);
+  -webkit-mask-image: radial-gradient(circle at center, black 20%, transparent 70%);
+}
+
+.cosmic-vignette {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at center, transparent 30%, rgba(0,0,0,0.6) 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.cosmic-ring {
+  border-radius: 50%;
+  border: 2px solid rgba(0, 242, 255, 0.18);
+  box-shadow: 0 0 15px rgba(0, 242, 255, 0.06), inset 0 0 15px rgba(0, 242, 255, 0.04);
+}
+
+.cosmic-ring-gold {
+  border-radius: 50%;
+  border: 2px solid rgba(255, 207, 125, 0.14);
+  box-shadow: 0 0 12px rgba(255, 207, 125, 0.05), inset 0 0 12px rgba(255, 207, 125, 0.03);
+}
+
+@keyframes orbit-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes orbit-spin-reverse {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+
+.orbit-rotate {
+  animation: orbit-spin 40s linear infinite;
+}
+
+.orbit-rotate-reverse {
+  animation: orbit-spin-reverse 55s linear infinite;
+}
+
+.orbit-rotate-slow {
+  animation: orbit-spin 80s linear infinite;
+}
+
+@keyframes float-particle {
+  0%, 100% { transform: translateY(0) translateX(0); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  50% { transform: translateY(-120px) translateX(30px); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.text-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.8) 0%,
+    rgba(0,242,255,1) 25%,
+    rgba(255,255,255,0.8) 50%,
+    rgba(168,85,247,0.9) 75%,
+    rgba(255,255,255,0.8) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 6s linear infinite;
+}
+
+@keyframes dash-orbit {
+  to { stroke-dashoffset: -100; }
+}
+
+.orbit-dash-animate {
+  animation: dash-orbit 20s linear infinite;
+}
+
+.constellation-line {
+  stroke: rgba(255, 255, 255, 0.08);
+  stroke-dasharray: 4 4;
+}
+
+.stellar-panel {
+  background: rgba(2, 2, 5, 0.85);
+  backdrop-filter: blur(12px);
+  border-left: 1px solid rgba(0, 242, 255, 0.2);
+  box-shadow: -20px 0 50px rgba(0, 0, 0, 0.5);
+}
+
+.star-node {
+  transition: all 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+  filter: drop-shadow(0 0 2px #f8fafc);
+}
+
+.star-node:hover {
+  transform: scale(1.5);
+  filter: drop-shadow(0 0 15px #00f2ff);
+  z-index: 20;
+}
+
+.font-cinzel {
+  font-family: var(--font-cinzel), 'Cinzel Decorative', cursive;
+}
+
+.font-space-grotesk {
+  font-family: var(--font-space-grotesk), 'Space Grotesk', sans-serif;
+}
+
+.mono-ui {
+  font-family: var(--font-space-mono), 'Space Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 30s linear infinite;
+}
+
+@keyframes flow-pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+.flow-line {
+  background: linear-gradient(90deg, transparent, rgba(0,242,255,0.4), transparent);
+  animation: flow-pulse 3s ease-in-out infinite;
+}
+
+@keyframes glow-breathe {
+  0%, 100% { box-shadow: 0 0 8px rgba(0,242,255,0.2); }
+  50% { box-shadow: 0 0 20px rgba(0,242,255,0.5); }
+}
+
+.glow-breathe {
+  animation: glow-breathe 3s ease-in-out infinite;
+}
+
+.cosmic-card {
+  background: rgba(2, 2, 5, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.cosmic-card:hover {
+  border-color: rgba(0, 242, 255, 0.2);
+  box-shadow: 0 0 30px rgba(0, 242, 255, 0.05);
+}
+
+/* ===== Artistic Dashboard Animations ===== */
+
+@keyframes morph-blob {
+  0%, 100% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+  25% { border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%; }
+  50% { border-radius: 50% 60% 30% 60% / 30% 40% 70% 60%; }
+  75% { border-radius: 40% 30% 60% 50% / 60% 70% 40% 30%; }
+}
+
+@keyframes aurora-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes wave-float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-8px) rotate(1deg); }
+  50% { transform: translateY(-4px) rotate(-1deg); }
+  75% { transform: translateY(-10px) rotate(0.5deg); }
+}
+
+@keyframes border-flow {
+  to { stroke-dashoffset: -40; }
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+@keyframes tilt-subtle {
+  0%, 100% { transform: perspective(1000px) rotateX(0deg) rotateY(0deg); }
+  25% { transform: perspective(1000px) rotateX(1deg) rotateY(-1deg); }
+  75% { transform: perspective(1000px) rotateX(-1deg) rotateY(1deg); }
+}
+
+.blob-morph {
+  animation: morph-blob 12s ease-in-out infinite;
+}
+
+.aurora-bg {
+  background-size: 300% 300%;
+  animation: aurora-shift 8s ease-in-out infinite;
+}
+
+.wave-float {
+  animation: wave-float 6s ease-in-out infinite;
+}
+
+.border-flow-animate {
+  animation: border-flow 3s linear infinite;
+}
+
+.tilt-animate {
+  animation: tilt-subtle 8s ease-in-out infinite;
+}
+
+@keyframes wave-path {
+  0% { d: path('M0,20 Q25,0 50,20 T100,20 V100 H0 Z'); }
+  50% { d: path('M0,25 Q25,10 50,15 T100,25 V100 H0 Z'); }
+  100% { d: path('M0,20 Q25,0 50,20 T100,20 V100 H0 Z'); }
+}
+
+.cosmic-input {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #f8fafc;
+  transition: all 0.3s ease;
+}
+
+.cosmic-input:focus {
+  border-color: rgba(0, 242, 255, 0.4);
+  outline: none;
+  box-shadow: 0 0 0 1px rgba(0, 242, 255, 0.2);
+}
+
+.cosmic-input::placeholder {
+  color: rgba(255, 255, 255, 0.2);
 }

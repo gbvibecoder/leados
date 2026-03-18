@@ -130,10 +130,10 @@ function FloatingCTA({ text, visible }: { text: string; visible: boolean }) {
 export default function FunnelPageWrapper() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+      <div className="min-h-screen bg-[#020205] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="h-10 w-10 animate-spin text-blue-400" />
-          <p className="text-zinc-500 text-sm animate-pulse">Loading your experience...</p>
+          <p className="text-gray-500 text-sm animate-pulse">Loading your experience...</p>
         </div>
       </div>
     }>
@@ -249,7 +249,7 @@ function FunnelPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+      <div className="min-h-screen bg-[#020205] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="relative">
             <div className="w-16 h-16 rounded-full border-2 border-blue-500/20 border-t-blue-500 animate-spin" />
@@ -257,7 +257,7 @@ function FunnelPage() {
               <Zap className="w-6 h-6 text-blue-400" />
             </div>
           </div>
-          <p className="text-zinc-500 text-sm">Preparing your experience...</p>
+          <p className="text-gray-500 text-sm">Preparing your experience...</p>
         </div>
       </div>
     );
@@ -265,7 +265,7 @@ function FunnelPage() {
 
   if (error || !funnelData) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
+      <div className="min-h-screen bg-[#020205] flex items-center justify-center px-4">
         <div className="text-center space-y-4 max-w-md">
           <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto">
             <X className="w-8 h-8 text-red-400" />
@@ -290,15 +290,15 @@ function FunnelPage() {
   const ctaText = heroSection?.cta || funnelData.landingPage.cta || 'Get Started';
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 overflow-x-hidden">
+    <div className="min-h-screen bg-[#020205] text-gray-100 overflow-x-hidden">
       {/* Floating CTA */}
       <FloatingCTA text={ctaText} visible={showFloatingCTA} />
 
       {/* ─── Navbar ──────────────────────────────────────────────── */}
-      <nav className="sticky top-0 z-40 border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-xl">
+      <nav className="sticky top-0 z-40 border-b border-white/[0.03] bg-[#020205]/80 backdrop-blur-xl">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 via-cyan-500 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
               <Zap className="w-5 h-5 text-white" />
             </div>
             <span className="text-white font-bold text-lg tracking-tight hidden sm:block">
@@ -335,14 +335,14 @@ function FunnelPage() {
             {heroSection?.headline || funnelData.landingPage.headline}
           </h1>
 
-          <p className="text-lg sm:text-xl md:text-2xl text-zinc-400 max-w-3xl mx-auto leading-relaxed animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+          <p className="text-lg sm:text-xl md:text-2xl text-gray-400 max-w-3xl mx-auto leading-relaxed animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
             {heroSection?.subheadline || funnelData.landingPage.subheadline}
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
             <a
               href="#lead-form"
-              className="group relative inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-8 py-4 rounded-xl text-lg font-bold transition-all hover:shadow-xl hover:shadow-blue-500/25 hover:-translate-y-1"
+              className="group relative inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white px-8 py-4 rounded-xl text-lg font-bold transition-all hover:shadow-xl hover:shadow-blue-500/25 hover:-translate-y-1"
             >
               {ctaText}
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -352,7 +352,7 @@ function FunnelPage() {
                 href={funnelData.bookingCalendar.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-zinc-400 hover:text-white px-6 py-4 rounded-xl text-lg font-medium transition-colors border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900/50"
+                className="inline-flex items-center gap-2 text-gray-400 hover:text-white px-6 py-4 rounded-xl text-lg font-medium transition-colors border border-white/[0.04] hover:border-cyan-500/15 hover:bg-[rgba(2,2,5,0.6)]"
               >
                 <Phone className="w-5 h-5" />
                 Book a Call
@@ -361,7 +361,7 @@ function FunnelPage() {
           </div>
 
           {heroSection?.socialProofBar && (
-            <p className="text-sm text-zinc-500 pt-4 animate-fade-in" style={{ animationDelay: '0.4s' }}>
+            <p className="text-sm text-gray-500 pt-4 animate-fade-in" style={{ animationDelay: '0.4s' }}>
               {heroSection.socialProofBar}
             </p>
           )}
@@ -373,8 +373,8 @@ function FunnelPage() {
               { icon: Clock, text: 'Setup in 48h' },
               { icon: Users, text: 'Trusted by 500+' },
             ].map((item, i) => (
-              <div key={i} className="flex items-center gap-2 text-zinc-500 text-xs sm:text-sm">
-                <item.icon className="w-4 h-4 text-zinc-600" />
+              <div key={i} className="flex items-center gap-2 text-gray-500 text-xs sm:text-sm">
+                <item.icon className="w-4 h-4 text-gray-600" />
                 <span>{item.text}</span>
               </div>
             ))}
@@ -383,7 +383,7 @@ function FunnelPage() {
 
         {/* Scroll indicator */}
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
-          <ChevronDown className="w-6 h-6 text-zinc-600" />
+          <ChevronDown className="w-6 h-6 text-gray-600" />
         </div>
       </section>
 
@@ -414,12 +414,12 @@ function FunnelPage() {
             <h2 className="text-3xl sm:text-4xl font-bold text-white mb-3">
               Ready to Transform Your Pipeline?
             </h2>
-            <p className="text-zinc-400 text-lg">
+            <p className="text-gray-400 text-lg">
               Fill out the form below and get your custom growth plan.
             </p>
           </div>
 
-          <div className="bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-2xl p-6 sm:p-8 shadow-2xl shadow-black/20">
+          <div className="bg-zinc-900/80 backdrop-blur-sm border border-white/[0.04] rounded-2xl p-6 sm:p-8 shadow-2xl shadow-black/20">
             {submitted ? (
               <div className="text-center space-y-4 py-8">
                 <div className="w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto animate-scale-in">
@@ -428,8 +428,8 @@ function FunnelPage() {
                 <p className="text-emerald-400 font-bold text-xl">
                   {funnelData.leadForm?.successMessage || 'Thank you!'}
                 </p>
-                <p className="text-zinc-500 text-sm">Redirecting you to the next step...</p>
-                <div className="w-32 h-1 bg-zinc-800 rounded-full mx-auto overflow-hidden">
+                <p className="text-gray-500 text-sm">Redirecting you to the next step...</p>
+                <div className="w-32 h-1 bg-white/5 rounded-full mx-auto overflow-hidden">
                   <div className="h-full bg-emerald-500 rounded-full animate-progress" />
                 </div>
               </div>
@@ -437,7 +437,7 @@ function FunnelPage() {
               <form onSubmit={handleSubmit} className="space-y-5">
                 {formFields.map((field, idx) => (
                   <div key={field.name} className="space-y-1.5" style={{ animationDelay: `${idx * 0.05}s` }}>
-                    <label className="text-sm font-medium text-zinc-300 flex items-center gap-1.5">
+                    <label className="text-sm font-medium text-gray-300 flex items-center gap-1.5">
                       {field.label}
                       {field.required && <span className="text-red-400">*</span>}
                     </label>
@@ -446,7 +446,7 @@ function FunnelPage() {
                         required={field.required}
                         value={formData[field.name] || ''}
                         onChange={(e) => setFormData({ ...formData, [field.name]: e.target.value })}
-                        className="w-full bg-zinc-800/50 border border-zinc-700/50 rounded-xl px-4 py-3.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all hover:border-zinc-600"
+                        className="w-full bg-white/[0.03] border border-white/[0.08]/50 rounded-xl px-4 py-3.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all hover:border-cyan-500/20"
                       >
                         <option value="" className="bg-zinc-900">{field.placeholder}</option>
                         {field.options?.map((opt) => (
@@ -460,7 +460,7 @@ function FunnelPage() {
                         placeholder={field.placeholder}
                         value={formData[field.name] || ''}
                         onChange={(e) => setFormData({ ...formData, [field.name]: e.target.value })}
-                        className="w-full bg-zinc-800/50 border border-zinc-700/50 rounded-xl px-4 py-3.5 text-white text-sm placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all hover:border-zinc-600"
+                        className="w-full bg-white/[0.03] border border-white/[0.08]/50 rounded-xl px-4 py-3.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all hover:border-cyan-500/20"
                       />
                     )}
                   </div>
@@ -469,7 +469,7 @@ function FunnelPage() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:from-blue-600/50 disabled:to-indigo-600/50 text-white py-4 rounded-xl font-bold text-lg transition-all hover:shadow-lg hover:shadow-blue-500/25 hover:-translate-y-0.5 flex items-center justify-center gap-2"
+                  className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 disabled:from-blue-600/50 disabled:to-cyan-600/50 text-white py-4 rounded-xl font-bold text-lg transition-all hover:shadow-lg hover:shadow-blue-500/25 hover:-translate-y-0.5 flex items-center justify-center gap-2"
                 >
                   {submitting ? (
                     <>
@@ -485,17 +485,17 @@ function FunnelPage() {
                 </button>
 
                 <div className="flex items-center justify-center gap-4 pt-2">
-                  <div className="flex items-center gap-1.5 text-zinc-500 text-xs">
+                  <div className="flex items-center gap-1.5 text-gray-500 text-xs">
                     <Shield className="w-3.5 h-3.5" />
                     <span>256-bit SSL</span>
                   </div>
                   <div className="w-1 h-1 rounded-full bg-zinc-700" />
-                  <div className="flex items-center gap-1.5 text-zinc-500 text-xs">
+                  <div className="flex items-center gap-1.5 text-gray-500 text-xs">
                     <Check className="w-3.5 h-3.5" />
                     <span>No spam, ever</span>
                   </div>
                   <div className="w-1 h-1 rounded-full bg-zinc-700" />
-                  <div className="flex items-center gap-1.5 text-zinc-500 text-xs">
+                  <div className="flex items-center gap-1.5 text-gray-500 text-xs">
                     <Clock className="w-3.5 h-3.5" />
                     <span>2-min setup</span>
                   </div>
@@ -507,15 +507,15 @@ function FunnelPage() {
       </section>
 
       {/* ─── Footer ──────────────────────────────────────────────── */}
-      <footer className="border-t border-zinc-800/50">
+      <footer className="border-t border-white/[0.03]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center">
               <Zap className="w-4 h-4 text-white" />
             </div>
-            <span className="text-zinc-500 text-sm">Powered by LeadOS</span>
+            <span className="text-gray-500 text-sm">Powered by LeadOS</span>
           </div>
-          <p className="text-zinc-600 text-xs">&copy; {new Date().getFullYear()} All rights reserved.</p>
+          <p className="text-gray-600 text-xs">&copy; {new Date().getFullYear()} All rights reserved.</p>
         </div>
       </footer>
 
@@ -584,7 +584,7 @@ function PainPointsSection({ content }: { content: any }) {
                   <Icon className="w-6 h-6" />
                 </div>
                 <h3 className="text-lg font-bold text-white group-hover:text-red-300 transition-colors">{point.title}</h3>
-                <p className="text-zinc-400 text-sm leading-relaxed">{point.description}</p>
+                <p className="text-gray-400 text-sm leading-relaxed">{point.description}</p>
               </div>
             );
           })}
@@ -614,11 +614,11 @@ function SolutionSection({ content, ctaText }: { content: any; ctaText: string }
           {content.features?.map((feature: any, i: number) => {
             const text = typeof feature === 'string' ? feature : (feature?.title || feature?.body || JSON.stringify(feature));
             return (
-              <div key={i} className="flex items-start gap-3 p-4 rounded-xl bg-zinc-900/50 border border-zinc-800/50 hover:border-emerald-500/20 transition-colors">
+              <div key={i} className="flex items-start gap-3 p-4 rounded-xl bg-[rgba(2,2,5,0.6)] border border-white/[0.04]/50 hover:border-emerald-500/20 transition-colors">
                 <div className="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0 mt-0.5">
                   <Check className="w-3.5 h-3.5 text-emerald-400" />
                 </div>
-                <span className="text-zinc-300 text-sm leading-relaxed">{text}</span>
+                <span className="text-gray-300 text-sm leading-relaxed">{text}</span>
               </div>
             );
           })}
@@ -650,18 +650,18 @@ function SocialProofSection({ content }: { content: any }) {
           {content.testimonials?.map((t: any, i: number) => (
             <div
               key={i}
-              className="group bg-zinc-900/50 border border-zinc-800/50 rounded-2xl p-6 space-y-4 hover:border-yellow-500/20 hover:bg-zinc-900 transition-all duration-300"
+              className="group bg-[rgba(2,2,5,0.6)] border border-white/[0.04]/50 rounded-2xl p-6 space-y-4 hover:border-yellow-500/20 hover:bg-zinc-900 transition-all duration-300"
             >
               <div className="flex gap-1">
                 {[1, 2, 3, 4, 5].map((s) => (
                   <Star key={s} className="w-4 h-4 text-yellow-400 fill-yellow-400" />
                 ))}
               </div>
-              <p className="text-zinc-300 text-sm italic leading-relaxed">&ldquo;{t.quote}&rdquo;</p>
-              <div className="flex items-center justify-between pt-2 border-t border-zinc-800/50">
+              <p className="text-gray-300 text-sm italic leading-relaxed">&ldquo;{t.quote}&rdquo;</p>
+              <div className="flex items-center justify-between pt-2 border-t border-white/[0.03]">
                 <div>
                   <p className="text-white font-semibold text-sm">{t.name}</p>
-                  <p className="text-zinc-500 text-xs">{t.title}</p>
+                  <p className="text-gray-500 text-xs">{t.title}</p>
                 </div>
                 {t.metric && (
                   <span className="text-emerald-400 text-sm font-bold bg-emerald-500/10 px-3 py-1.5 rounded-lg">
@@ -685,7 +685,7 @@ function PricingSection({ content }: { content: any }) {
       <div className="absolute inset-0 bg-gradient-to-b from-zinc-950 via-indigo-950/10 to-zinc-950" />
       <div className={cn('relative max-w-6xl mx-auto px-4 sm:px-6 py-24 transition-all duration-700', visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10')}>
         <div className="text-center mb-4">
-          <span className="text-indigo-400 text-sm font-semibold uppercase tracking-wider">Pricing</span>
+          <span className="text-cyan-400 text-sm font-semibold uppercase tracking-wider">Pricing</span>
           <h2 className="text-3xl sm:text-4xl font-bold text-white mt-3">
             {content.sectionTitle || 'Choose Your Plan'}
           </h2>
@@ -704,11 +704,11 @@ function PricingSection({ content }: { content: any }) {
                 'relative bg-zinc-900/80 border rounded-2xl p-7 space-y-6 transition-all duration-300 hover:scale-[1.02]',
                 tier.highlight
                   ? 'border-blue-500 shadow-lg shadow-blue-500/10 ring-1 ring-blue-500/20'
-                  : 'border-zinc-800 hover:border-zinc-700'
+                  : 'border-white/[0.04] hover:border-cyan-500/15'
               )}
             >
               {tier.badge && (
-                <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-lg">
+                <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-lg">
                   {tier.badge}
                 </span>
               )}
@@ -720,7 +720,7 @@ function PricingSection({ content }: { content: any }) {
                 {tier.features?.map((f: any, j: number) => {
                   const featureText = typeof f === 'string' ? f : (f?.title || f?.body || JSON.stringify(f));
                   return (
-                    <li key={j} className="flex items-start gap-2.5 text-sm text-zinc-400">
+                    <li key={j} className="flex items-start gap-2.5 text-sm text-gray-400">
                       <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                       {featureText}
                     </li>
@@ -732,8 +732,8 @@ function PricingSection({ content }: { content: any }) {
                 className={cn(
                   'block text-center py-3.5 rounded-xl font-semibold text-sm transition-all hover:-translate-y-0.5',
                   tier.highlight
-                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/20'
-                    : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+                    ? 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white shadow-lg shadow-blue-500/20'
+                    : 'bg-white/5 hover:bg-zinc-700 text-gray-300'
                 )}
               >
                 {tier.cta || 'Get Started'}
@@ -754,7 +754,7 @@ function FAQSection({ content }: { content: any }) {
     <section ref={ref} className="max-w-3xl mx-auto px-4 sm:px-6 py-24">
       <div className={cn('transition-all duration-700', visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10')}>
         <div className="text-center mb-14">
-          <span className="text-purple-400 text-sm font-semibold uppercase tracking-wider">FAQ</span>
+          <span className="text-violet-400 text-sm font-semibold uppercase tracking-wider">FAQ</span>
           <h2 className="text-3xl sm:text-4xl font-bold text-white mt-3">
             {content.sectionTitle || 'Common Questions'}
           </h2>
@@ -770,7 +770,7 @@ function FAQSection({ content }: { content: any }) {
                 key={i}
                 className={cn(
                   'border rounded-xl overflow-hidden transition-all duration-300',
-                  isOpen ? 'border-purple-500/30 bg-purple-500/5' : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700'
+                  isOpen ? 'border-purple-500/30 bg-purple-500/5' : 'border-white/[0.04] bg-[rgba(2,2,5,0.6)]/50 hover:border-cyan-500/15'
                 )}
               >
                 <button
@@ -780,10 +780,10 @@ function FAQSection({ content }: { content: any }) {
                   <span className={cn('font-semibold text-sm sm:text-base transition-colors', isOpen ? 'text-purple-300' : 'text-white')}>
                     {question}
                   </span>
-                  <ChevronDown className={cn('w-5 h-5 shrink-0 ml-4 transition-all duration-300', isOpen ? 'rotate-180 text-purple-400' : 'text-zinc-500')} />
+                  <ChevronDown className={cn('w-5 h-5 shrink-0 ml-4 transition-all duration-300', isOpen ? 'rotate-180 text-violet-400' : 'text-gray-500')} />
                 </button>
                 <div className={cn('overflow-hidden transition-all duration-300', isOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0')}>
-                  <div className="px-5 pb-5 text-zinc-400 text-sm leading-relaxed">
+                  <div className="px-5 pb-5 text-gray-400 text-sm leading-relaxed">
                     {answer}
                   </div>
                 </div>
