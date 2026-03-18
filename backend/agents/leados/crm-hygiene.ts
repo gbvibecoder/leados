@@ -244,8 +244,8 @@ export class CRMHygieneAgent extends BaseAgent {
           totalInteractions: 0,
           dataQualityScore: 0,
         },
-        reasoning: parsed.reasoning || '',
-        confidence: parsed.confidence || 0,
+        reasoning: typeof parsed.reasoning === 'string' ? parsed.reasoning : (parsed.notes || ''),
+        confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0,
       };
 
       this.status = 'done';

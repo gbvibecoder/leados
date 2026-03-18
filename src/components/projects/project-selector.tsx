@@ -158,7 +158,7 @@ export function ProjectSelector({
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute right-0 z-50 mt-1 w-80 rounded-lg border border-white/[0.06] bg-white/[0.02] shadow-2xl shadow-black/50">
+        <div className="absolute right-0 z-50 mt-1 w-80 rounded-lg border border-white/[0.08] bg-[#0a0a0f] shadow-2xl shadow-black/60 backdrop-blur-sm">
           <div className="max-h-64 overflow-y-auto">
             {/* No project option — runs on existing DB leads */}
             <button
