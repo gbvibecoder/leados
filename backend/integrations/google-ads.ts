@@ -32,6 +32,8 @@ export interface GoogleAdsBudgetUpdate {
   newDailyBudgetMicros: number;
 }
 
+const GOOGLE_ADS_TIMEOUT_MS = 30_000;
+
 async function googleAdsFetch(gaql: string): Promise<any> {
   const customerId = getCustomerId();
   const developerToken = getDeveloperToken();
@@ -42,6 +44,8 @@ async function googleAdsFetch(gaql: string): Promise<any> {
   const accessToken = await getAccessToken();
   const url = `https://googleads.googleapis.com/${ADS_API_VERSION}/customers/${customerId}/googleAds:searchStream`;
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), GOOGLE_ADS_TIMEOUT_MS);
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -49,8 +53,10 @@ async function googleAdsFetch(gaql: string): Promise<any> {
       Authorization: `Bearer ${accessToken}`,
       'developer-token': developerToken,
     },
+    signal: controller.signal,
     body: JSON.stringify({ query: gaql }),
   });
+  clearTimeout(timeout);
 
   if (!res.ok) {
     const text = await res.text();
@@ -117,6 +123,8 @@ async function googleAdsMutate(endpoint: string, body: any): Promise<any> {
   const accessToken = await getAccessToken();
   const url = `https://googleads.googleapis.com/${ADS_API_VERSION}/customers/${customerId}/${endpoint}`;
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), GOOGLE_ADS_TIMEOUT_MS);
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -124,8 +132,10 @@ async function googleAdsMutate(endpoint: string, body: any): Promise<any> {
       Authorization: `Bearer ${accessToken}`,
       'developer-token': developerToken,
     },
+    signal: controller.signal,
     body: JSON.stringify(body),
   });
+  clearTimeout(timeout);
 
   if (!res.ok) {
     const text = await res.text();
@@ -317,6 +327,8 @@ export async function pauseCampaign(campaignId: string): Promise<boolean> {
   if (!customerId || !developerToken) return false;
 
   const accessToken = await getAccessToken();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), GOOGLE_ADS_TIMEOUT_MS);
   const res = await fetch(
     `https://googleads.googleapis.com/${ADS_API_VERSION}/customers/${customerId}/campaigns:mutate`,
     {
@@ -326,6 +338,7 @@ export async function pauseCampaign(campaignId: string): Promise<boolean> {
         Authorization: `Bearer ${accessToken}`,
         'developer-token': developerToken,
       },
+      signal: controller.signal,
       body: JSON.stringify({
         operations: [{
           update: {
@@ -337,6 +350,7 @@ export async function pauseCampaign(campaignId: string): Promise<boolean> {
       }),
     }
   );
+  clearTimeout(timeout);
 
   return res.ok;
 }
@@ -360,6 +374,8 @@ export async function updateBudget(campaignId: string, newDailyBudgetMicros: num
   if (!customerId || !developerToken) return false;
 
   const accessToken = await getAccessToken();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), GOOGLE_ADS_TIMEOUT_MS);
   const res = await fetch(
     `https://googleads.googleapis.com/${ADS_API_VERSION}/customers/${customerId}/campaignBudgets:mutate`,
     {
@@ -369,6 +385,7 @@ export async function updateBudget(campaignId: string, newDailyBudgetMicros: num
         Authorization: `Bearer ${accessToken}`,
         'developer-token': developerToken,
       },
+      signal: controller.signal,
       body: JSON.stringify({
         operations: [{
           update: {
@@ -380,6 +397,7 @@ export async function updateBudget(campaignId: string, newDailyBudgetMicros: num
       }),
     }
   );
+  clearTimeout(timeout);
 
   return res.ok;
 }

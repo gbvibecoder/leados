@@ -43,10 +43,14 @@ export interface ApolloEnrichmentResult {
   decisionMaker: boolean;
 }
 
+const APOLLO_TIMEOUT_MS = 20_000;
+
 async function apolloFetch(endpoint: string, body: Record<string, any>): Promise<any> {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error('APOLLO_API_KEY not configured');
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), APOLLO_TIMEOUT_MS);
   const res = await fetch(`${APOLLO_BASE}${endpoint}`, {
     method: 'POST',
     headers: {
@@ -54,8 +58,10 @@ async function apolloFetch(endpoint: string, body: Record<string, any>): Promise
       'Cache-Control': 'no-cache',
       'X-Api-Key': apiKey,
     },
+    signal: controller.signal,
     body: JSON.stringify(body),
   });
+  clearTimeout(timeout);
 
   if (!res.ok) {
     const text = await res.text();
@@ -81,38 +87,52 @@ export async function searchProspects(params: ApolloPersonSearchParams): Promise
   const searchResults = data.people || [];
 
   // Search returns obfuscated data — enrich each person via people/match to reveal emails/phones
+  // Run enrichment in parallel (batches of 5 to avoid rate limits)
   const enriched: ApolloPerson[] = [];
-  for (const person of searchResults) {
-    try {
-      const match = await apolloFetch('/people/match', { id: person.id });
-      const p = match.person || {};
-      const org = p.organization || {};
-      enriched.push({
-        firstName: p.first_name || person.first_name || '',
-        lastName: p.last_name || '',
-        email: p.email || '',
-        company: org.name || person.organization?.name || '',
-        jobTitle: p.title || person.title || '',
-        industry: org.industry || '',
-        companySize: org.estimated_num_employees
-          ? `${org.estimated_num_employees} employees`
-          : 'Unknown',
-        linkedInUrl: p.linkedin_url || '',
-        phone: p.phone_numbers?.[0]?.sanitized_number || org.sanitized_phone || '',
-      });
-    } catch {
-      // If enrich fails, use whatever search returned
-      enriched.push({
-        firstName: person.first_name || '',
-        lastName: '',
-        email: '',
-        company: person.organization?.name || '',
-        jobTitle: person.title || '',
-        industry: '',
-        companySize: 'Unknown',
-        linkedInUrl: '',
-        phone: '',
-      });
+  const BATCH_SIZE = 5;
+
+  for (let i = 0; i < searchResults.length; i += BATCH_SIZE) {
+    const batch = searchResults.slice(i, i + BATCH_SIZE);
+    const batchResults = await Promise.allSettled(
+      batch.map(async (person: any) => {
+        const match = await apolloFetch('/people/match', { id: person.id });
+        const p = match.person || {};
+        const org = p.organization || {};
+        return {
+          firstName: p.first_name || person.first_name || '',
+          lastName: p.last_name || '',
+          email: p.email || '',
+          company: org.name || person.organization?.name || '',
+          jobTitle: p.title || person.title || '',
+          industry: org.industry || '',
+          companySize: org.estimated_num_employees
+            ? `${org.estimated_num_employees} employees`
+            : 'Unknown',
+          linkedInUrl: p.linkedin_url || '',
+          phone: p.phone_numbers?.[0]?.sanitized_number || org.sanitized_phone || '',
+        } as ApolloPerson;
+      })
+    );
+
+    for (let j = 0; j < batchResults.length; j++) {
+      const result = batchResults[j];
+      if (result.status === 'fulfilled') {
+        enriched.push(result.value);
+      } else {
+        // If enrich fails, use whatever search returned
+        const person = batch[j];
+        enriched.push({
+          firstName: person.first_name || '',
+          lastName: '',
+          email: '',
+          company: person.organization?.name || '',
+          jobTitle: person.title || '',
+          industry: '',
+          companySize: 'Unknown',
+          linkedInUrl: '',
+          phone: '',
+        });
+      }
     }
   }
 
