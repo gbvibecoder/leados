@@ -298,7 +298,7 @@ function FunnelPage() {
       <nav className="sticky top-0 z-40 border-b border-white/[0.03] bg-[#020205]/80 backdrop-blur-xl">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 via-cyan-500 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
               <Zap className="w-5 h-5 text-white" />
             </div>
             <span className="text-white font-bold text-lg tracking-tight hidden sm:block">
@@ -342,7 +342,7 @@ function FunnelPage() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
             <a
               href="#lead-form"
-              className="group relative inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-8 py-4 rounded-xl text-lg font-bold transition-all hover:shadow-xl hover:shadow-blue-500/25 hover:-translate-y-1"
+              className="group relative inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white px-8 py-4 rounded-xl text-lg font-bold transition-all hover:shadow-xl hover:shadow-blue-500/25 hover:-translate-y-1"
             >
               {ctaText}
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -469,7 +469,7 @@ function FunnelPage() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:from-blue-600/50 disabled:to-indigo-600/50 text-white py-4 rounded-xl font-bold text-lg transition-all hover:shadow-lg hover:shadow-blue-500/25 hover:-translate-y-0.5 flex items-center justify-center gap-2"
+                  className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 disabled:from-blue-600/50 disabled:to-cyan-600/50 text-white py-4 rounded-xl font-bold text-lg transition-all hover:shadow-lg hover:shadow-blue-500/25 hover:-translate-y-0.5 flex items-center justify-center gap-2"
                 >
                   {submitting ? (
                     <>
@@ -510,7 +510,7 @@ function FunnelPage() {
       <footer className="border-t border-white/[0.03]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center">
               <Zap className="w-4 h-4 text-white" />
             </div>
             <span className="text-gray-500 text-sm">Powered by LeadOS</span>
@@ -708,7 +708,7 @@ function PricingSection({ content }: { content: any }) {
               )}
             >
               {tier.badge && (
-                <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-lg">
+                <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-lg">
                   {tier.badge}
                 </span>
               )}
@@ -732,7 +732,7 @@ function PricingSection({ content }: { content: any }) {
                 className={cn(
                   'block text-center py-3.5 rounded-xl font-semibold text-sm transition-all hover:-translate-y-0.5',
                   tier.highlight
-                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/20'
+                    ? 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white shadow-lg shadow-blue-500/20'
                     : 'bg-white/5 hover:bg-zinc-700 text-gray-300'
                 )}
               >
@@ -754,7 +754,7 @@ function FAQSection({ content }: { content: any }) {
     <section ref={ref} className="max-w-3xl mx-auto px-4 sm:px-6 py-24">
       <div className={cn('transition-all duration-700', visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10')}>
         <div className="text-center mb-14">
-          <span className="text-purple-400 text-sm font-semibold uppercase tracking-wider">FAQ</span>
+          <span className="text-violet-400 text-sm font-semibold uppercase tracking-wider">FAQ</span>
           <h2 className="text-3xl sm:text-4xl font-bold text-white mt-3">
             {content.sectionTitle || 'Common Questions'}
           </h2>
@@ -780,7 +780,7 @@ function FAQSection({ content }: { content: any }) {
                   <span className={cn('font-semibold text-sm sm:text-base transition-colors', isOpen ? 'text-purple-300' : 'text-white')}>
                     {question}
                   </span>
-                  <ChevronDown className={cn('w-5 h-5 shrink-0 ml-4 transition-all duration-300', isOpen ? 'rotate-180 text-purple-400' : 'text-gray-500')} />
+                  <ChevronDown className={cn('w-5 h-5 shrink-0 ml-4 transition-all duration-300', isOpen ? 'rotate-180 text-violet-400' : 'text-gray-500')} />
                 </button>
                 <div className={cn('overflow-hidden transition-all duration-300', isOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0')}>
                   <div className="px-5 pb-5 text-gray-400 text-sm leading-relaxed">

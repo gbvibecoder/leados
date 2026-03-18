@@ -15,10 +15,10 @@ body {
   color: var(--foreground);
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar — cosmic cyan */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -26,12 +26,19 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #27272a;
-  border-radius: 3px;
+  background: rgba(0, 242, 255, 0.12);
+  border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: rgba(0, 242, 255, 0.25);
+}
+
+/* Mobile responsive fixes */
+@media (max-width: 768px) {
+  .cosmic-ring, .cosmic-ring-gold { display: none; }
+  .cosmic-grid { opacity: 0.3; }
+  .font-cinzel { letter-spacing: 0.05em; }
 }
 
 /* Animation for running agents */

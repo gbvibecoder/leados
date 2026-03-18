@@ -100,7 +100,7 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.2 }}
-        className="fixed inset-0 z-40 bg-black/50"
+        className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm"
         onClick={onClose}
       />
 
@@ -115,19 +115,23 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
       >
         <div
           onClick={(e) => e.stopPropagation()}
-          className="relative w-full max-w-4xl max-h-[90vh] rounded-2xl border border-white/[0.04] bg-[#020205] shadow-2xl shadow-black/50 flex flex-col overflow-hidden"
+          className="relative w-full max-w-4xl max-h-[90vh] rounded-2xl shadow-2xl shadow-black/50 flex flex-col overflow-hidden"
+          style={{ background: 'rgba(2,2,5,0.97)', border: '1px solid rgba(0,242,255,0.06)', backdropFilter: 'blur(20px)' }}
         >
           {/* Header */}
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.25, delay: 0.1 }}
-            className="flex items-center justify-between border-b border-white/[0.04] px-6 py-4 shrink-0"
+            className="flex items-center justify-between px-6 py-4 shrink-0 relative"
+            style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}
           >
+            {/* Aurora line */}
+            {isRunning && <div className="absolute top-0 left-0 right-0 h-px aurora-bg" style={{ background: 'linear-gradient(90deg, transparent, rgba(0,242,255,0.3), transparent)', backgroundSize: '300% 100%' }} />}
             <div className="flex items-center gap-3">
               <div>
-                <h3 className="text-lg font-semibold text-white">{agentName}</h3>
-                <p className="text-xs text-gray-500 mt-0.5">{agentId}</p>
+                <div className="mono-ui text-[8px] text-cyan-400/50 mb-0.5">{agentId}</div>
+                <h3 className="font-cinzel text-base text-white">{agentName}</h3>
               </div>
               {/* Live status badge */}
               {isRunning && (
@@ -162,25 +166,27 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
 
           {/* Running Progress Banner */}
           {isRunning && (
-            <div className="px-6 py-4 bg-cyan-950 border-b border-cyan-500/40 shrink-0">
+            <div className="px-6 py-4 shrink-0" style={{ background: 'linear-gradient(135deg, rgba(0,242,255,0.06), rgba(139,92,246,0.03), rgba(2,2,5,0.8))', borderBottom: '1px solid rgba(0,242,255,0.1)' }}>
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2.5">
-                  <Loader2 className="h-5 w-5 text-cyan-400 animate-spin" />
+                  <div className="relative w-6 h-6">
+                    <div className="absolute inset-0 rounded-full orbit-rotate" style={{ border: '1.5px solid rgba(0,242,255,0.3)' }}>
+                      <div className="absolute -top-[2px] left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-cyan-400" style={{ boxShadow: '0 0 6px #00f2ff' }} />
+                    </div>
+                    <Loader2 className="absolute inset-0.5 h-5 w-5 text-cyan-400 animate-spin" />
+                  </div>
                   <span className="text-sm font-semibold text-white">Agent is processing...</span>
                 </div>
                 {typeof elapsedTime === 'number' && (
-                  <span className="text-xs font-mono text-white bg-cyan-500/30 border border-indigo-400/30 px-2.5 py-1 rounded-md">
+                  <span className="mono-ui text-[9px] rounded-full px-3 py-1" style={{ color: '#00f2ff', background: 'rgba(0,242,255,0.1)', border: '1px solid rgba(0,242,255,0.15)' }}>
                     {formatElapsed(elapsedTime)}
                   </span>
                 )}
               </div>
-              {/* Animated progress bar */}
-              <div className="w-full h-2 bg-cyan-500/20 rounded-full overflow-hidden">
-                <div className="h-full bg-cyan-500 rounded-full animate-progress-indeterminate" />
+              <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(0,242,255,0.06)' }}>
+                <div className="h-full rounded-full animate-progress-indeterminate" style={{ background: 'linear-gradient(90deg, rgba(0,242,255,0.6), rgba(139,92,246,0.4))', boxShadow: '0 0 8px rgba(0,242,255,0.3)' }} />
               </div>
-              <p className="text-xs text-cyan-300 mt-2">
-                Analyzing data, calling APIs, and generating insights...
-              </p>
+              <p className="text-xs text-gray-500 mt-2">Analyzing data, calling APIs, and generating insights...</p>
             </div>
           )}
 
