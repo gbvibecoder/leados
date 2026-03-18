@@ -76,6 +76,11 @@ export default function LeadOSPage() {
   const [snackbar, setSnackbar] = useState<string | null>(null);
   const timerRef = useRef<Record<string, NodeJS.Timeout>>({});
 
+  // Total pipeline timer
+  const [pipelineStartTime, setPipelineStartTime] = useState<number | null>(null);
+  const [totalElapsed, setTotalElapsed] = useState(0);
+  const totalTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
   const isInternal = selectedProject?.type === 'internal';
 
@@ -139,10 +144,28 @@ export default function LeadOSPage() {
     loadAgentConfig();
   }, [loadProjects, loadAgentConfig]);
 
+  // Total pipeline timer — start/stop based on pipeline status
+  useEffect(() => {
+    if (pipeline.status === 'running' && !totalTimerRef.current) {
+      if (!pipelineStartTime) setPipelineStartTime(Date.now());
+      totalTimerRef.current = setInterval(() => {
+        setPipelineStartTime(prev => {
+          if (!prev) return prev;
+          setTotalElapsed(Math.floor((Date.now() - prev) / 1000));
+          return prev;
+        });
+      }, 1000);
+    } else if (pipeline.status !== 'running' && pipeline.status !== 'paused' && totalTimerRef.current) {
+      clearInterval(totalTimerRef.current);
+      totalTimerRef.current = null;
+    }
+  }, [pipeline.status]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Cleanup timers on unmount
   useEffect(() => {
     return () => {
       Object.values(timerRef.current).forEach(clearInterval);
+      if (totalTimerRef.current) clearInterval(totalTimerRef.current);
     };
   }, []);
 
@@ -197,6 +220,8 @@ export default function LeadOSPage() {
     setPipelineError(null);
     setAgentOutputs({});
     setElapsedTimes({});
+    setTotalElapsed(0);
+    setPipelineStartTime(Date.now());
     updatePipelineStatus('running');
     setCurrentAgentIndex(0);
 
@@ -649,6 +674,9 @@ export default function LeadOSPage() {
                     setPipelineError(null);
                     setAgentOutputs({});
                     setElapsedTimes({});
+                    setTotalElapsed(0);
+                    setPipelineStartTime(null);
+                    if (totalTimerRef.current) { clearInterval(totalTimerRef.current); totalTimerRef.current = null; }
                     clearActivities();
                     // Reset pipeline LAST — this clears pipeline.id which blocks further SSE events
                     resetPipeline();
@@ -665,17 +693,31 @@ export default function LeadOSPage() {
             </div>
           </div>
 
-          {/* Progress bar */}
+          {/* Progress bar + Total Timer */}
           {hasRun && (
             <div className="mt-3">
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-[10px] text-gray-500 flex items-center gap-1">
                   {isRunning && <Loader2 className="h-3 w-3 animate-spin" />}
-                  {isRunning ? 'Processing agents sequentially...' : 'Progress'}
+                  {isRunning ? 'Processing agents...' : 'Progress'}
                 </span>
-                <span className="text-[10px] text-gray-500">
-                  {completedCount}/{totalAgents} ({progressPercent}%)
-                </span>
+                <div className="flex items-center gap-3">
+                  {/* Total elapsed timer */}
+                  {totalElapsed > 0 && (
+                    <span className="mono-ui text-[9px] flex items-center gap-1 rounded-full px-2.5 py-0.5"
+                      style={{
+                        color: isRunning ? '#00f2ff' : pipeline.status === 'completed' ? '#10b981' : '#f59e0b',
+                        background: isRunning ? 'rgba(0,242,255,0.08)' : pipeline.status === 'completed' ? 'rgba(16,185,129,0.08)' : 'rgba(245,158,11,0.08)',
+                        border: `1px solid ${isRunning ? 'rgba(0,242,255,0.15)' : pipeline.status === 'completed' ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)'}`,
+                      }}>
+                      <Clock className="h-3 w-3" />
+                      {Math.floor(totalElapsed / 60)}m {totalElapsed % 60}s
+                    </span>
+                  )}
+                  <span className="text-[10px] text-gray-500">
+                    {completedCount}/{totalAgents} ({progressPercent}%)
+                  </span>
+                </div>
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full" style={{ background: 'rgba(255,255,255,0.03)' }}>
                 <div
@@ -964,12 +1006,24 @@ export default function LeadOSPage() {
                                     {/* Actions */}
                                     <div className="flex flex-col items-end gap-1 shrink-0">
                                       {status === 'running' && elapsed !== undefined && (
-                                        <span className="mono-ui text-[7px] flex items-center gap-1 rounded-full px-2 py-0.5" style={{ color: sc, background: `${sc}10` }}>
+                                        <span className="mono-ui text-[7px] flex items-center gap-1 rounded-full px-2.5 py-0.5"
+                                          style={{ color: sc, background: `${sc}10`, border: `1px solid ${sc}15` }}>
                                           <Clock className="h-2.5 w-2.5" />{formatElapsed(elapsed)}
                                         </span>
                                       )}
-                                      {status === 'done' && pipelineAgent?.lastRunTime && (
-                                        <span className="mono-ui text-[7px] text-gray-600">{new Date(pipelineAgent.lastRunTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                      {status === 'done' && (
+                                        <div className="flex flex-col items-end gap-0.5">
+                                          {/* Duration this agent took */}
+                                          {elapsed !== undefined && elapsed > 0 && (
+                                            <span className="mono-ui text-[7px] flex items-center gap-1 rounded-full px-2 py-0.5"
+                                              style={{ color: '#10b981', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.12)' }}>
+                                              <Clock className="h-2.5 w-2.5" />{formatElapsed(elapsed)}
+                                            </span>
+                                          )}
+                                          {pipelineAgent?.lastRunTime && (
+                                            <span className="mono-ui text-[6px] text-gray-600">{new Date(pipelineAgent.lastRunTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                          )}
+                                        </div>
                                       )}
                                       <div className="flex items-center gap-1">
                                         {status === 'idle' && !isRunning && (
