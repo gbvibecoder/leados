@@ -34,6 +34,24 @@ export function AgentOutput({ agentId, agentName, data, isLive = false }: AgentO
     try { normalizedData = JSON.parse(normalizedData); } catch { /* keep as-is */ }
   }
 
+  // Check for error output — show error message instead of "no data yet" placeholder
+  const errorMsg = normalizedData?.error
+    || normalizedData?.data?.error
+    || (normalizedData?.success === false && normalizedData?.reasoning);
+  if (errorMsg) {
+    return (
+      <div className="rounded-lg border border-red-500/20 bg-red-950/10 p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-sm font-medium text-red-400">Agent Error</span>
+        </div>
+        <p className="text-sm text-red-300/80">{typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg)}</p>
+        {normalizedData?.reasoning && normalizedData.reasoning !== errorMsg && (
+          <p className="text-xs text-zinc-500 mt-2">{normalizedData.reasoning}</p>
+        )}
+      </div>
+    );
+  }
+
   // Pass the normalized data object - components will handle nested structure internally
   switch (agentId) {
     case 'service-research':

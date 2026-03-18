@@ -52,7 +52,9 @@ export abstract class BaseAgent {
 
   /** Call LLM — tries Anthropic first, falls back to Gemini if Anthropic fails.
    *  maxTokens: output limit (default 16384 — safe for all agents including heavy ones like funnel-builder) */
-  protected async callClaude(systemPrompt: string, userMessage: string, maxRetries = 2, maxTokens = 16384): Promise<string> {
+  protected async callClaude(systemPrompt: string, userMessage: string, maxRetries = 3, maxTokens = 16384): Promise<string> {
+    let anthropicError = '';
+
     // Try Anthropic first
     const anthropicKey = process.env.ANTHROPIC_API_KEY;
     if (anthropicKey) {
@@ -60,21 +62,24 @@ export abstract class BaseAgent {
         const result = await this.callAnthropic(systemPrompt, userMessage, anthropicKey, maxRetries, maxTokens);
         return result;
       } catch (error: any) {
-        await this.log('anthropic_failed', { error: error.message });
+        anthropicError = error.message || 'Unknown Anthropic error';
+        await this.log('anthropic_failed', { error: anthropicError, status: error.status });
         // Fall through to Gemini
       }
+    } else {
+      anthropicError = 'No API key configured';
     }
 
     // Fallback to Gemini
     const geminiKey = process.env.GEMINI_API_KEY;
     if (geminiKey) {
       try {
-        await this.log('gemini_fallback', { reason: 'Anthropic unavailable, using Gemini' });
+        await this.log('gemini_fallback', { reason: `Anthropic failed: ${anthropicError}` });
         const result = await this.callGemini(systemPrompt, userMessage, geminiKey, maxRetries, maxTokens);
         return result;
       } catch (error: any) {
         await this.log('gemini_failed', { error: error.message });
-        throw new Error(`Both Anthropic and Gemini failed. Anthropic: no credits. Gemini: ${error.message}`);
+        throw new Error(`Both Anthropic and Gemini failed. Anthropic: ${anthropicError}. Gemini: ${error.message}`);
       }
     }
 
@@ -88,12 +93,21 @@ export abstract class BaseAgent {
       try {
         const client = new Anthropic({ apiKey, timeout: 120_000 });
 
-        const message = await client.messages.create({
-          model: 'claude-sonnet-4-6',
-          max_tokens: maxTokens,
-          system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
-          messages: [{ role: 'user', content: userMessage }],
-        });
+        // Hard 3-minute total timeout — AbortController kills the request regardless of activity
+        const abortController = new AbortController();
+        const hardTimeout = setTimeout(() => abortController.abort(), 180_000);
+
+        let message;
+        try {
+          message = await client.messages.create({
+            model: 'claude-sonnet-4-6',
+            max_tokens: maxTokens,
+            system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+            messages: [{ role: 'user', content: userMessage }],
+          }, { signal: abortController.signal });
+        } finally {
+          clearTimeout(hardTimeout);
+        }
 
         const text = message.content
           .filter((block): block is Anthropic.TextBlock => block.type === 'text')
@@ -109,12 +123,20 @@ export abstract class BaseAgent {
         lastError = error;
         await this.log('anthropic_retry', { attempt, maxRetries, error: error.message });
 
-        // Don't retry on auth/billing/rate errors — fail fast to Gemini
-        if (error.status === 401 || error.status === 403 || error.status === 429
-            || error.message?.includes('credit balance')
-            || error.message?.includes('overloaded')
-            || error.message?.includes('rate_limit')) {
+        // Don't retry on auth/billing errors — fail fast to Gemini
+        if (error.status === 401 || error.status === 403
+            || error.message?.includes('credit balance')) {
           throw error;
+        }
+
+        // Retry on connection errors, overloaded, and rate limits with longer wait
+        const isConnectionError = error.message?.includes('Connection error') || error.message?.includes('ECONNRESET') || error.message?.includes('fetch failed') || error.name === 'AbortError';
+        const isOverloaded = error.status === 429 || error.status === 529 || error.message?.includes('overloaded') || error.message?.includes('rate_limit');
+        if ((isConnectionError || isOverloaded) && attempt < maxRetries) {
+          const waitSec = isOverloaded ? 15 * attempt : 5 * attempt;
+          await this.log('anthropic_wait_retry', { waitSeconds: waitSec, reason: isConnectionError ? 'connection_error' : 'overloaded' });
+          await new Promise(resolve => setTimeout(resolve, waitSec * 1000));
+          continue;
         }
 
         if (attempt < maxRetries) {
@@ -128,8 +150,10 @@ export abstract class BaseAgent {
 
   private async callGemini(systemPrompt: string, userMessage: string, apiKey: string, maxRetries: number, maxTokens: number = 16384): Promise<string> {
     let lastError: Error | null = null;
+    // Allow more retries for rate limits (free tier has 15 req/min)
+    const totalAttempts = maxRetries + 3;
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    for (let attempt = 1; attempt <= totalAttempts; attempt++) {
       try {
         const geminiController = new AbortController();
         const geminiTimeout = setTimeout(() => geminiController.abort(), 120_000);
@@ -164,14 +188,27 @@ export abstract class BaseAgent {
         return text;
       } catch (error: any) {
         lastError = error;
-        await this.log('gemini_retry', { attempt, maxRetries, error: error.message });
+        const isRateLimit = error.message?.includes('429') || error.message?.includes('RATE_LIMIT');
+        const isQuotaExhausted = error.message?.includes('quota') || error.message?.includes('RESOURCE_EXHAUSTED') || error.message?.includes('suspended') || error.message?.includes('limit: 0');
+        const isAuthError = error.message?.includes('403') || error.message?.includes('401') || error.message?.includes('PERMISSION_DENIED');
 
-        // Don't retry on quota errors
-        if (error.message?.includes('429') || error.message?.includes('quota')) {
+        await this.log('gemini_retry', { attempt, totalAttempts, error: error.message, isRateLimit, isQuotaExhausted });
+
+        // Fail fast on quota exhaustion, auth errors, or suspension — no point retrying
+        if (isQuotaExhausted || isAuthError) {
           throw error;
         }
 
-        if (attempt < maxRetries) {
+        // For per-minute rate limits: wait and retry (Gemini free tier resets per minute)
+        if (isRateLimit && attempt < totalAttempts) {
+          const waitSec = Math.min(15 + attempt * 10, 60);
+          await this.log('gemini_rate_limit_wait', { waitSeconds: waitSec, attempt });
+          await new Promise(resolve => setTimeout(resolve, waitSec * 1000));
+          continue;
+        }
+
+        // For non-rate-limit errors: standard exponential backoff
+        if (!isRateLimit && attempt < totalAttempts) {
           await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)));
         }
       }
