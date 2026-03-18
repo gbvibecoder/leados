@@ -127,8 +127,10 @@ export abstract class BaseAgent {
 
   private async callGemini(systemPrompt: string, userMessage: string, apiKey: string, maxRetries: number): Promise<string> {
     let lastError: Error | null = null;
+    // Allow more retries for rate limits (free tier has 15 req/min)
+    const totalAttempts = maxRetries + 3;
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    for (let attempt = 1; attempt <= totalAttempts; attempt++) {
       try {
         const geminiController = new AbortController();
         const geminiTimeout = setTimeout(() => geminiController.abort(), 120_000);
@@ -163,14 +165,20 @@ export abstract class BaseAgent {
         return text;
       } catch (error: any) {
         lastError = error;
-        await this.log('gemini_retry', { attempt, maxRetries, error: error.message });
+        const isRateLimit = error.message?.includes('429') || error.message?.includes('quota') || error.message?.includes('RATE_LIMIT');
 
-        // Don't retry on quota errors
-        if (error.message?.includes('429') || error.message?.includes('quota')) {
-          throw error;
+        await this.log('gemini_retry', { attempt, totalAttempts, error: error.message, isRateLimit });
+
+        // For rate limits: wait longer and retry (Gemini free tier resets per minute)
+        if (isRateLimit && attempt < totalAttempts) {
+          const waitSec = Math.min(15 + attempt * 10, 60); // 25s, 35s, 45s, 55s, 60s
+          await this.log('gemini_rate_limit_wait', { waitSeconds: waitSec, attempt });
+          await new Promise(resolve => setTimeout(resolve, waitSec * 1000));
+          continue;
         }
 
-        if (attempt < maxRetries) {
+        // For non-rate-limit errors: standard exponential backoff
+        if (!isRateLimit && attempt < totalAttempts) {
           await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)));
         }
       }
