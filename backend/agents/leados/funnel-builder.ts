@@ -1,93 +1,46 @@
 import { BaseAgent, AgentInput, AgentOutput } from '../base-agent';
 import * as webflow from '../../integrations/webflow';
 
-const SYSTEM_PROMPT = `You are the Funnel Builder Agent for LeadOS — the Service Acquisition Machine. Your job is to build the entire acquisition infrastructure: landing page, lead capture forms, booking calendar integration, and CRM pipeline setup.
+// Slimmed prompt — LLM only generates landing page copy + sections.
+// leadForm, bookingCalendar, crmIntegration, tracking are all built from
+// deterministic defaults + real API data — no LLM needed for those.
+const SYSTEM_PROMPT = `You are the Funnel Builder Agent for LeadOS. Generate landing page copy ONLY.
 
-You receive JSON input containing:
-- The validated offer (ICP, pricing, guarantee, positioning) from the Offer Engineering Agent
-- The GO decision and risk assessment from the Validation Agent
+You receive JSON with the validated offer (ICP, pricing, guarantee, positioning).
 
-Your responsibilities:
-1. LANDING PAGE COPY & STRUCTURE: Design a high-converting landing page with these sections: Hero (headline + subheadline + CTA), Pain Points (problem agitation), Solution (transformation promise + unique mechanism), Social Proof (testimonials, logos, case study snippets), Pricing (3-tier comparison table), FAQ (objection handling), and final CTA. Every section must have specific, detailed content — not placeholders.
-2. LEAD FORM: Define form fields with types, labels, placeholders, and required flags. Keep friction low (5-7 fields max) while capturing enough data for lead scoring.
-3. BOOKING CALENDAR: Set up integration with Calendly or Cal.com — define meeting type, duration, buffer time, availability rules, and pre-call questions.
-4. CRM INTEGRATION: Configure HubSpot pipeline with deal stages that match the LeadOS qualification funnel. Include contact properties, lifecycle stages, and automation triggers.
-5. TRACKING & PIXELS: Ensure GTM container, Meta Pixel, and Google Ads conversion tag are configured on the page with specific conversion events.
-6. DEPLOY TARGET: Specify deployment platform (Webflow, Framer, Shopify, or custom) with page structure.
-
-Use the offer's transformation promise as the hero headline, the ICP psychographics for pain point messaging, and the pricing tiers directly from the offer package.
-
-Return ONLY valid JSON (no markdown, no explanation outside JSON) with this structure:
+Return ONLY valid JSON (no markdown) with this structure:
 {
   "landingPage": {
-    "url": "string — deployed page URL",
-    "deployTarget": "Webflow | Framer | Shopify | custom",
-    "headline": "string — primary headline",
+    "url": "https://leadflow-ai.com/get-started",
+    "deployTarget": "Webflow",
+    "headline": "string — transformation promise as primary headline",
     "subheadline": "string — supporting subheadline",
     "sections": [
-      {
-        "type": "hero | painPoints | solution | socialProof | pricing | faq | cta",
-        "content": "object — detailed section content"
-      }
+      { "type": "hero", "content": { "headline": "string", "subheadline": "string", "cta": "string", "ctaSubtext": "string", "socialProofBar": "string", "guaranteeBadge": "string" } },
+      { "type": "painPoints", "content": { "sectionTitle": "string", "points": [{ "icon": "string", "title": "string", "description": "string" }] } },
+      { "type": "solution", "content": { "sectionTitle": "string", "transformationPromise": "string", "uniqueMechanism": "string", "features": ["string"] } },
+      { "type": "socialProof", "content": { "testimonials": [{ "quote": "string", "name": "string", "title": "string", "metric": "string" }], "logos": ["string"] } },
+      { "type": "pricing", "content": { "sectionTitle": "string", "tiers": [{ "name": "string", "price": "string", "highlight": false, "badge": "string", "cta": "string", "features": ["string"] }], "guarantee": "string" } },
+      { "type": "faq", "content": { "sectionTitle": "string", "questions": [{ "q": "string", "a": "string" }] } },
+      { "type": "cta", "content": { "headline": "string", "subheadline": "string", "ctaButton": "string", "ctaSubtext": "string" } }
     ],
-    "cta": "string — primary call-to-action text",
-    "seoMeta": {
-      "title": "string",
-      "description": "string",
-      "ogImage": "string"
-    }
+    "cta": "string",
+    "seoMeta": { "title": "string", "description": "string" }
   },
-  "leadForm": {
-    "fields": [
-      { "name": "string", "type": "text | email | phone | select | number | textarea", "label": "string", "placeholder": "string", "required": true/false, "options": ["string — for select type only"] }
-    ],
-    "submitButtonText": "string",
-    "submitAction": "string — what happens on submit",
-    "successMessage": "string",
-    "webhookUrl": "string — CRM webhook endpoint"
-  },
-  "bookingCalendar": {
-    "provider": "Calendly | Cal.com",
-    "url": "string — booking link",
-    "meetingType": "string — e.g. Strategy Call, Discovery Call",
-    "meetingDuration": "number — always 30 minutes",
-    "bufferTime": "number — minutes between meetings",
-    "availability": "string — availability description",
-    "preCallQuestions": ["string — questions asked before booking"],
-    "confirmationRedirect": "string — thank-you page URL"
-  },
-  "crmIntegration": {
-    "provider": "HubSpot | GoHighLevel | Salesforce",
-    "pipeline": "string — pipeline name",
-    "stages": ["string — ordered deal stages"],
-    "contactProperties": ["string — custom properties to create"],
-    "lifecycleStages": ["string — lifecycle stage mapping"],
-    "automations": [
-      { "trigger": "string", "action": "string" }
-    ]
-  },
-  "tracking": {
-    "gtmContainerId": "string",
-    "metaPixelId": "string",
-    "googleAdsConversionId": "string",
-    "events": ["string — tracked conversion events"],
-    "utmParams": ["string — UTM parameters to capture"]
-  },
-  "pages": [
-    { "type": "landing | booking | thank-you", "name": "string", "url": "string", "description": "string" }
-  ],
   "reasoning": "string",
   "confidence": "number 0-100"
 }
 
-CRITICAL DATA INTEGRITY RULE: Do NOT generate projected, estimated, or fabricated performance metrics. Landing page copy, form fields, CRM setup, and tracking configuration are creative/strategic outputs and are expected. However, do NOT invent conversion rates, traffic numbers, visitor counts, lead counts, or any metric that looks like measured data. If a field requires a measured metric and no real data exists, set it to 0 or null. Never fabricate numbers.`;
+Use the offer's transformation promise as headline, ICP psychographics for pain points, pricing tiers from the offer. Be specific — no placeholders.
+Do NOT generate any performance metrics. Do NOT include leadForm, bookingCalendar, crmIntegration, or tracking — those are handled separately.`;
 
 // ─── Integration Helpers ────────────────────────────────────────────────────
+
+const API_TIMEOUT = 8_000; // 8s — fast-fail on integrations
 
 interface CalendlyEventType {
   name: string;
   duration: number;
-  url?: string;
 }
 
 interface HubSpotPipelineConfig {
@@ -96,9 +49,6 @@ interface HubSpotPipelineConfig {
   contactProperties: string[];
 }
 
-/**
- * Creates a Calendly event type via API (or returns placeholder if no key)
- */
 async function createCalendlyEventType(config: CalendlyEventType): Promise<{ url: string; eventTypeId: string }> {
   const apiKey = process.env.CALENDLY_API_KEY;
   if (!apiKey) {
@@ -109,22 +59,20 @@ async function createCalendlyEventType(config: CalendlyEventType): Promise<{ url
   }
 
   try {
-    // Get current user to find organization URI
+    // Single request: get user + event types in one flow
     const userResponse = await fetch('https://api.calendly.com/users/me', {
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(API_TIMEOUT),
     });
     const userData = await userResponse.json();
     const userUri = userData.resource?.uri;
 
-    // List existing event types to find or verify
     const eventsResponse = await fetch(
-      `https://api.calendly.com/event_types?user=${encodeURIComponent(userUri || '')}&active=true`,
-      { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(15_000) }
+      `https://api.calendly.com/event_types?user=${encodeURIComponent(userUri || '')}&active=true&count=5`,
+      { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(API_TIMEOUT) }
     );
     const eventsData = await eventsResponse.json();
 
-    // Return first matching or first available event type
     const matching = eventsData.collection?.find(
       (e: any) => e.duration === config.duration || e.name?.toLowerCase().includes('strategy')
     );
@@ -142,9 +90,6 @@ async function createCalendlyEventType(config: CalendlyEventType): Promise<{ url
   }
 }
 
-/**
- * Creates HubSpot pipeline and deal stages (or returns placeholder if no key)
- */
 async function setupHubSpotPipeline(config: HubSpotPipelineConfig): Promise<{ pipelineId: string; stageIds: string[] }> {
   const apiKey = process.env.HUBSPOT_API_KEY;
   if (!apiKey) {
@@ -155,7 +100,6 @@ async function setupHubSpotPipeline(config: HubSpotPipelineConfig): Promise<{ pi
   }
 
   try {
-    // Create pipeline with stages
     const pipelinePayload = {
       label: config.pipelineName,
       displayOrder: 0,
@@ -168,69 +112,53 @@ async function setupHubSpotPipeline(config: HubSpotPipelineConfig): Promise<{ pi
 
     const response = await fetch('https://api.hubapi.com/crm/v3/pipelines/deals', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      signal: AbortSignal.timeout(15_000),
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(API_TIMEOUT),
       body: JSON.stringify(pipelinePayload),
     });
 
     if (!response.ok) {
-      // Pipeline might already exist — list and find it
       const listResponse = await fetch('https://api.hubapi.com/crm/v3/pipelines/deals', {
         headers: { Authorization: `Bearer ${apiKey}` },
-        signal: AbortSignal.timeout(15_000),
+        signal: AbortSignal.timeout(API_TIMEOUT),
       });
       const pipelines = await listResponse.json();
       const existing = pipelines.results?.find((p: any) => p.label === config.pipelineName);
       if (existing) {
-        return {
-          pipelineId: existing.id,
-          stageIds: existing.stages?.map((s: any) => s.id) || [],
-        };
+        return { pipelineId: existing.id, stageIds: existing.stages?.map((s: any) => s.id) || [] };
       }
       throw new Error('Failed to create or find pipeline');
     }
 
     const pipeline = await response.json();
-    return {
-      pipelineId: pipeline.id,
-      stageIds: pipeline.stages?.map((s: any) => s.id) || [],
-    };
+    return { pipelineId: pipeline.id, stageIds: pipeline.stages?.map((s: any) => s.id) || [] };
   } catch {
-    return {
-      pipelineId: 'hubspot-fallback',
-      stageIds: config.stages.map((_, i) => `fallback-stage-${i}`),
-    };
+    return { pipelineId: 'hubspot-fallback', stageIds: config.stages.map((_, i) => `fallback-stage-${i}`) };
   }
 }
 
-/**
- * Creates custom contact properties in HubSpot for lead enrichment
- */
+/** Create contact properties in HubSpot — all in parallel */
 async function createHubSpotContactProperties(properties: string[]): Promise<boolean> {
   const apiKey = process.env.HUBSPOT_API_KEY;
   if (!apiKey) return false;
 
   try {
-    for (const prop of properties) {
-      await fetch('https://api.hubapi.com/crm/v3/properties/contacts', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        signal: AbortSignal.timeout(15_000),
-        body: JSON.stringify({
-          name: prop.toLowerCase().replace(/\s+/g, '_'),
-          label: prop,
-          type: 'string',
-          fieldType: 'text',
-          groupName: 'contactinformation',
-        }),
-      });
-    }
+    await Promise.allSettled(
+      properties.map((prop) =>
+        fetch('https://api.hubapi.com/crm/v3/properties/contacts', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(API_TIMEOUT),
+          body: JSON.stringify({
+            name: prop.toLowerCase().replace(/\s+/g, '_'),
+            label: prop,
+            type: 'string',
+            fieldType: 'text',
+            groupName: 'contactinformation',
+          }),
+        })
+      )
+    );
     return true;
   } catch {
     return false;
@@ -244,7 +172,7 @@ export class FunnelBuilderAgent extends BaseAgent {
     super(
       'funnel-builder',
       'Funnel Builder Agent',
-      'Build landing page, lead capture forms, booking calendar, CRM pipeline, and conversion tracking infrastructure'
+      'Builds acquisition infrastructure — landing pages, lead forms, booking, and CRM setup.'
     );
   }
 
@@ -258,7 +186,6 @@ export class FunnelBuilderAgent extends BaseAgent {
       || {};
     const validationData = inputs.previousOutputs?.['validation'] || {};
 
-    // Only proceed if validation decision is GO or CONDITIONAL
     const decision = validationData.decision || 'GO';
     if (decision === 'NO-GO') {
       this.status = 'done';
@@ -272,6 +199,7 @@ export class FunnelBuilderAgent extends BaseAgent {
       };
     }
 
+    const niche = inputs.config?.niche || inputs.config?.serviceNiche || offerData.serviceName || 'B2B Lead Generation';
     const meetingName = offerData.serviceName
       ? `${offerData.serviceName} — Strategy Call`
       : 'LeadOS Strategy Call';
@@ -291,23 +219,26 @@ export class FunnelBuilderAgent extends BaseAgent {
       : 'LeadOS — New Client Acquisition';
 
     try {
-      // Step 1: Generate landing page copy via AI AND set up integrations IN PARALLEL
-      await this.log('llm_generating', { phase: 'Generating landing page copy and funnel structure' });
+      await this.log('llm_generating', { phase: 'Generating landing page copy + setting up integrations' });
 
-      const enrichedInput = {
-        offer: offerData,
-        validation: {
-          decision: validationData.decision,
-          scores: validationData.scores,
-          riskFactors: validationData.riskFactors,
+      // Only send what the LLM needs — offer data, nothing else
+      const llmInput = JSON.stringify({
+        offer: {
+          serviceName: offerData.serviceName,
+          icp: offerData.icp || offerData.idealCustomerProfile,
+          painPoints: offerData.painPoints,
+          transformationPromise: offerData.transformationPromise,
+          pricingTiers: offerData.pricingTiers,
+          guarantee: offerData.guarantee,
+          positioning: offerData.positioning,
+          uniqueMechanism: offerData.uniqueMechanism,
         },
-        config: inputs.config,
-      };
+        niche,
+      });
 
-      // Run LLM + integrations in parallel — saves 3-8 seconds
-      // LLM call is wrapped to NOT crash if both providers fail — fallback logic below will handle it
+      // ── Run LLM + ALL integrations in parallel ────────────────────
       const [llmResult, calendlyResult, hubspotResult] = await Promise.all([
-        this.callClaude(SYSTEM_PROMPT, JSON.stringify(enrichedInput), 2, 8192)
+        this.callClaude(SYSTEM_PROMPT, llmInput, 1, 4096)
           .catch((err: any) => {
             this.log('llm_failed', { error: err.message });
             return null;
@@ -316,11 +247,12 @@ export class FunnelBuilderAgent extends BaseAgent {
         setupHubSpotPipeline({ pipelineName, stages: crmStages, contactProperties }),
       ]);
 
-      // Create contact properties (non-blocking)
+      // Create contact properties (non-blocking, parallel)
       createHubSpotContactProperties(contactProperties).catch(() => {});
 
       await this.log('integrations_complete', { calendly: calendlyResult, hubspot: hubspotResult });
 
+      // ── Parse LLM result ──────────────────────────────────────────
       let parsed: any = {};
       if (llmResult) {
         try {
@@ -333,33 +265,25 @@ export class FunnelBuilderAgent extends BaseAgent {
         await this.log('using_fallback', { reason: 'LLM unavailable — generating funnel from upstream data' });
       }
 
-      // Normalize: map alternative key names the LLM might return
+      // Normalize alternative key names
       parsed.landingPage = parsed.landingPage || parsed.landing_page || parsed.page || parsed.landingPageCopy;
-      parsed.leadForm = parsed.leadForm || parsed.lead_form || parsed.form || parsed.leadCaptureForm;
-      parsed.bookingCalendar = parsed.bookingCalendar || parsed.booking_calendar || parsed.calendar || parsed.booking;
-      parsed.crmIntegration = parsed.crmIntegration || parsed.crm_integration || parsed.crm || parsed.crmSetup;
-      parsed.tracking = parsed.tracking || parsed.analytics || parsed.trackingPixels || parsed.trackingSetup;
 
-      // Force-zero any LLM-fabricated performance metrics
+      // Force-zero any LLM-fabricated metrics
       if (parsed.landingPage) {
         if (parsed.landingPage.estimatedConversionRate !== undefined) parsed.landingPage.estimatedConversionRate = 0;
         if (parsed.landingPage.estimatedTraffic !== undefined) parsed.landingPage.estimatedTraffic = 0;
         if (parsed.landingPage.visitors !== undefined) parsed.landingPage.visitors = 0;
         if (parsed.landingPage.leads !== undefined) parsed.landingPage.leads = 0;
       }
-      if (parsed.projectedMetrics !== undefined) {
-        Object.keys(parsed.projectedMetrics).forEach(k => { if (typeof parsed.projectedMetrics[k] === 'number') parsed.projectedMetrics[k] = 0; });
-      }
 
-      // Build fallback funnel if LLM didn't produce valid landingPage
+      // ── Build fallback landing page if LLM didn't produce one ─────
       if (!parsed.landingPage) {
-        const niche = inputs.config?.niche || inputs.config?.serviceNiche || offerData.serviceName || 'B2B Lead Generation';
-        const transformationPromise = offerData.transformationPromise || `Double Your Qualified Leads in 90 Days`;
+        const transformationPromise = offerData.transformationPromise || 'Double Your Qualified Leads in 90 Days';
         const guarantee = offerData.guarantee || '90-Day Money-Back Guarantee';
         const basePrice = offerData.pricingTiers?.[0]?.price || '$2,500/mo';
 
         parsed.landingPage = {
-          url: `https://leadflow-ai.com/get-started`,
+          url: 'https://leadflow-ai.com/get-started',
           deployTarget: 'Webflow',
           headline: transformationPromise,
           subheadline: `B2B companies use our AI engine to build a predictable, scalable pipeline for ${niche.toLowerCase()} — fully autonomous, performance-guaranteed, and live in 48 hours`,
@@ -389,75 +313,76 @@ export class FunnelBuilderAgent extends BaseAgent {
         };
       }
 
-      if (!parsed.leadForm) {
-        parsed.leadForm = {
-          fields: [
-            { name: 'firstName', type: 'text', label: 'First Name', placeholder: 'John', required: true },
-            { name: 'lastName', type: 'text', label: 'Last Name', placeholder: 'Smith', required: true },
-            { name: 'workEmail', type: 'email', label: 'Work Email', placeholder: 'john@company.com', required: true },
-            { name: 'company', type: 'text', label: 'Company', placeholder: 'Acme Inc', required: true },
-            { name: 'phone', type: 'phone', label: 'Phone Number', placeholder: '+1 (555) 000-0000', required: false },
-            { name: 'monthlyBudget', type: 'select', label: 'Monthly Marketing Budget', placeholder: 'Select range', required: true, options: ['Under $5K', '$5K-$10K', '$10K-$25K', '$25K-$50K', '$50K+'] },
-          ],
-          submitButtonText: 'Book Your Free Strategy Call',
-          submitAction: 'Redirect to Calendly, create HubSpot contact, fire conversion events',
-          successMessage: 'Thanks! You\'ll be redirected to book your strategy call.',
-          webhookUrl: '/api/webhooks/lead-capture',
-        };
-      }
+      // ── Deterministic sections — no LLM needed ────────────────────
+      parsed.leadForm = parsed.leadForm || {
+        fields: [
+          { name: 'firstName', type: 'text', label: 'First Name', placeholder: 'John', required: true },
+          { name: 'lastName', type: 'text', label: 'Last Name', placeholder: 'Smith', required: true },
+          { name: 'workEmail', type: 'email', label: 'Work Email', placeholder: 'john@company.com', required: true },
+          { name: 'company', type: 'text', label: 'Company', placeholder: 'Acme Inc', required: true },
+          { name: 'phone', type: 'phone', label: 'Phone Number', placeholder: '+1 (555) 000-0000', required: false },
+          { name: 'monthlyBudget', type: 'select', label: 'Monthly Marketing Budget', placeholder: 'Select range', required: true, options: ['Under $5K', '$5K-$10K', '$10K-$25K', '$25K-$50K', '$50K+'] },
+        ],
+        submitButtonText: 'Book Your Free Strategy Call',
+        submitAction: 'Redirect to Calendly, create HubSpot contact, fire conversion events',
+        successMessage: 'Thanks! You\'ll be redirected to book your strategy call.',
+        webhookUrl: '/api/webhooks/lead-capture',
+      };
 
-      if (!parsed.bookingCalendar) {
-        parsed.bookingCalendar = {
-          provider: 'Calendly', meetingType: 'Strategy Call', meetingDuration: 30, bufferTime: 15,
-          availability: 'Monday-Friday, 9:00 AM - 5:00 PM EST',
-          preCallQuestions: ['What is your biggest lead generation challenge?', 'What is your current monthly marketing spend?'],
-          confirmationRedirect: 'https://leadflow-ai.com/thank-you',
-        };
-      }
-      parsed.bookingCalendar.url = calendlyResult.url;
+      parsed.bookingCalendar = {
+        provider: 'Calendly',
+        url: calendlyResult.url,
+        meetingType: 'Strategy Call',
+        meetingDuration: 30,
+        bufferTime: 15,
+        availability: 'Monday-Friday, 9:00 AM - 5:00 PM EST',
+        preCallQuestions: ['What is your biggest lead generation challenge?', 'What is your current monthly marketing spend?'],
+        confirmationRedirect: 'https://leadflow-ai.com/thank-you',
+      };
 
-      if (!parsed.crmIntegration) {
-        parsed.crmIntegration = {
-          provider: 'HubSpot', pipeline: pipelineName, stages: crmStages, contactProperties,
-          automations: [
-            { trigger: 'Form Submitted', action: 'Create contact in HubSpot, assign to pipeline, send confirmation email' },
-            { trigger: 'Call Booked', action: 'Update deal stage, notify sales rep' },
-            { trigger: 'AI Qualified (score >= 70)', action: 'Move to Strategy Call stage, assign to senior rep' },
-            { trigger: 'Closed Won', action: 'Trigger onboarding workflow, create Stripe subscription' },
-          ],
-        };
-      }
-      parsed.crmIntegration._pipelineId = hubspotResult.pipelineId;
+      parsed.crmIntegration = {
+        provider: 'HubSpot',
+        pipeline: pipelineName,
+        stages: crmStages,
+        contactProperties,
+        automations: [
+          { trigger: 'Form Submitted', action: 'Create contact in HubSpot, assign to pipeline, send confirmation email' },
+          { trigger: 'Call Booked', action: 'Update deal stage, notify sales rep' },
+          { trigger: 'AI Qualified (score >= 70)', action: 'Move to Strategy Call stage, assign to senior rep' },
+          { trigger: 'Closed Won', action: 'Trigger onboarding workflow, create Stripe subscription' },
+        ],
+        _pipelineId: hubspotResult.pipelineId,
+      };
 
-      if (!parsed.tracking) {
-        parsed.tracking = {
-          gtmContainerId: 'GTM-LEADFLOW', metaPixelId: '123456789012345', googleAdsConversionId: 'AW-987654321',
-          events: ['page_view', 'scroll_depth_50', 'cta_click', 'form_start', 'form_submit', 'calendly_booking', 'lead', 'qualified_lead'],
-          utmParams: ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'],
-        };
-      }
+      parsed.tracking = {
+        gtmContainerId: 'GTM-LEADFLOW',
+        metaPixelId: '123456789012345',
+        googleAdsConversionId: 'AW-987654321',
+        events: ['page_view', 'scroll_depth_50', 'cta_click', 'form_start', 'form_submit', 'calendly_booking', 'lead', 'qualified_lead'],
+        utmParams: ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'],
+      };
 
-      if (!parsed.pages) {
-        parsed.pages = [
-          { type: 'landing', name: 'Main Landing Page', url: '/funnel', description: 'Primary conversion page' },
-          { type: 'booking', name: 'Demo Booking Page', url: '/funnel/book', description: 'Calendly embed with pre-call questions' },
-          { type: 'thank-you', name: 'Confirmation Page', url: '/funnel/thank-you', description: 'Post-booking confirmation' },
-        ];
-      }
+      parsed.pages = [
+        { type: 'landing', name: 'Main Landing Page', url: '/funnel', description: 'Primary conversion page' },
+        { type: 'booking', name: 'Demo Booking Page', url: '/funnel/book', description: 'Calendly embed with pre-call questions' },
+        { type: 'thank-you', name: 'Confirmation Page', url: '/funnel/thank-you', description: 'Post-booking confirmation' },
+      ];
 
-      // Step 2: Deploy to Webflow if available
+      // ── Deploy to Webflow if available ────────────────────────────
       if (webflow.isWebflowAvailable()) {
         try {
           await this.log('webflow_deploying', { phase: 'Deploying landing page to Webflow' });
           const slug = (parsed.landingPage?.headline || 'leados')
             .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').substring(0, 50);
 
-          const pageResult = await webflow.createPage({
-            title: parsed.landingPage?.headline || 'LeadOS Landing Page',
-            slug,
-            seoTitle: parsed.landingPage?.seoMeta?.title,
-            seoDescription: parsed.landingPage?.seoMeta?.description,
-          });
+          const [pageResult] = await Promise.all([
+            webflow.createPage({
+              title: parsed.landingPage?.headline || 'LeadOS Landing Page',
+              slug,
+              seoTitle: parsed.landingPage?.seoMeta?.title,
+              seoDescription: parsed.landingPage?.seoMeta?.description,
+            }),
+          ]);
 
           if (pageResult.url) {
             parsed.landingPage.url = pageResult.url;
@@ -465,7 +390,7 @@ export class FunnelBuilderAgent extends BaseAgent {
             parsed.landingPage.deployedToWebflow = true;
           }
 
-          await webflow.publishSite();
+          webflow.publishSite().catch(() => {}); // non-blocking publish
           await this.log('webflow_deployed', { url: pageResult.url, pageId: pageResult.pageId });
         } catch (webflowError: any) {
           await this.log('webflow_failed', { error: webflowError.message });
