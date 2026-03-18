@@ -209,8 +209,9 @@ export class InboundCaptureAgent extends BaseAgent {
         }
       }
 
-      // Enrich leads via Apollo
-      if (apolloApi.isApolloAvailable()) {
+      // Enrich leads via Apollo + Clearbit in parallel
+      const apolloPromise = (async () => {
+        if (!apolloApi.isApolloAvailable()) return;
         try {
           const emailsToEnrich = [
             ...(outboundData.prospectList || []).map((p: any) => p.email),
@@ -235,20 +236,21 @@ export class InboundCaptureAgent extends BaseAgent {
         } catch (err: any) {
           await this.log('apollo_enrichment_error', { error: err.message });
         }
-      }
+      })();
 
-      // Enrich company data via Clearbit
-      if (clearbit.isClearbitAvailable()) {
+      const clearbitPromise = (async () => {
+        if (!clearbit.isClearbitAvailable()) return;
         try {
           const domains = new Set<string>();
           for (const contact of realHubSpotContacts) {
             const domain = contact.email?.split('@')[1];
             if (domain) domains.add(domain);
           }
-          for (const domain of Array.from(domains).slice(0, 10)) {
+          const domainList = Array.from(domains).slice(0, 10);
+          // Enrich domains in parallel
+          await Promise.all(domainList.map(async (domain) => {
             try {
               const company = await clearbit.enrichCompany(domain);
-              // Store by domain for lookup
               realEnrichments.set(`domain:${domain}`, {
                 companyRevenue: company.annualRevenue,
                 employeeCount: company.employeeCount,
@@ -257,13 +259,15 @@ export class InboundCaptureAgent extends BaseAgent {
                 industry: company.industry,
               });
             } catch { /* skip individual failures */ }
-          }
+          }));
           await this.log('clearbit_enrichment_done', { domains: domains.size });
           enrichmentSources.push('clearbit');
         } catch (err: any) {
           await this.log('clearbit_error', { error: err.message });
         }
-      }
+      })();
+
+      await Promise.all([apolloPromise, clearbitPromise]);
 
       // Format real DB leads for the LLM context
       const realLeadsForContext = dbLeads.length > 0

@@ -169,33 +169,42 @@ export class PerformanceOptimizationAgent extends BaseAgent {
       let realMetaInsights: any[] = [];
       let realConversions: any[] = [];
 
-      if (googleAds.isGoogleAdsAvailable()) {
-        try {
-          await this.log('google_ads_fetch', { phase: 'Fetching live Google Ads metrics' });
-          realGoogleMetrics = await googleAds.getCampaignMetrics();
+      // Fetch all platform data in parallel
+      await this.log('data_fetch', { phase: 'Fetching Google Ads, Meta Ads, GA4 data in parallel' });
+      const [googleResult, metaResult, ga4Result] = await Promise.allSettled([
+        googleAds.isGoogleAdsAvailable()
+          ? googleAds.getCampaignMetrics()
+          : Promise.resolve([]),
+        metaAds.isMetaAdsAvailable()
+          ? metaAds.getCampaignInsights()
+          : Promise.resolve([]),
+        ga4.isGoogleAnalyticsAvailable()
+          ? ga4.getConversionReport()
+          : Promise.resolve([]),
+      ]);
+
+      if (googleResult.status === 'fulfilled') {
+        realGoogleMetrics = googleResult.value;
+        if (realGoogleMetrics.length > 0)
           await this.log('google_ads_fetched', { campaigns: realGoogleMetrics.length });
-        } catch (err: any) {
-          await this.log('google_ads_fetch_failed', { error: err.message });
-        }
+      } else {
+        await this.log('google_ads_fetch_failed', { error: googleResult.reason?.message });
       }
 
-      if (metaAds.isMetaAdsAvailable()) {
-        try {
-          await this.log('meta_ads_fetch', { phase: 'Fetching live Meta Ads insights' });
-          realMetaInsights = await metaAds.getCampaignInsights();
+      if (metaResult.status === 'fulfilled') {
+        realMetaInsights = metaResult.value;
+        if (realMetaInsights.length > 0)
           await this.log('meta_ads_fetched', { campaigns: realMetaInsights.length });
-        } catch (err: any) {
-          await this.log('meta_ads_fetch_failed', { error: err.message });
-        }
+      } else {
+        await this.log('meta_ads_fetch_failed', { error: metaResult.reason?.message });
       }
 
-      if (ga4.isGoogleAnalyticsAvailable()) {
-        try {
-          realConversions = await ga4.getConversionReport();
+      if (ga4Result.status === 'fulfilled') {
+        realConversions = ga4Result.value;
+        if (realConversions.length > 0)
           await this.log('ga4_conversions_fetched', { events: realConversions.length });
-        } catch (err: any) {
-          await this.log('ga4_fetch_failed', { error: err.message });
-        }
+      } else {
+        await this.log('ga4_fetch_failed', { error: ga4Result.reason?.message });
       }
 
       const userMessage = JSON.stringify({

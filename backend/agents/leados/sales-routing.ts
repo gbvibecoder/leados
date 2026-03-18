@@ -216,9 +216,9 @@ export class SalesRoutingAgent extends BaseAgent {
         confidence: parsed.confidence || 0,
       };
 
-      // Update CRM with routing data if HubSpot is available
+      // Update CRM with routing data if HubSpot is available (in parallel)
       if (hubspot.isHubSpotAvailable() && cleanOutput.routedLeads.length > 0) {
-        for (const lead of cleanOutput.routedLeads.slice(0, 20)) {
+        await Promise.all(cleanOutput.routedLeads.slice(0, 20).map(async (lead: any) => {
           try {
             const stage = lead.route === 'checkout' ? 'opportunity'
               : lead.route === 'sales_call' ? 'qualifiedtobuy'
@@ -233,7 +233,7 @@ export class SalesRoutingAgent extends BaseAgent {
               },
             });
           } catch { /* skip individual CRM failures */ }
-        }
+        }));
         await this.log('hubspot_routing_synced', { count: Math.min(cleanOutput.routedLeads.length, 20) });
       }
 
