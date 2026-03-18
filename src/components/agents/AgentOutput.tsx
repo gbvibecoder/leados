@@ -28,51 +28,57 @@ interface AgentOutputProps {
  * Provides interactive, user-friendly displays instead of raw JSON
  */
 export function AgentOutput({ agentId, agentName, data, isLive = false }: AgentOutputProps) {
-  // Pass the full data object - components will handle nested structure internally
+  // Normalize: if data is a string (double-serialized), parse it
+  let normalizedData = data;
+  if (typeof normalizedData === 'string') {
+    try { normalizedData = JSON.parse(normalizedData); } catch { /* keep as-is */ }
+  }
+
+  // Pass the normalized data object - components will handle nested structure internally
   switch (agentId) {
     case 'service-research':
       // Service Research uses live API data
-      return <ServiceResearchOutput data={data} isLive={isLive} />;
+      return <ServiceResearchOutput data={normalizedData} isLive={isLive} />;
 
     case 'offer-engineering':
-      return <OfferEngineeringOutput data={data} />;
+      return <OfferEngineeringOutput data={normalizedData} />;
 
     case 'validation':
-      return <ValidationOutput data={data} />;
+      return <ValidationOutput data={normalizedData} />;
 
     case 'funnel-builder':
-      return <FunnelBuilderOutput data={data} />;
+      return <FunnelBuilderOutput data={normalizedData} />;
 
     case 'content-creative':
-      return <ContentCreativeOutput data={data} />;
+      return <ContentCreativeOutput data={normalizedData} />;
 
     case 'paid-traffic':
-      return <PaidTrafficOutput data={data} />;
+      return <PaidTrafficOutput data={normalizedData} />;
 
     case 'outbound-outreach':
-      return <OutboundOutreachOutput data={data} />;
+      return <OutboundOutreachOutput data={normalizedData} />;
 
     case 'inbound-capture':
-      return <InboundCaptureOutput data={data} />;
+      return <InboundCaptureOutput data={normalizedData} />;
 
     case 'ai-qualification':
-      return <AIQualificationOutput data={data} />;
+      return <AIQualificationOutput data={normalizedData} />;
 
     case 'sales-routing':
-      return <SalesRoutingOutput data={data} />;
+      return <SalesRoutingOutput data={normalizedData} />;
 
     case 'tracking-attribution':
-      return <TrackingAttributionOutput data={data} />;
+      return <TrackingAttributionOutput data={normalizedData} />;
 
     case 'performance-optimization':
-      return <PerformanceOptimizationOutput data={data} />;
+      return <PerformanceOptimizationOutput data={normalizedData} />;
 
     case 'crm-hygiene':
-      return <CRMHygieneOutput data={data} />;
+      return <CRMHygieneOutput data={normalizedData} />;
 
     default:
       // Fallback to generic interactive output
-      return <GenericAgentOutput data={data} agentId={agentId} agentName={agentName} />;
+      return <GenericAgentOutput data={normalizedData} agentId={agentId} agentName={agentName} />;
   }
 }
 

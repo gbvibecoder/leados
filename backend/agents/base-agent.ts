@@ -85,7 +85,7 @@ export abstract class BaseAgent {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const client = new Anthropic({ apiKey });
+        const client = new Anthropic({ apiKey, timeout: 120_000 });
 
         const message = await client.messages.create({
           model: 'claude-sonnet-4-6',
@@ -108,8 +108,11 @@ export abstract class BaseAgent {
         lastError = error;
         await this.log('anthropic_retry', { attempt, maxRetries, error: error.message });
 
-        // Don't retry on auth/billing errors — fail fast to Gemini
-        if (error.status === 401 || error.status === 403 || error.message?.includes('credit balance')) {
+        // Don't retry on auth/billing/rate errors — fail fast to Gemini
+        if (error.status === 401 || error.status === 403 || error.status === 429
+            || error.message?.includes('credit balance')
+            || error.message?.includes('overloaded')
+            || error.message?.includes('rate_limit')) {
           throw error;
         }
 
@@ -127,9 +130,12 @@ export abstract class BaseAgent {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
+        const geminiController = new AbortController();
+        const geminiTimeout = setTimeout(() => geminiController.abort(), 120_000);
         const res = await fetch(`${GEMINI_BASE}/gemini-2.0-flash:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: geminiController.signal,
           body: JSON.stringify({
             systemInstruction: { parts: [{ text: systemPrompt }] },
             contents: [{ parts: [{ text: userMessage }] }],
@@ -139,6 +145,8 @@ export abstract class BaseAgent {
             },
           }),
         });
+
+        clearTimeout(geminiTimeout);
 
         if (!res.ok) {
           const errText = await res.text();

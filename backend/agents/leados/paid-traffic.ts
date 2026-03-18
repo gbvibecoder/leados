@@ -93,7 +93,10 @@ async function fetchKeywordData(keywords: string[]): Promise<KeywordData[]> {
       searchUrl.searchParams.set('num', '10');
       searchUrl.searchParams.set('api_key', apiKey);
 
-      const response = await fetch(searchUrl.toString());
+      const serpController = new AbortController();
+      const serpTimeout = setTimeout(() => serpController.abort(), 15_000);
+      const response = await fetch(searchUrl.toString(), { signal: serpController.signal });
+      clearTimeout(serpTimeout);
       if (!response.ok) return null;
 
       const data = await response.json();
@@ -195,37 +198,37 @@ export class PaidTrafficAgent extends BaseAgent {
       `${niche.toLowerCase()} service`,
     ].slice(0, 3);
 
-    await this.log('keyword_research', { phase: 'Fetching real keyword data via SerpAPI', seeds: keywordSeeds });
+    // Steps 1 & 2: Fetch keyword data + ad platform metrics IN PARALLEL
+    await this.log('data_fetch', { phase: 'Fetching keyword data + ad platform metrics in parallel' });
     let keywordData: KeywordData[] = [];
-    try {
-      keywordData = await fetchKeywordData(keywordSeeds);
-      await this.log('keyword_research_complete', { keywordsFound: keywordData.length });
-    } catch (error: any) {
-      await this.log('keyword_research_failed', { error: error.message });
-    }
-
-    // Step 2: Fetch real ad platform data if available
     let realGoogleMetrics: any[] = [];
     let realMetaInsights: any[] = [];
 
-    if (googleAds.isGoogleAdsAvailable()) {
-      try {
-        await this.log('google_ads_fetch', { phase: 'Fetching real Google Ads campaign metrics' });
-        realGoogleMetrics = await googleAds.getCampaignMetrics();
-        await this.log('google_ads_fetched', { campaigns: realGoogleMetrics.length });
-      } catch (err: any) {
-        await this.log('google_ads_fetch_failed', { error: err.message });
-      }
+    const [kwResult, googleResult, metaResult] = await Promise.allSettled([
+      fetchKeywordData(keywordSeeds),
+      googleAds.isGoogleAdsAvailable() ? googleAds.getCampaignMetrics() : Promise.resolve([]),
+      metaAds.isMetaAdsAvailable() ? metaAds.getCampaignInsights() : Promise.resolve([]),
+    ]);
+
+    if (kwResult.status === 'fulfilled') {
+      keywordData = kwResult.value;
+      await this.log('keyword_research_complete', { keywordsFound: keywordData.length });
+    } else {
+      await this.log('keyword_research_failed', { error: kwResult.reason?.message });
     }
 
-    if (metaAds.isMetaAdsAvailable()) {
-      try {
-        await this.log('meta_ads_fetch', { phase: 'Fetching real Meta Ads campaign insights' });
-        realMetaInsights = await metaAds.getCampaignInsights();
-        await this.log('meta_ads_fetched', { campaigns: realMetaInsights.length });
-      } catch (err: any) {
-        await this.log('meta_ads_fetch_failed', { error: err.message });
-      }
+    if (googleResult.status === 'fulfilled') {
+      realGoogleMetrics = googleResult.value;
+      if (realGoogleMetrics.length > 0) await this.log('google_ads_fetched', { campaigns: realGoogleMetrics.length });
+    } else {
+      await this.log('google_ads_fetch_failed', { error: googleResult.reason?.message });
+    }
+
+    if (metaResult.status === 'fulfilled') {
+      realMetaInsights = metaResult.value;
+      if (realMetaInsights.length > 0) await this.log('meta_ads_fetched', { campaigns: realMetaInsights.length });
+    } else {
+      await this.log('meta_ads_fetch_failed', { error: metaResult.reason?.message });
     }
 
     // Step 3: Send everything to Gemini for campaign planning
@@ -325,13 +328,13 @@ export class PaidTrafficAgent extends BaseAgent {
         confidence: parsed.confidence || 0,
       };
 
-      // Step 4: Create FULL campaign structure in Google Ads
-      if (googleAds.isGoogleAdsAvailable() && cleanOutput.googleAds) {
-        try {
-          const dailyBudget = 100; // Use a default — LLM budget is zeroed
-          const landingUrl = funnelData.landingPage?.url || offerData.landingPageUrl || 'https://leados.com';
+      // Steps 4 & 5: Create Google Ads + Meta Ads campaigns IN PARALLEL
+      const landingUrl = funnelData.landingPage?.url || offerData.landingPageUrl || 'https://leados.com';
 
-          // 4a: Create campaign (ENABLED)
+      const googleAdsPromise = (async () => {
+        if (!googleAds.isGoogleAdsAvailable() || !cleanOutput.googleAds) return;
+        try {
+          const dailyBudget = 100;
           await this.log('google_ads_creating', { phase: 'Creating ENABLED campaign with budget' });
           const campaign = await googleAds.createCampaign({
             name: cleanOutput.googleAds.campaignName || 'LeadOS Google Campaign',
@@ -343,56 +346,42 @@ export class PaidTrafficAgent extends BaseAgent {
           cleanOutput.googleAds._createdInGoogleAds = true;
           await this.log('google_ads_campaign_created', { campaignId: campaign.campaignId });
 
-          // 4b: Add negative keywords at campaign level
-          if (cleanOutput.googleAds.negativeKeywords?.length > 0) {
-            try {
-              await googleAds.addNegativeKeywords({
-                campaignResourceName: campaign.campaignResourceName,
-                keywords: cleanOutput.googleAds.negativeKeywords,
-              });
-              await this.log('google_ads_negatives_added', { count: cleanOutput.googleAds.negativeKeywords.length });
-            } catch (err: any) {
-              await this.log('google_ads_negatives_failed', { error: err.message });
-            }
-          }
-
-          // 4c: Create ad groups with keywords and RSAs
+          // Add negative keywords + create ad groups in parallel
           const adGroups = cleanOutput.googleAds.adGroups || [];
           cleanOutput.googleAds._adGroups = [];
-          for (const ag of adGroups) {
+
+          const negativePromise = cleanOutput.googleAds.negativeKeywords?.length > 0
+            ? googleAds.addNegativeKeywords({
+                campaignResourceName: campaign.campaignResourceName,
+                keywords: cleanOutput.googleAds.negativeKeywords,
+              }).then(() => this.log('google_ads_negatives_added', { count: cleanOutput.googleAds.negativeKeywords.length }))
+              .catch((err: any) => this.log('google_ads_negatives_failed', { error: err.message }))
+            : Promise.resolve();
+
+          const adGroupPromises = adGroups.map(async (ag: any) => {
             try {
               const agResult = await googleAds.createAdGroup({
                 campaignResourceName: campaign.campaignResourceName,
                 name: ag.name,
               });
-              await this.log('google_ads_adgroup_created', { name: ag.name, id: agResult.adGroupId });
 
-              const agKeywords = (ag.keywords || []).map((kw: string) => ({
-                text: kw,
-                matchType: 'PHRASE' as const,
-              }));
-              const exactKeywords = (ag.keywords || []).map((kw: string) => ({
-                text: kw,
-                matchType: 'EXACT' as const,
-              }));
+              const agKeywords = (ag.keywords || []).map((kw: string) => ({ text: kw, matchType: 'PHRASE' as const }));
+              const exactKeywords = (ag.keywords || []).map((kw: string) => ({ text: kw, matchType: 'EXACT' as const }));
 
-              if (agKeywords.length > 0) {
-                await googleAds.addKeywords({
-                  adGroupResourceName: agResult.adGroupResourceName,
-                  keywords: [...agKeywords, ...exactKeywords],
-                });
-                await this.log('google_ads_keywords_added', { adGroup: ag.name, count: agKeywords.length + exactKeywords.length });
-              }
-
-              if (ag.adCopy) {
-                const adResult = await googleAds.createResponsiveSearchAd({
-                  adGroupResourceName: agResult.adGroupResourceName,
-                  headlines: ag.adCopy.headlines || [],
-                  descriptions: ag.adCopy.descriptions || [],
-                  finalUrl: landingUrl,
-                });
-                await this.log('google_ads_rsa_created', { adGroup: ag.name, adId: adResult.adId });
-              }
+              // Add keywords + create RSA in parallel within each ad group
+              await Promise.all([
+                agKeywords.length > 0
+                  ? googleAds.addKeywords({ adGroupResourceName: agResult.adGroupResourceName, keywords: [...agKeywords, ...exactKeywords] })
+                  : Promise.resolve(),
+                ag.adCopy
+                  ? googleAds.createResponsiveSearchAd({
+                      adGroupResourceName: agResult.adGroupResourceName,
+                      headlines: ag.adCopy.headlines || [],
+                      descriptions: ag.adCopy.descriptions || [],
+                      finalUrl: landingUrl,
+                    })
+                  : Promise.resolve(),
+              ]);
 
               cleanOutput.googleAds._adGroups.push({
                 name: ag.name,
@@ -403,17 +392,17 @@ export class PaidTrafficAgent extends BaseAgent {
             } catch (err: any) {
               await this.log('google_ads_adgroup_failed', { adGroup: ag.name, error: err.message });
             }
-          }
+          });
+
+          await Promise.all([negativePromise, ...adGroupPromises]);
         } catch (err: any) {
           await this.log('google_ads_create_failed', { error: err.message });
         }
-      }
+      })();
 
-      // Step 5: Create FULL campaign structure in Meta Ads
-      if (metaAds.isMetaAdsAvailable() && cleanOutput.metaAds) {
+      const metaAdsPromise = (async () => {
+        if (!metaAds.isMetaAdsAvailable() || !cleanOutput.metaAds) return;
         try {
-          const landingUrl = funnelData.landingPage?.url || offerData.landingPageUrl || 'https://leados.com';
-
           await this.log('meta_creating', { phase: 'Creating ACTIVE Meta campaign' });
           const campaign = await metaAds.createCampaign({
             name: cleanOutput.metaAds.campaignName || 'LeadOS Meta Campaign',
@@ -428,7 +417,9 @@ export class PaidTrafficAgent extends BaseAgent {
 
           const adSets = cleanOutput.metaAds.adSets || [];
           cleanOutput.metaAds._adSets = [];
-          for (const adSet of adSets) {
+
+          // Create all ad sets in parallel
+          await Promise.all(adSets.map(async (adSet: any) => {
             try {
               const adSetResult = await metaAds.createAdSet({
                 campaignId: campaign.campaignId,
@@ -440,11 +431,10 @@ export class PaidTrafficAgent extends BaseAgent {
                   ageMax: 55,
                 },
               });
-              await this.log('meta_adset_created', { name: adSet.name, id: adSetResult.adSetId });
 
+              // Create all ads within this ad set in parallel
               const creatives = adSet.creatives || [];
-              const adIds: string[] = [];
-              for (const creative of creatives) {
+              const adResults = await Promise.all(creatives.map(async (creative: any) => {
                 try {
                   const adResult = await metaAds.createAd({
                     adSetId: adSetResult.adSetId,
@@ -456,27 +446,30 @@ export class PaidTrafficAgent extends BaseAgent {
                       callToAction: 'LEARN_MORE',
                     },
                   });
-                  adIds.push(adResult.adId);
-                  await this.log('meta_ad_created', { creative: creative.name, adId: adResult.adId });
+                  return adResult.adId;
                 } catch (err: any) {
                   await this.log('meta_ad_failed', { creative: creative.name, error: err.message });
+                  return null;
                 }
-              }
+              }));
 
               cleanOutput.metaAds._adSets.push({
                 name: adSet.name,
                 adSetId: adSetResult.adSetId,
-                adsCount: adIds.length,
+                adsCount: adResults.filter(Boolean).length,
                 status: 'ACTIVE',
               });
             } catch (err: any) {
               await this.log('meta_adset_failed', { adSet: adSet.name, error: err.message });
             }
-          }
+          }));
         } catch (err: any) {
           await this.log('meta_create_failed', { error: err.message });
         }
-      }
+      })();
+
+      // Wait for both platforms to finish simultaneously
+      await Promise.all([googleAdsPromise, metaAdsPromise]);
 
       // Inject real platform metrics into output (these are REAL, from API)
       if (realGoogleMetrics.length > 0) {

@@ -165,7 +165,16 @@ function Section({
 }
 
 export function ContentCreativeOutput({ data }: Props) {
-  const displayData: ContentData = data?.data || data;
+  // Unwrap nested data — agent output may be wrapped in {success, data: {...}} or {data: {data: {...}}}
+  let displayData: ContentData = data?.data?.data || data?.data || data;
+
+  // If still no adCopies/hooks, search one level deeper in case of extra wrapping
+  if (displayData && !displayData.adCopies && !displayData.hooks) {
+    const inner = (displayData as any)?.data;
+    if (inner && (inner.adCopies || inner.hooks)) {
+      displayData = inner;
+    }
+  }
 
   if (!displayData || (!displayData.adCopies && !displayData.hooks)) {
     return (
