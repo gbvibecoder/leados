@@ -122,15 +122,12 @@ export default function LeadOSPage() {
 
   const isPaused = pipeline.status === 'paused';
 
-  // Compute effective agent statuses — ENFORCES only ONE agent can be "running" at a time
-  // If the store has multiple agents as "running" (due to SSE race conditions),
-  // only the one at currentAgentIndex is truly running; others are forced to "done"
+  // Compute effective agent statuses — enforces only ONE agent running at a time
   const agentStatuses = useMemo(() => {
     const statuses: Record<string, AgentStatus> = {};
     const currentAgent = pipeline.agents[pipeline.currentAgentIndex];
     for (const agent of pipeline.agents) {
       let status = agent.status;
-      // If this agent says "running" but it's NOT the current agent, force it to "done"
       if (status === 'running' && currentAgent && agent.id !== currentAgent.id) {
         status = 'done';
       }

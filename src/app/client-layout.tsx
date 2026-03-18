@@ -59,14 +59,10 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
             if (agentIdx >= 0) {
               setCurrentAgentIndex(agentIdx);
             }
-            // ENFORCE SEQUENTIAL: Force-stop any other agent that was still "running"
-            // This ensures only ONE agent shows as running at a time
+            // Mark any previously running agent as done before starting new one
             for (const a of currentAgents) {
               if (a.id !== data.agentId && a.status === 'running') {
-                updateAgentStatus(a.id, {
-                  status: 'done',
-                  progress: 100,
-                });
+                updateAgentStatus(a.id, { status: 'done', progress: 100 });
               }
             }
             updateAgentStatus(data.agentId, {

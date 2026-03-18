@@ -96,7 +96,8 @@ const PARALLEL_GROUPS: string[][] = [
   ['offer-engineering'],
   ['validation'],
   ['funnel-builder'],
-  ['content-creative', 'paid-traffic'],        // both need offer+validation+funnel — safe parallel
+  ['content-creative'],                        // content-creative must finish before paid-traffic
+  ['paid-traffic'],                            // paid-traffic uses content from content-creative
   ['outbound-outreach', 'inbound-capture'],    // outbound needs content, inbound needs funnel — safe parallel
   ['ai-qualification'],
   ['sales-routing'],
@@ -144,9 +145,11 @@ async function runPipelineInBackground(id: string, agentsToRun: string[], projec
       agentRun = await prisma.agentRun.create({
         data: { pipelineId: id, agentId, agentName: agent.name, status: 'running', inputsJson: JSON.stringify(projectConfig), startedAt: new Date() },
       });
-    } catch { /* ignore */ }
+    } catch (e) {
+      console.error(`[pipeline] Failed to create agentRun for ${agentId}:`, e);
+    }
 
-    const output = await agent.run({ pipelineId: id, config: projectConfig, previousOutputs });
+    const output = await agent.run({ pipelineId: id, config: projectConfig, previousOutputs, userId: pipelineUserId });
 
     if (output?.success) {
       previousOutputs[agentId] = output.data;
@@ -158,9 +161,20 @@ async function runPipelineInBackground(id: string, agentsToRun: string[], projec
     });
 
     if (agentRun) {
-      try {
-        await prisma.agentRun.update({ where: { id: agentRun.id }, data: { status: 'done', outputsJson: JSON.stringify(output), completedAt: new Date() } });
-      } catch { /* ignore */ }
+      const outputJson = JSON.stringify(output);
+      // Retry DB update up to 2 times — this is critical for output to show in UI
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          await prisma.agentRun.update({
+            where: { id: agentRun.id },
+            data: { status: 'done', outputsJson: outputJson, completedAt: new Date() },
+          });
+          break; // success
+        } catch (e) {
+          console.error(`[pipeline] Failed to update agentRun ${agentId} (attempt ${attempt}):`, e);
+          if (attempt < 2) await new Promise(r => setTimeout(r, 1000));
+        }
+      }
     }
   }
 

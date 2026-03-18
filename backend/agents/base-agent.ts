@@ -112,9 +112,9 @@ export abstract class BaseAgent {
       try {
         const client = new Anthropic({ apiKey, timeout: 120_000 });
 
-        // Hard 3-minute total timeout — AbortController kills the request regardless of activity
+        // Hard 90s total timeout — AbortController kills the request regardless of activity
         const abortController = new AbortController();
-        const hardTimeout = setTimeout(() => abortController.abort(), 180_000);
+        const hardTimeout = setTimeout(() => abortController.abort(), 90_000);
 
         let message;
         try {
@@ -152,7 +152,7 @@ export abstract class BaseAgent {
         const isConnectionError = error.message?.includes('Connection error') || error.message?.includes('ECONNRESET') || error.message?.includes('fetch failed') || error.name === 'AbortError';
         const isOverloaded = error.status === 429 || error.status === 529 || error.message?.includes('overloaded') || error.message?.includes('rate_limit');
         if ((isConnectionError || isOverloaded) && attempt < maxRetries) {
-          const waitSec = isOverloaded ? 15 * attempt : 5 * attempt;
+          const waitSec = isOverloaded ? 5 * attempt : 3 * attempt;
           await this.log('anthropic_wait_retry', { waitSeconds: waitSec, reason: isConnectionError ? 'connection_error' : 'overloaded' });
           await new Promise(resolve => setTimeout(resolve, waitSec * 1000));
           continue;
@@ -169,8 +169,8 @@ export abstract class BaseAgent {
 
   private async callGemini(systemPrompt: string, userMessage: string, apiKey: string, maxRetries: number, maxTokens: number = 16384): Promise<string> {
     let lastError: Error | null = null;
-    // Allow more retries for rate limits (free tier has 15 req/min)
-    const totalAttempts = maxRetries + 3;
+    // Allow 1 extra retry for transient rate limits, but not more
+    const totalAttempts = maxRetries + 1;
 
     for (let attempt = 1; attempt <= totalAttempts; attempt++) {
       try {
@@ -218,9 +218,9 @@ export abstract class BaseAgent {
           throw error;
         }
 
-        // For per-minute rate limits: wait and retry (Gemini free tier resets per minute)
+        // For per-minute rate limits: short wait and retry
         if (isRateLimit && attempt < totalAttempts) {
-          const waitSec = Math.min(15 + attempt * 10, 60);
+          const waitSec = Math.min(5 + attempt * 5, 20);
           await this.log('gemini_rate_limit_wait', { waitSeconds: waitSec, attempt });
           await new Promise(resolve => setTimeout(resolve, waitSec * 1000));
           continue;
