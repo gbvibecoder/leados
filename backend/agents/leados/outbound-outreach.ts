@@ -226,7 +226,7 @@ CRITICAL: For projectedMetrics, set emailsSent to 0, expectedReplies to 0, expec
 CRITICAL: For projectedMetrics, set ALL numeric values to 0 — no emails have been sent, no connections made, no meetings booked. Do NOT fabricate metrics.`,
       });
 
-      const response = await this.callClaude(SYSTEM_PROMPT, userMessage);
+      const response = await this.callClaude(SYSTEM_PROMPT, userMessage, 3, 8000);
       let parsed: any = {};
       try {
         parsed = this.safeParseLLMJson<any>(response, ['coldEmail', 'linkedIn', 'projectedMetrics']);

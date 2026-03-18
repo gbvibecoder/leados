@@ -112,6 +112,7 @@ async function createCalendlyEventType(config: CalendlyEventType): Promise<{ url
     // Get current user to find organization URI
     const userResponse = await fetch('https://api.calendly.com/users/me', {
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(15_000),
     });
     const userData = await userResponse.json();
     const userUri = userData.resource?.uri;
@@ -119,7 +120,7 @@ async function createCalendlyEventType(config: CalendlyEventType): Promise<{ url
     // List existing event types to find or verify
     const eventsResponse = await fetch(
       `https://api.calendly.com/event_types?user=${encodeURIComponent(userUri || '')}&active=true`,
-      { headers: { Authorization: `Bearer ${apiKey}` } }
+      { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(15_000) }
     );
     const eventsData = await eventsResponse.json();
 
@@ -171,6 +172,7 @@ async function setupHubSpotPipeline(config: HubSpotPipelineConfig): Promise<{ pi
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
+      signal: AbortSignal.timeout(15_000),
       body: JSON.stringify(pipelinePayload),
     });
 
@@ -178,6 +180,7 @@ async function setupHubSpotPipeline(config: HubSpotPipelineConfig): Promise<{ pi
       // Pipeline might already exist — list and find it
       const listResponse = await fetch('https://api.hubapi.com/crm/v3/pipelines/deals', {
         headers: { Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(15_000),
       });
       const pipelines = await listResponse.json();
       const existing = pipelines.results?.find((p: any) => p.label === config.pipelineName);
@@ -218,6 +221,7 @@ async function createHubSpotContactProperties(properties: string[]): Promise<boo
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
+        signal: AbortSignal.timeout(15_000),
         body: JSON.stringify({
           name: prop.toLowerCase().replace(/\s+/g, '_'),
           label: prop,
@@ -301,7 +305,7 @@ export class FunnelBuilderAgent extends BaseAgent {
         config: inputs.config,
       };
 
-      const response = await this.callClaude(SYSTEM_PROMPT, JSON.stringify(enrichedInput));
+      const response = await this.callClaude(SYSTEM_PROMPT, JSON.stringify(enrichedInput), 3, 8000);
       let parsed: any = {};
       try {
         parsed = this.safeParseLLMJson<any>(response, ['landingPage', 'leadForm']);

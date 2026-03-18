@@ -115,7 +115,7 @@ export class ContentCreativeAgent extends BaseAgent {
         config: inputs.config,
       };
 
-      const response = await this.callClaude(SYSTEM_PROMPT, JSON.stringify(enrichedInput));
+      const response = await this.callClaude(SYSTEM_PROMPT, JSON.stringify(enrichedInput), 3, 10000);
       let parsed: any = {};
       try {
         parsed = this.safeParseLLMJson<any>(response, ['adCopies', 'hooks', 'emailSequence']);

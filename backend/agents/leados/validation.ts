@@ -66,7 +66,7 @@ export class ValidationAgent extends BaseAgent {
         ...inputs.config,
         previousOutputs: inputs.previousOutputs || {},
       });
-      const response = await this.callClaude(SYSTEM_PROMPT, userMessage);
+      const response = await this.callClaude(SYSTEM_PROMPT, userMessage, 3, 4000);
       let parsed: any = {};
       try {
         parsed = this.safeParseLLMJson<any>(response, ['decision', 'scores']);
