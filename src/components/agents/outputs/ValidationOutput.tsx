@@ -184,7 +184,7 @@ export function ValidationOutput({ data }: Props) {
           <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-400 shrink-0" />
           <span className="text-xs sm:text-sm font-medium text-blue-400">Validation Reasoning</span>
         </div>
-        <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed break-words">{validationData.reasoning || data?.reasoning || ''}</p>
+        <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed break-words">{typeof validationData.reasoning === 'string' ? validationData.reasoning : typeof data?.reasoning === 'string' ? data.reasoning : (typeof validationData.reasoning === 'object' ? JSON.stringify(validationData.reasoning) : '')}</p>
       </div>
     </div>
   );

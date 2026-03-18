@@ -95,7 +95,21 @@ interface Props {
 // ─── Main Component ─────────────────────────────────────────────────────────
 
 export function FunnelBuilderOutput({ data }: Props) {
-  const funnelData: FunnelData = data?.data || data;
+  // Robust data extraction — handle multiple wrapper shapes the backend may return
+  const raw = data?.data?.data || data?.data || data;
+
+  // Normalize: map alternative key names the LLM might return
+  const funnelData: FunnelData = (raw && typeof raw === 'object') ? {
+    ...raw,
+    landingPage: raw.landingPage || raw.landing_page || raw.page || raw.landingPageCopy || undefined,
+    leadForm: raw.leadForm || raw.lead_form || raw.form || raw.leadCaptureForm || undefined,
+    bookingCalendar: raw.bookingCalendar || raw.booking_calendar || raw.calendar || raw.booking || undefined,
+    crmIntegration: raw.crmIntegration || raw.crm_integration || raw.crm || raw.crmSetup || undefined,
+    tracking: raw.tracking || raw.analytics || raw.trackingPixels || raw.trackingSetup || undefined,
+    pages: raw.pages || raw.pageList || undefined,
+    reasoning: raw.reasoning || data?.reasoning || '',
+    confidence: typeof raw.confidence === 'number' ? raw.confidence : (data?.confidence || 0),
+  } : raw;
 
   // Normalize meeting duration to 30 minutes
   if (funnelData?.bookingCalendar) {
@@ -417,7 +431,7 @@ export function FunnelBuilderOutput({ data }: Props) {
           <span className="text-xs sm:text-sm font-medium text-blue-400">Build Reasoning</span>
         </div>
         <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed break-words">
-          {funnelData.reasoning || data?.reasoning || ''}
+          {typeof funnelData.reasoning === 'string' ? funnelData.reasoning : typeof data?.reasoning === 'string' ? data.reasoning : (typeof funnelData.reasoning === 'object' ? JSON.stringify(funnelData.reasoning) : '')}
         </p>
       </div>
     </div>

@@ -450,7 +450,7 @@ export function ServiceResearchOutput({ data, isLive = false }: Props) {
                 {/* Reasoning */}
                 <div className="p-2.5 sm:p-3 bg-muted/50 rounded-lg">
                   <div className="text-xs font-medium text-muted-foreground mb-1">Analysis</div>
-                  <p className="text-xs sm:text-sm leading-relaxed break-words">{opp.reasoning}</p>
+                  <p className="text-xs sm:text-sm leading-relaxed break-words">{typeof opp.reasoning === 'string' ? opp.reasoning : JSON.stringify(opp.reasoning)}</p>
                 </div>
 
                 {/* Platform Mentions */}

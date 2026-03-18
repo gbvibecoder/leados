@@ -154,7 +154,7 @@ async function runPipelineInBackground(id: string, agentsToRun: string[], projec
 
     pipelineEvents.emitAgentCompleted({
       agentId, agentName: agent.name, pipelineId: id, pipelineType: 'leados',
-      outputSummary: output?.reasoning || 'Completed successfully', timestamp: new Date().toISOString(),
+      outputSummary: typeof output?.reasoning === 'string' ? output.reasoning : 'Completed successfully', timestamp: new Date().toISOString(),
     });
 
     if (agentRun) {

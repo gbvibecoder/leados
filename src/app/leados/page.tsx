@@ -478,7 +478,7 @@ export default function LeadOSPage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, ease: [0.25, 0.4, 0.25, 1] }}
-          className="mb-6 relative rounded-2xl overflow-hidden p-5 sm:p-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
+          className="mb-6 relative rounded-2xl overflow-visible p-5 sm:p-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
           style={{ background: 'linear-gradient(135deg, rgba(0,242,255,0.03), rgba(139,92,246,0.02), rgba(2,2,5,0.8))', border: '1px solid rgba(0,242,255,0.08)' }}
         >
           {/* Decorative mini orbit */}
