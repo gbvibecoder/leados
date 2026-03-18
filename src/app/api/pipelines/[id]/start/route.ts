@@ -72,9 +72,42 @@ async function waitWhilePaused(id: string, maxWaitMs = 600000): Promise<boolean>
   }
 }
 
+/*
+ * PARALLEL EXECUTION GROUPS
+ * Verified dependency chain for each agent:
+ *   service-research     → needs nothing
+ *   offer-engineering    → needs service-research
+ *   validation           → needs offer-engineering
+ *   funnel-builder       → needs offer-engineering + validation
+ *   content-creative     → needs offer + validation + funnel
+ *   paid-traffic         → needs offer + validation + funnel (PARALLEL with content)
+ *   outbound-outreach    → needs offer + content-creative
+ *   inbound-capture      → needs funnel
+ *   ai-qualification     → needs inbound-capture
+ *   sales-routing        → needs ai-qualification
+ *   tracking-attribution → needs funnel + paid-traffic + outbound + inbound
+ *   perf-optimization    → needs paid-traffic + tracking-attribution
+ *   crm-hygiene          → needs inbound + qualification + routing + tracking
+ *
+ * Safe parallel groups (13 agents in 10 steps instead of 13):
+ */
+const PARALLEL_GROUPS: string[][] = [
+  ['service-research'],
+  ['offer-engineering'],
+  ['validation'],
+  ['funnel-builder'],
+  ['content-creative', 'paid-traffic'],        // both need offer+validation+funnel — safe parallel
+  ['outbound-outreach', 'inbound-capture'],    // outbound needs content, inbound needs funnel — safe parallel
+  ['ai-qualification'],
+  ['sales-routing'],
+  ['tracking-attribution'],
+  ['performance-optimization', 'crm-hygiene'], // both need tracking — safe parallel
+];
+
 async function runPipelineInBackground(id: string, agentsToRun: string[], projectData?: { name: string; url?: string; type: string; description?: string; config?: any }, pipelineUserId?: string | null) {
   const agents = getAgents();
   const previousOutputs: Record<string, any> = {};
+  const enabledSet = new Set(agentsToRun);
 
   // Build project config to pass to each agent
   const projectConfig: Record<string, any> = {};
@@ -84,163 +117,118 @@ async function runPipelineInBackground(id: string, agentsToRun: string[], projec
     if (projectData.url) projectConfig.projectUrl = projectData.url;
     if (projectData.description) projectConfig.projectDescription = projectData.description;
 
-    // Map project name/description into fields agents look for (focus, niche, serviceNiche)
-    // so agents automatically research/generate for this specific project
     if (projectData.name) {
       projectConfig.focus = projectData.name;
       projectConfig.niche = projectData.name;
       projectConfig.serviceNiche = projectData.name;
     }
 
-    // Merge any extra config from the project (e.g. enabledAgentIds, url, budget overrides)
     if (projectData.config) {
       const cfg = typeof projectData.config === 'string' ? JSON.parse(projectData.config) : projectData.config;
       Object.assign(projectConfig, cfg);
     }
   }
 
-  for (let i = 0; i < agentsToRun.length; i++) {
-    const agentId = agentsToRun[i];
+  // Helper: run a single agent with full SSE + DB lifecycle
+  async function runSingleAgent(agentId: string, agentIndex: number): Promise<void> {
     const agent = agents.get(agentId);
-    if (!agent) continue;
+    if (!agent) return;
 
-    // Check if pipeline was cancelled
+    pipelineEvents.emitAgentStarted({
+      agentId, agentName: agent.name, pipelineId: id, pipelineType: 'leados',
+      userId: pipelineUserId || undefined, timestamp: new Date().toISOString(),
+    });
+
+    let agentRun;
+    try {
+      agentRun = await prisma.agentRun.create({
+        data: { pipelineId: id, agentId, agentName: agent.name, status: 'running', inputsJson: JSON.stringify(projectConfig), startedAt: new Date() },
+      });
+    } catch { /* ignore */ }
+
+    const output = await agent.run({ pipelineId: id, config: projectConfig, previousOutputs });
+
+    if (output?.success) {
+      previousOutputs[agentId] = output.data;
+    }
+
+    pipelineEvents.emitAgentCompleted({
+      agentId, agentName: agent.name, pipelineId: id, pipelineType: 'leados',
+      outputSummary: output?.reasoning || 'Completed successfully', timestamp: new Date().toISOString(),
+    });
+
+    if (agentRun) {
+      try {
+        await prisma.agentRun.update({ where: { id: agentRun.id }, data: { status: 'done', outputsJson: JSON.stringify(output), completedAt: new Date() } });
+      } catch { /* ignore */ }
+    }
+  }
+
+  let globalIndex = 0;
+
+  for (const group of PARALLEL_GROUPS) {
+    // Filter to only enabled agents in this group
+    const groupAgents = group.filter(id => enabledSet.has(id));
+    if (groupAgents.length === 0) continue;
+
+    // Check cancelled/paused before each group
     if (await checkCancelled(id)) return;
-
-    // Check if pipeline was paused — wait for resume
     if (await checkPaused(id)) {
       const resumed = await waitWhilePaused(id);
-      if (!resumed) return; // pipeline was cancelled or timed out
+      if (!resumed) return;
     }
 
     // Update pipeline progress
     try {
-      await prisma.pipeline.update({
-        where: { id },
-        data: { currentAgentIndex: i },
-      });
-    } catch {
-      // ignore
-    }
+      await prisma.pipeline.update({ where: { id }, data: { currentAgentIndex: globalIndex } });
+    } catch { /* ignore */ }
 
-    // Emit SSE event: agent started
-    pipelineEvents.emitAgentStarted({
-      agentId,
-      agentName: agent.name,
-      pipelineId: id,
-      pipelineType: 'leados',
-      userId: pipelineUserId || undefined,
-      timestamp: new Date().toISOString(),
-    });
+    // Run agents in this group IN PARALLEL
+    const results = await Promise.allSettled(
+      groupAgents.map((agentId) => runSingleAgent(agentId, globalIndex))
+    );
 
-    // Create run record
-    let agentRun;
-    try {
-      agentRun = await prisma.agentRun.create({
-        data: {
-          pipelineId: id,
-          agentId,
-          agentName: agent.name,
-          status: 'running',
-          inputsJson: JSON.stringify(projectConfig),
-          startedAt: new Date(),
-        },
-      });
-    } catch {
-      // ignore DB errors — still run the agent
-    }
+    // Check for errors — if any agent failed, stop pipeline
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i];
+      if (result.status === 'rejected') {
+        const agentId = groupAgents[i];
+        const agent = agents.get(agentId);
+        const errorMsg = result.reason?.message || 'Unknown error';
 
-    try {
-      const output = await agent.run({
-        pipelineId: id,
-        config: projectConfig,
-        previousOutputs,
-      });
-
-      // Store output for next agent in chain
-      if (output?.success) {
-        previousOutputs[agentId] = output.data;
-      }
-
-      // Emit SSE event: agent completed
-      pipelineEvents.emitAgentCompleted({
-        agentId,
-        agentName: agent.name,
-        pipelineId: id,
-        pipelineType: 'leados',
-        outputSummary: output?.reasoning || 'Completed successfully',
-        timestamp: new Date().toISOString(),
-      });
-
-      if (agentRun) {
-        try {
-          await prisma.agentRun.update({
-            where: { id: agentRun.id },
-            data: {
-              status: 'done',
-              outputsJson: JSON.stringify(output),
-              completedAt: new Date(),
-            },
-          });
-        } catch {
-          // ignore
-        }
-      }
-    } catch (error: any) {
-      // Emit SSE event: agent error
-      pipelineEvents.emitAgentError({
-        agentId,
-        agentName: agent.name,
-        pipelineId: id,
-        pipelineType: 'leados',
-        error: error.message || 'Unknown error',
-        timestamp: new Date().toISOString(),
-      });
-
-      if (agentRun) {
-        try {
-          await prisma.agentRun.update({
-            where: { id: agentRun.id },
-            data: {
-              status: 'error',
-              error: error.message,
-              completedAt: new Date(),
-            },
-          });
-        } catch {
-          // ignore
-        }
-      }
-
-      // Update pipeline to error and stop
-      try {
-        await prisma.pipeline.update({
-          where: { id },
-          data: { status: 'error', currentAgentIndex: i },
+        pipelineEvents.emitAgentError({
+          agentId, agentName: agent?.name || agentId, pipelineId: id, pipelineType: 'leados',
+          error: errorMsg, timestamp: new Date().toISOString(),
         });
-      } catch {
-        // ignore
+
+        // Update the agentRun record
+        try {
+          const agentRun = await prisma.agentRun.findFirst({ where: { pipelineId: id, agentId, status: 'running' }, orderBy: { startedAt: 'desc' } });
+          if (agentRun) {
+            await prisma.agentRun.update({ where: { id: agentRun.id }, data: { status: 'error', error: errorMsg, completedAt: new Date() } });
+          }
+        } catch { /* ignore */ }
+
+        try {
+          await prisma.pipeline.update({ where: { id }, data: { status: 'error', currentAgentIndex: globalIndex } });
+        } catch { /* ignore */ }
+        return; // Stop pipeline on error
       }
-      return; // Stop pipeline on error
     }
+
+    globalIndex += groupAgents.length;
   }
 
   // All agents completed successfully
   pipelineEvents.emitPipelineCompleted({
-    pipelineId: id,
-    pipelineType: 'leados',
+    pipelineId: id, pipelineType: 'leados',
     userId: pipelineUserId || undefined,
     summary: { totalAgents: agentsToRun.length, completed: agentsToRun.length },
   });
 
   try {
-    await prisma.pipeline.update({
-      where: { id },
-      data: { status: 'completed', currentAgentIndex: agentsToRun.length },
-    });
-  } catch {
-    // ignore
-  }
+    await prisma.pipeline.update({ where: { id }, data: { status: 'completed', currentAgentIndex: agentsToRun.length } });
+  } catch { /* ignore */ }
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {

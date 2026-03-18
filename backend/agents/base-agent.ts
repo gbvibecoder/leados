@@ -50,15 +50,15 @@ export abstract class BaseAgent {
     return this.logs;
   }
 
-  /** Call LLM — tries Anthropic first, falls back to Gemini if Anthropic fails */
-  protected async callClaude(systemPrompt: string, userMessage: string, maxRetries = 3): Promise<string> {
+  /** Call LLM — tries Anthropic first, falls back to Gemini if Anthropic fails.
+   *  maxTokens: agent-specific output limit (default 8192, was 16384 — most agents need <4000 tokens) */
+  protected async callClaude(systemPrompt: string, userMessage: string, maxRetries = 3, maxTokens = 8192): Promise<string> {
     let anthropicError = '';
-
     // Try Anthropic first
     const anthropicKey = process.env.ANTHROPIC_API_KEY;
     if (anthropicKey) {
       try {
-        const result = await this.callAnthropic(systemPrompt, userMessage, anthropicKey, maxRetries);
+        const result = await this.callAnthropic(systemPrompt, userMessage, anthropicKey, maxRetries, maxTokens);
         return result;
       } catch (error: any) {
         anthropicError = error.message || 'Unknown Anthropic error';
@@ -74,7 +74,7 @@ export abstract class BaseAgent {
     if (geminiKey) {
       try {
         await this.log('gemini_fallback', { reason: `Anthropic failed: ${anthropicError}` });
-        const result = await this.callGemini(systemPrompt, userMessage, geminiKey, maxRetries);
+        const result = await this.callGemini(systemPrompt, userMessage, geminiKey, maxRetries, maxTokens);
         return result;
       } catch (error: any) {
         await this.log('gemini_failed', { error: error.message });
@@ -85,7 +85,7 @@ export abstract class BaseAgent {
     throw new Error('No LLM API key configured — set ANTHROPIC_API_KEY or GEMINI_API_KEY');
   }
 
-  private async callAnthropic(systemPrompt: string, userMessage: string, apiKey: string, maxRetries: number): Promise<string> {
+  private async callAnthropic(systemPrompt: string, userMessage: string, apiKey: string, maxRetries: number, maxTokens: number = 8192): Promise<string> {
     let lastError: Error | null = null;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -94,8 +94,8 @@ export abstract class BaseAgent {
 
         const message = await client.messages.create({
           model: 'claude-sonnet-4-6',
-          max_tokens: 16384,
-          system: systemPrompt,
+          max_tokens: maxTokens,
+          system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
           messages: [{ role: 'user', content: userMessage }],
         });
 
@@ -130,7 +130,7 @@ export abstract class BaseAgent {
     throw lastError || new Error('Anthropic call failed after retries');
   }
 
-  private async callGemini(systemPrompt: string, userMessage: string, apiKey: string, maxRetries: number): Promise<string> {
+  private async callGemini(systemPrompt: string, userMessage: string, apiKey: string, maxRetries: number, maxTokens: number = 8192): Promise<string> {
     let lastError: Error | null = null;
     // Allow more retries for rate limits (free tier has 15 req/min)
     const totalAttempts = maxRetries + 3;
@@ -147,7 +147,7 @@ export abstract class BaseAgent {
             systemInstruction: { parts: [{ text: systemPrompt }] },
             contents: [{ parts: [{ text: userMessage }] }],
             generationConfig: {
-              maxOutputTokens: 16384,
+              maxOutputTokens: maxTokens,
               temperature: 0.7,
             },
           }),

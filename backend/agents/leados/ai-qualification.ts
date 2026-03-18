@@ -429,61 +429,58 @@ For leads in emailOnlyLeads: set callStatus to "no_valid_phone", outcome to "med
       // Update lead stage + qualification data in the database
       try {
         const { prisma } = await import('@/lib/prisma');
-        for (const result of parsed.callResults || []) {
-          if (!result.leadEmail) continue;
+        const stageMap: Record<string, string> = {
+          high_intent_checkout: 'qualified',
+          high_intent_sales: 'qualified',
+          medium_intent: 'nurture',
+          low_intent: 'disqualified',
+          pending_call: '',
+        };
+        const userScope = inputs.userId ? { userId: inputs.userId } : {};
 
-          // Map outcome to stage
-          // Leads without valid phone go to 'contacted' (email nurture), not disqualified
-          // Leads that were never called stay in their current stage
-          const stageMap: Record<string, string> = {
-            high_intent_checkout: 'qualified',
-            high_intent_sales: 'qualified',
-            medium_intent: 'nurture',
-            low_intent: 'disqualified',
-            pending_call: '', // don't change stage
-          };
-          const isNoPhone = result.callStatus === 'no_valid_phone';
-          const isNotCalled = result.callStatus === 'not_called' || result.outcome === 'pending_call';
-          const newStage = isNotCalled ? '' : isNoPhone ? 'contacted' : (stageMap[result.outcome] || 'contacted');
+        // Batch all DB operations in a single transaction for speed
+        await prisma.$transaction(async (tx: any) => {
+          for (const result of parsed.callResults || []) {
+            if (!result.leadEmail) continue;
+            const isNoPhone = result.callStatus === 'no_valid_phone';
+            const isNotCalled = result.callStatus === 'not_called' || result.outcome === 'pending_call';
+            const newStage = isNotCalled ? '' : isNoPhone ? 'contacted' : (stageMap[result.outcome] || 'contacted');
+            if (isNotCalled) continue;
 
-          // Skip DB update for leads that were never actually called
-          if (isNotCalled) continue;
-
-          const userScope = inputs.userId ? { userId: inputs.userId } : {};
-          await prisma.lead.updateMany({
-            where: { email: result.leadEmail, ...userScope },
-            data: {
-              stage: newStage,
-              score: result.score || undefined,
-              qualificationScore: result.score || null,
-              qualificationOutcome: result.outcome || null,
-              routingDecision: result.routingAction || null,
-              ...(inputs.userId && { userId: inputs.userId }),
-            },
-          });
-
-          // Log the qualification call as an interaction
-          const lead = await prisma.lead.findFirst({ where: { email: result.leadEmail, ...userScope } });
-          if (lead) {
-            await prisma.interaction.create({
+            await tx.lead.updateMany({
+              where: { email: result.leadEmail, ...userScope },
               data: {
-                leadId: lead.id,
-                type: 'ai_qualification_call',
-                content: `AI call: ${result.callStatus} | Score: ${result.score} | Outcome: ${result.outcome} | Duration: ${result.duration}s`,
-                metadata: JSON.stringify({
-                  callStatus: result.callStatus,
-                  duration: result.duration,
-                  score: result.score,
-                  outcome: result.outcome,
-                  sentiment: result.sentiment,
-                  keySignals: result.keySignals,
-                  objectionsRaised: result.objectionsRaised,
-                  callId: result.callId || null,
-                }),
+                stage: newStage,
+                score: result.score || undefined,
+                qualificationScore: result.score || null,
+                qualificationOutcome: result.outcome || null,
+                routingDecision: result.routingAction || null,
+                ...(inputs.userId && { userId: inputs.userId }),
               },
             });
+
+            const lead = await tx.lead.findFirst({ where: { email: result.leadEmail, ...userScope } });
+            if (lead) {
+              await tx.interaction.create({
+                data: {
+                  leadId: lead.id,
+                  type: 'ai_qualification_call',
+                  content: `AI call: ${result.callStatus} | Score: ${result.score} | Outcome: ${result.outcome} | Duration: ${result.duration}s`,
+                  metadata: JSON.stringify({
+                    callStatus: result.callStatus,
+                    duration: result.duration,
+                    score: result.score,
+                    outcome: result.outcome,
+                    sentiment: result.sentiment,
+                    keySignals: result.keySignals,
+                    objectionsRaised: result.objectionsRaised,
+                    callId: result.callId || null,
+                  }),
+                },
+              });
+            }
           }
-        }
+        });
         await this.log('db_leads_updated', { count: (parsed.callResults || []).length });
       } catch (err: any) {
         await this.log('db_update_error', { error: err.message });

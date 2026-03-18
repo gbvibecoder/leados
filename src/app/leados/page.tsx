@@ -287,11 +287,11 @@ export default function LeadOSPage() {
         config: {},
       });
 
-      // Poll for completion every 3 seconds
+      // Poll for completion every 1.5 seconds (was 3s — halved for faster response)
       const pollForCompletion = async () => {
-        const maxPolls = 200; // ~10 minutes max
+        const maxPolls = 400; // ~10 minutes max at 1.5s intervals
         for (let i = 0; i < maxPolls; i++) {
-          await new Promise(r => setTimeout(r, 3000));
+          await new Promise(r => setTimeout(r, 1500));
           try {
             const runs = await agentsApi.runs(agentId);
             const latestRun = runs?.[0];
