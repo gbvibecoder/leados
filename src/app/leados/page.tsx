@@ -281,34 +281,62 @@ export default function LeadOSPage() {
     });
 
     try {
-      const result = await agentsApi.run(agentId, {
+      // Fire agent — returns immediately with status: 'running'
+      await agentsApi.run(agentId, {
         pipelineId: pipeline.id,
         config: {},
       });
 
-      stopAgentTimer(agentId);
+      // Poll for completion every 3 seconds
+      const pollForCompletion = async () => {
+        const maxPolls = 200; // ~10 minutes max
+        for (let i = 0; i < maxPolls; i++) {
+          await new Promise(r => setTimeout(r, 3000));
+          try {
+            const runs = await agentsApi.runs(agentId);
+            const latestRun = runs?.[0];
+            if (!latestRun) continue;
 
-      // Store the real output
-      const output = result.outputsJson || result.outputs || result;
-      setAgentOutputs(prev => ({ ...prev, [agentId]: output }));
+            if (latestRun.status === 'done') {
+              stopAgentTimer(agentId);
+              const output = latestRun.outputsJson || latestRun;
+              setAgentOutputs(prev => ({ ...prev, [agentId]: output }));
 
-      const preview = output?.reasoning
-        || output?.data?.reasoning
-        || (output?.success ? 'Completed successfully with live data' : 'Completed');
+              const preview = output?.reasoning
+                || output?.data?.reasoning
+                || (output?.success ? 'Completed successfully with live data' : 'Completed');
 
-      updateAgentStatus(agentId, {
-        status: 'done',
-        progress: 100,
-        lastRunTime: new Date().toISOString(),
-        outputPreview: typeof preview === 'string' ? preview.slice(0, 120) : 'Agent completed successfully',
-      });
+              updateAgentStatus(agentId, {
+                status: 'done',
+                progress: 100,
+                lastRunTime: new Date().toISOString(),
+                outputPreview: typeof preview === 'string' ? preview.slice(0, 120) : 'Agent completed successfully',
+              });
 
-      addActivity({
-        type: 'agent_completed',
-        agentId,
-        agentName: LEADOS_AGENTS.find(a => a.id === agentId)?.name || agentId,
-        message: `${LEADOS_AGENTS.find(a => a.id === agentId)?.name || agentId} completed`,
-      });
+              addActivity({
+                type: 'agent_completed',
+                agentId,
+                agentName: LEADOS_AGENTS.find(a => a.id === agentId)?.name || agentId,
+                message: `${LEADOS_AGENTS.find(a => a.id === agentId)?.name || agentId} completed`,
+              });
+              return;
+            }
+
+            if (latestRun.status === 'error') {
+              throw new Error(latestRun.error || 'Agent execution failed');
+            }
+          } catch (pollErr: any) {
+            if (pollErr.message && pollErr.message !== 'Agent execution failed') {
+              // Network error during poll — keep trying
+              continue;
+            }
+            throw pollErr;
+          }
+        }
+        throw new Error('Agent timed out after 10 minutes');
+      };
+
+      await pollForCompletion();
     } catch (err: any) {
       stopAgentTimer(agentId);
       const errorMsg = err.message || 'Agent execution failed';

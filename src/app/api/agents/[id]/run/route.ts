@@ -3,6 +3,9 @@ import { prisma } from '@/lib/prisma';
 import { createLeadOSAgents } from '@backend/agents/leados/index';
 import { getUserId } from '@/lib/auth';
 
+// Allow up to 5 minutes for agent execution on Vercel
+export const maxDuration = 300;
+
 // Singleton agent instances
 let agentMap: Map<string, any> | null = null;
 
@@ -89,17 +92,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
   }
 
-  // Execute the agent
-  try {
-    const output = await agent.run({
-      pipelineId,
-      config: body.config || {},
-      previousOutputs,
-      userId,
-    });
-
-    // Update the run record with results
-    const completedRun = await prisma.agentRun.update({
+  // Fire agent in background — don't block the HTTP response
+  const runPromise = agent.run({
+    pipelineId,
+    config: body.config || {},
+    previousOutputs,
+    userId,
+  }).then(async (output: any) => {
+    await prisma.agentRun.update({
       where: { id: agentRun.id },
       data: {
         status: 'done',
@@ -107,21 +107,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         completedAt: new Date(),
       },
     });
-
-    return NextResponse.json({
-      id: completedRun.id,
-      pipelineId,
-      agentId: id,
-      agentName: agent.name,
-      status: 'done',
-      inputsJson: body.config || {},
-      outputsJson: output,
-      startedAt: completedRun.startedAt,
-      completedAt: completedRun.completedAt,
-      createdAt: completedRun.createdAt,
-    });
-  } catch (error: any) {
-    // Update run as error
+  }).catch(async (error: any) => {
     await prisma.agentRun.update({
       where: { id: agentRun.id },
       data: {
@@ -130,10 +116,30 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         completedAt: new Date(),
       },
     });
+  });
 
-    return NextResponse.json(
-      { error: `Agent execution failed: ${error.message}` },
-      { status: 500 }
-    );
+  // On Vercel, we need to wait for the promise to avoid it being killed.
+  // Use waitUntil if available (Vercel Edge/Node), otherwise fall back to awaiting.
+  const waitUntil = (globalThis as any)[Symbol.for('vercel-request-context')]?.get?.()?.waitUntil;
+  if (typeof waitUntil === 'function') {
+    waitUntil(runPromise);
+  } else {
+    // Local dev or non-Vercel: await the promise so it doesn't get garbage collected
+    // but wrap in a global tracker so we can return immediately
+    (globalThis as any).__agentRuns = (globalThis as any).__agentRuns || new Map();
+    (globalThis as any).__agentRuns.set(agentRun.id, runPromise);
+    runPromise.finally(() => {
+      (globalThis as any).__agentRuns?.delete(agentRun.id);
+    });
   }
+
+  // Return immediately with the run ID — frontend polls for completion
+  return NextResponse.json({
+    id: agentRun.id,
+    pipelineId,
+    agentId: id,
+    agentName: agent.name,
+    status: 'running',
+    startedAt: agentRun.startedAt,
+  });
 }

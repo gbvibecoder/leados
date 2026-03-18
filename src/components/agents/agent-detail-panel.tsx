@@ -70,6 +70,21 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
     prevStatusRef.current = agentStatus;
   }, [isRunning, agentStatus]);
 
+  // Poll for completion while agent is running (handles background execution)
+  useEffect(() => {
+    if (!isRunning && agentStatus !== 'running') return;
+    const interval = setInterval(() => {
+      agentsApi.runs(agentId).then((data) => {
+        const runsList = Array.isArray(data) ? data : [];
+        if (runsList.length > 0 && runsList[0].status !== 'running') {
+          setRuns(runsList);
+          setSelectedRun(runsList[0]);
+        }
+      }).catch(() => {});
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [isRunning, agentStatus, agentId]);
+
   const handleRunWithPrompt = () => {
     onRun();
   };

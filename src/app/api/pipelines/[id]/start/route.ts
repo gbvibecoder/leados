@@ -4,6 +4,9 @@ import { createLeadOSAgents } from '@backend/agents/leados/index';
 import { pipelineEvents } from '@backend/orchestrator/event-emitter';
 import { getUserId } from '@/lib/auth';
 
+// Allow up to 5 minutes for pipeline execution on Vercel
+export const maxDuration = 300;
+
 // All 13 agents in pipeline order
 const ALL_AGENTS = [
   'service-research',
