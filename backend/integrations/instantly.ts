@@ -7,6 +7,8 @@ function getApiKey(): string | null {
   return process.env.INSTANTLY_API_KEY || null;
 }
 
+const INSTANTLY_TIMEOUT_MS = 20_000;
+
 async function instantlyFetch(endpoint: string, options: { method?: string; body?: any; query?: Record<string, string> } = {}): Promise<any> {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error('INSTANTLY_API_KEY not configured');
@@ -18,14 +20,18 @@ async function instantlyFetch(endpoint: string, options: { method?: string; body
     }
   }
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), INSTANTLY_TIMEOUT_MS);
   const res = await fetch(url.toString(), {
     method: options.method || 'GET',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
     },
+    signal: controller.signal,
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
+  clearTimeout(timeout);
 
   if (!res.ok) {
     const text = await res.text();

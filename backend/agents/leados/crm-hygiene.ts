@@ -108,13 +108,14 @@ export class CRMHygieneAgent extends BaseAgent {
         }
       }
 
-      // Enrich contacts missing key fields
+      // Enrich contacts missing key fields (Apollo + Clearbit in parallel)
       if (realContacts.length > 0) {
         const contactsToEnrich = realContacts
           .filter((c: any) => !c.properties?.industry || !c.properties?.company_size)
           .slice(0, 10); // Limit to 10 per run to conserve API credits
 
-        if (apolloApi.isApolloAvailable() && contactsToEnrich.length > 0) {
+        const apolloPromise = (async () => {
+          if (!apolloApi.isApolloAvailable() || contactsToEnrich.length === 0) return;
           try {
             await this.log('apollo_enrichment', { phase: 'Enriching contacts via Apollo.io', count: contactsToEnrich.length });
             const emails = contactsToEnrich.map((c: any) => c.properties?.email).filter(Boolean);
@@ -122,9 +123,9 @@ export class CRMHygieneAgent extends BaseAgent {
             enrichedCount += enrichResults.length;
             await this.log('apollo_enriched', { enriched: enrichResults.length });
 
-            // Push enriched data back to HubSpot
+            // Push enriched data back to HubSpot in parallel
             if (hubspot.isHubSpotAvailable()) {
-              for (const result of enrichResults) {
+              await Promise.all(enrichResults.map(async (result: any) => {
                 const contact = contactsToEnrich.find((c: any) => c.properties?.email === result.email);
                 if (contact?.id) {
                   try {
@@ -135,14 +136,15 @@ export class CRMHygieneAgent extends BaseAgent {
                     });
                   } catch { /* skip failed updates */ }
                 }
-              }
+              }));
             }
           } catch (err: any) {
             await this.log('apollo_enrichment_failed', { error: err.message });
           }
-        }
+        })();
 
-        if (clearbit.isClearbitAvailable() && contactsToEnrich.length > 0) {
+        const clearbitPromise = (async () => {
+          if (!clearbit.isClearbitAvailable() || contactsToEnrich.length === 0) return;
           try {
             await this.log('clearbit_enrichment', { phase: 'Enriching companies via Clearbit' });
             const domains = contactsToEnrich
@@ -150,17 +152,19 @@ export class CRMHygieneAgent extends BaseAgent {
               .filter((d: string) => d && !d.includes('gmail') && !d.includes('yahoo') && !d.includes('hotmail'));
             const uniqueDomains = [...new Set(domains)].slice(0, 5);
 
-            for (const domain of uniqueDomains) {
+            await Promise.all(uniqueDomains.map(async (domain: string) => {
               try {
                 await clearbit.enrichCompany(domain);
                 enrichedCount++;
               } catch { /* skip */ }
-            }
+            }));
             await this.log('clearbit_enriched', { domains: uniqueDomains.length });
           } catch (err: any) {
             await this.log('clearbit_enrichment_failed', { error: err.message });
           }
-        }
+        })();
+
+        await Promise.all([apolloPromise, clearbitPromise]);
       }
 
       const userMessage = JSON.stringify({

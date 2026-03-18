@@ -33,6 +33,8 @@ export interface MetaCampaignConfig {
   status?: string;
 }
 
+const META_ADS_TIMEOUT_MS = 30_000;
+
 async function metaFetch(endpoint: string, options: RequestInit = {}): Promise<any> {
   const accessToken = getAccessToken();
   if (!accessToken) throw new Error('META_ACCESS_TOKEN not configured');
@@ -40,13 +42,17 @@ async function metaFetch(endpoint: string, options: RequestInit = {}): Promise<a
   const separator = endpoint.includes('?') ? '&' : '?';
   const url = `${META_BASE}${endpoint}${separator}access_token=${accessToken}`;
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), META_ADS_TIMEOUT_MS);
   const res = await fetch(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
     },
+    signal: controller.signal,
   });
+  clearTimeout(timeout);
 
   if (!res.ok) {
     const text = await res.text();

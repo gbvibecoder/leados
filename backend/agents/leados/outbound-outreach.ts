@@ -161,45 +161,44 @@ export class OutboundOutreachAgent extends BaseAgent {
         };
       }
 
-      // Fetch real prospect data from Apollo if available
+      // Fetch real prospect data from Apollo + create Instantly campaign IN PARALLEL
       let realProspects: any[] = [];
       let realCampaign: any = null;
 
-      if (apollo.isApolloAvailable()) {
-        try {
-          // Extract job titles from ICP — handle both array and comma/slash-separated string formats
-          let icpTitles: string[] = [];
-          const rawTitles = offerData.icp?.titles || offerData.idealCustomerProfile?.titles
-            || offerData.icp?.decisionMaker || offerData.idealCustomerProfile?.decisionMaker;
-          if (Array.isArray(rawTitles)) {
-            icpTitles = rawTitles;
-          } else if (typeof rawTitles === 'string') {
-            icpTitles = rawTitles.split(/[\/,]/).map((t: string) => t.trim()).filter(Boolean);
-          }
-          if (icpTitles.length === 0) {
-            icpTitles = ['VP of Marketing', 'Head of Growth', 'CMO', 'CEO'];
-          }
-
-          // Don't pass industries as tag IDs — Apollo expects numeric IDs, not strings
-          // Just search by job titles and locations for reliable results
-          realProspects = await apollo.searchProspects({
-            jobTitles: icpTitles,
-            limit: 25,
-          });
-          await this.log('apollo_prospects_fetched', { count: realProspects.length, titles: icpTitles });
-        } catch (err: any) {
-          await this.log('apollo_error', { error: err.message });
-        }
+      // Extract job titles from ICP — handle both array and comma/slash-separated string formats
+      let icpTitles: string[] = [];
+      const rawTitles = offerData.icp?.titles || offerData.idealCustomerProfile?.titles
+        || offerData.icp?.decisionMaker || offerData.idealCustomerProfile?.decisionMaker;
+      if (Array.isArray(rawTitles)) {
+        icpTitles = rawTitles;
+      } else if (typeof rawTitles === 'string') {
+        icpTitles = rawTitles.split(/[\/,]/).map((t: string) => t.trim()).filter(Boolean);
+      }
+      if (icpTitles.length === 0) {
+        icpTitles = ['VP of Marketing', 'Head of Growth', 'CMO', 'CEO'];
       }
 
-      if (instantly.isInstantlyAvailable()) {
-        try {
-          const niche = inputs.config?.niche || 'B2B SaaS';
-          realCampaign = await instantly.createCampaign({ name: `LeadOS — ${niche} ICP` });
-          await this.log('instantly_campaign_created', { campaignId: realCampaign.id });
-        } catch (err: any) {
-          await this.log('instantly_error', { error: err.message });
-        }
+      const [apolloResult, instantlyResult] = await Promise.allSettled([
+        apollo.isApolloAvailable()
+          ? apollo.searchProspects({ jobTitles: icpTitles, limit: 25 })
+          : Promise.resolve([]),
+        instantly.isInstantlyAvailable()
+          ? instantly.createCampaign({ name: `LeadOS — ${inputs.config?.niche || 'B2B SaaS'} ICP` })
+          : Promise.resolve(null),
+      ]);
+
+      if (apolloResult.status === 'fulfilled') {
+        realProspects = apolloResult.value;
+        if (realProspects.length > 0) await this.log('apollo_prospects_fetched', { count: realProspects.length, titles: icpTitles });
+      } else {
+        await this.log('apollo_error', { error: apolloResult.reason?.message });
+      }
+
+      if (instantlyResult.status === 'fulfilled' && instantlyResult.value) {
+        realCampaign = instantlyResult.value;
+        await this.log('instantly_campaign_created', { campaignId: realCampaign.id });
+      } else if (instantlyResult.status === 'rejected') {
+        await this.log('instantly_error', { error: instantlyResult.reason?.message });
       }
 
       const userMessage = JSON.stringify({
