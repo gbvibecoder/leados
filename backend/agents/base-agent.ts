@@ -50,39 +50,58 @@ export abstract class BaseAgent {
     return this.logs;
   }
 
-  /** Call LLM — tries Anthropic first, falls back to Gemini if Anthropic fails.
-   *  maxTokens: output limit (default 16384 — safe for all agents including heavy ones like funnel-builder) */
+  /** Call LLM — tries Gemini first (free), falls back to Anthropic (paid).
+   *  Set AI_ENGINE=anthropic in .env to force Anthropic-first.
+   *  maxTokens: output limit (default 16384) */
   protected async callClaude(systemPrompt: string, userMessage: string, maxRetries = 3, maxTokens = 16384): Promise<string> {
-    let anthropicError = '';
-
-    // Try Anthropic first
+    const preferAnthropic = process.env.AI_ENGINE === 'anthropic';
     const anthropicKey = process.env.ANTHROPIC_API_KEY;
-    if (anthropicKey) {
+    const geminiKey = process.env.GEMINI_API_KEY;
+
+    // Determine order: Gemini first (free) unless AI_ENGINE=anthropic
+    const primary = preferAnthropic ? 'anthropic' : 'gemini';
+    let primaryError = '';
+
+    // Try primary engine
+    if (primary === 'gemini' && geminiKey) {
+      try {
+        const result = await this.callGemini(systemPrompt, userMessage, geminiKey, maxRetries, maxTokens);
+        return result;
+      } catch (error: any) {
+        primaryError = error.message || 'Gemini failed';
+        await this.log('gemini_failed', { error: primaryError });
+      }
+    } else if (primary === 'anthropic' && anthropicKey) {
       try {
         const result = await this.callAnthropic(systemPrompt, userMessage, anthropicKey, maxRetries, maxTokens);
         return result;
       } catch (error: any) {
-        anthropicError = error.message || 'Unknown Anthropic error';
-        await this.log('anthropic_failed', { error: anthropicError, status: error.status });
-        // Fall through to Gemini
+        primaryError = error.message || 'Anthropic failed';
+        await this.log('anthropic_failed', { error: primaryError, status: error.status });
       }
-    } else {
-      anthropicError = 'No API key configured';
     }
 
-    // Fallback to Gemini
-    const geminiKey = process.env.GEMINI_API_KEY;
-    if (geminiKey) {
+    // Try fallback engine
+    const fallback = primary === 'gemini' ? 'anthropic' : 'gemini';
+    const fallbackKey = fallback === 'anthropic' ? anthropicKey : geminiKey;
+
+    if (fallbackKey) {
       try {
-        await this.log('gemini_fallback', { reason: `Anthropic failed: ${anthropicError}` });
-        const result = await this.callGemini(systemPrompt, userMessage, geminiKey, maxRetries, maxTokens);
-        return result;
+        await this.log(`${fallback}_fallback`, { reason: `${primary} failed: ${primaryError}` });
+        if (fallback === 'anthropic') {
+          return await this.callAnthropic(systemPrompt, userMessage, fallbackKey, maxRetries, maxTokens);
+        } else {
+          return await this.callGemini(systemPrompt, userMessage, fallbackKey, maxRetries, maxTokens);
+        }
       } catch (error: any) {
-        await this.log('gemini_failed', { error: error.message });
-        throw new Error(`Both Anthropic and Gemini failed. Anthropic: ${anthropicError}. Gemini: ${error.message}`);
+        await this.log(`${fallback}_failed`, { error: error.message });
+        throw new Error(`Both engines failed. ${primary}: ${primaryError}. ${fallback}: ${error.message}`);
       }
     }
 
+    if (primaryError) {
+      throw new Error(`${primary} failed: ${primaryError}. No fallback engine configured.`);
+    }
     throw new Error('No LLM API key configured — set ANTHROPIC_API_KEY or GEMINI_API_KEY');
   }
 
