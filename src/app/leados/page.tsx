@@ -453,14 +453,29 @@ export default function LeadOSPage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, ease: [0.25, 0.4, 0.25, 1] }}
-          className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
+          className="mb-6 relative rounded-2xl overflow-hidden p-5 sm:p-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
+          style={{ background: 'linear-gradient(135deg, rgba(0,242,255,0.03), rgba(139,92,246,0.02), rgba(2,2,5,0.8))', border: '1px solid rgba(0,242,255,0.08)' }}
         >
+          {/* Decorative mini orbit */}
+          <div className="absolute top-1/2 right-6 -translate-y-1/2 w-24 h-24 pointer-events-none hidden sm:block opacity-20">
+            <div className="w-full h-full rounded-full border border-cyan-400/20 orbit-rotate">
+              <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-cyan-400" />
+            </div>
+          </div>
           <div>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-              <Zap className="h-6 w-6 text-cyan-400" />
-              {selectedProject ? `${selectedProject.name} Pipeline` : 'LeadOS Pipeline'}
+            <div className="mono-ui text-[8px] text-cyan-400/50 mb-1.5 flex items-center gap-2">
+              <span className="w-3 h-px bg-cyan-500/30" />Pipeline Control
+            </div>
+            <h1 className="font-cinzel text-xl md:text-2xl text-white flex items-center gap-3">
+              <div className="relative w-8 h-8 shrink-0">
+                <div className="absolute inset-0 rounded-lg flex items-center justify-center"
+                  style={{ background: 'linear-gradient(135deg, rgba(0,242,255,0.12), rgba(139,92,246,0.08))', border: '1px solid rgba(0,242,255,0.2)' }}>
+                  <Zap className="h-4 w-4 text-cyan-400" />
+                </div>
+              </div>
+              {selectedProject ? `${selectedProject.name}` : 'LeadOS Pipeline'}
             </h1>
-            <p className="mt-1 text-sm text-gray-400">
+            <p className="mt-1.5 text-sm text-gray-500">
               {isRunning
                 ? `${completedCount}/${totalAgents} completed, ${runningCount} running${errorCount > 0 ? `, ${errorCount} failed` : ''}`
                 : hasRun
@@ -662,16 +677,21 @@ export default function LeadOSPage() {
                   {completedCount}/{totalAgents} ({progressPercent}%)
                 </span>
               </div>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5">
+              <div className="h-2 w-full overflow-hidden rounded-full" style={{ background: 'rgba(255,255,255,0.03)' }}>
                 <div
                   className={cn(
-                    'h-full rounded-full transition-all duration-700',
+                    'h-full rounded-full transition-all duration-700 relative overflow-hidden',
                     pipeline.status === 'completed' ? 'bg-emerald-500' :
                     pipeline.status === 'paused' ? 'bg-amber-500' :
                     pipeline.status === 'error' ? 'bg-red-500' : 'bg-cyan-500'
                   )}
-                  style={{ width: `${progressPercent}%` }}
-                />
+                  style={{
+                    width: `${progressPercent}%`,
+                    boxShadow: progressPercent > 0 ? `0 0 12px ${pipeline.status === 'completed' ? 'rgba(16,185,129,0.4)' : pipeline.status === 'error' ? 'rgba(239,68,68,0.4)' : 'rgba(0,242,255,0.4)'}` : undefined,
+                  }}
+                >
+                  {isRunning && <div className="absolute inset-0 aurora-bg" style={{ background: 'linear-gradient(90deg, transparent 30%, rgba(255,255,255,0.25) 50%, transparent 70%)', backgroundSize: '200% 100%' }} />}
+                </div>
               </div>
             </div>
           )}
@@ -747,12 +767,12 @@ export default function LeadOSPage() {
         )}
         </AnimatePresence>
 
-        {/* Pipeline Flow — vertical phases */}
+        {/* ══════ PIPELINE FLOW — Planet & Moon System ══════ */}
         <motion.div
           initial="hidden"
           animate="visible"
-          variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.08, delayChildren: 0.2 } } }}
-          className="space-y-3"
+          variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.1, delayChildren: 0.2 } } }}
+          className="space-y-6"
         >
           {PIPELINE_PHASES.map((phase, phaseIndex) => {
             const isSkipped = skippedPhaseIds.has(phase.id);
@@ -767,247 +787,238 @@ export default function LeadOSPage() {
 
             if (!isSkipped && enabledCount === 0) return null;
 
+            const phaseAccent =
+              phase.id === 'discovery' ? '#3b82f6' :
+              phase.id === 'content' ? '#ec4899' :
+              phase.id === 'generation' ? '#f59e0b' :
+              phase.id === 'qualification' ? '#8b5cf6' : '#10b981';
+
             return (
               <motion.div
                 key={phase.id}
-                variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.25, 0.4, 0.25, 1] } } }}
+                variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5 } } }}
               >
-                {/* Phase card */}
-                <div
-                  className={cn(
-                    'rounded-xl border transition-all',
-                    isSkipped ? 'border-white/[0.04]/40 bg-zinc-900/20 opacity-40' :
-                    phaseStatus === 'done' ? 'border-emerald-500/30 bg-emerald-950/10' :
-                    phaseStatus === 'running' ? cn(colors.border, colors.bg) :
-                    phaseStatus === 'error' ? 'border-red-500/30 bg-red-950/10' :
-                    'border-white/[0.04] bg-[rgba(2,2,5,0.6)]/40 hover:border-cyan-500/15'
-                  )}
-                >
-                  {/* Phase header */}
-                  <button
-                    onClick={() => !isSkipped && togglePhase(phase.id)}
-                    disabled={isSkipped}
-                    className="flex w-full items-center gap-3 px-4 py-3"
-                  >
-                    <div className={cn(
-                      'flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold shrink-0',
-                      isSkipped ? 'bg-white/5 text-gray-600' :
-                      phaseStatus === 'done' ? 'bg-emerald-900/50 text-emerald-400' :
-                      phaseStatus === 'running' ? 'bg-blue-900/50 text-blue-400' :
-                      phaseStatus === 'error' ? 'bg-red-900/50 text-red-400' :
-                      'bg-white/5 text-gray-400'
-                    )}>
-                      {phaseStatus === 'done' ? <Check className="h-4 w-4" /> :
-                       phaseStatus === 'running' ? <Loader2 className="h-4 w-4 animate-spin" /> :
-                       phaseStatus === 'error' ? <AlertCircle className="h-4 w-4" /> :
-                       phaseIndex + 1}
-                    </div>
+                {/* ════ PLANET — Phase Card ════ */}
+                <div className={cn('relative rounded-2xl overflow-hidden transition-all duration-500', isSkipped && 'opacity-30')}
+                  style={{ background: 'rgba(2,2,5,0.5)', border: `1px solid ${isSkipped ? 'rgba(255,255,255,0.02)' : phaseStatus === 'running' ? `${phaseAccent}20` : phaseStatus === 'done' ? `${phaseAccent}15` : 'rgba(255,255,255,0.04)'}` }}>
 
-                    <div className="flex-1 text-left">
-                      <div className="flex items-center gap-2">
-                        <h3 className={cn(
-                          'text-sm font-semibold',
-                          isSkipped ? 'text-gray-600' :
-                          phaseStatus === 'done' ? 'text-emerald-400' :
-                          phaseStatus === 'running' ? 'text-blue-400' :
-                          phaseStatus === 'paused' ? 'text-amber-400' : 'text-gray-200'
-                        )}>
-                          {phase.label}
-                        </h3>
-                        {isSkipped && (
-                          <span className="text-[10px] text-gray-600 bg-white/5 rounded px-1.5 py-0.5">Skipped</span>
-                        )}
+                  {/* Running aurora */}
+                  {phaseStatus === 'running' && (
+                    <div className="absolute top-0 left-0 right-0 h-px aurora-bg" style={{ background: `linear-gradient(90deg, transparent, ${phaseAccent}40, transparent)`, backgroundSize: '300% 100%' }} />
+                  )}
+
+                  {/* Planet header — clickable */}
+                  <button onClick={() => !isSkipped && togglePhase(phase.id)} disabled={isSkipped}
+                    className="w-full flex items-center gap-4 p-4 group text-left">
+
+                    {/* Planet orb */}
+                    <div className="relative w-14 h-14 shrink-0">
+                      {/* Outer orbit ring */}
+                      <div className="absolute inset-0 rounded-full transition-all duration-700"
+                        style={{ border: `2px solid ${phaseStatus === 'running' ? `${phaseAccent}35` : phaseStatus === 'done' ? `${phaseAccent}20` : 'rgba(255,255,255,0.04)'}` }}>
                         {phaseStatus === 'running' && (
-                          <span className="text-[10px] text-blue-400 bg-blue-500/10 rounded px-1.5 py-0.5 animate-pulse">LIVE</span>
-                        )}
-                        {phaseStatus === 'paused' && (
-                          <span className="text-[10px] text-amber-400 bg-amber-500/10 rounded px-1.5 py-0.5">PAUSED</span>
+                          <div className="absolute inset-0 rounded-full orbit-rotate">
+                            <div className="absolute -top-[3px] left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full"
+                              style={{ background: phaseAccent, boxShadow: `0 0 10px ${phaseAccent}` }} />
+                          </div>
                         )}
                       </div>
-                      <p className="text-[11px] text-gray-500 mt-0.5">
+                      {/* Planet core */}
+                      <div className="absolute inset-2 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300"
+                        style={{
+                          background: `radial-gradient(circle at 40% 40%, ${phaseAccent}20, ${phaseAccent}08)`,
+                          color: isSkipped ? '#4b5563' : phaseAccent,
+                          boxShadow: phaseStatus === 'running' ? `0 0 20px ${phaseAccent}15, inset 0 0 15px ${phaseAccent}10` : phaseStatus === 'done' ? `0 0 15px ${phaseAccent}10` : undefined,
+                        }}>
+                        {phaseStatus === 'done' ? <Check className="h-5 w-5" /> :
+                         phaseStatus === 'running' ? <Loader2 className="h-5 w-5 animate-spin" /> :
+                         phaseStatus === 'error' ? <AlertCircle className="h-5 w-5" /> :
+                         phaseIndex + 1}
+                      </div>
+                    </div>
+
+                    {/* Phase info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2.5 mb-0.5">
+                        <h3 className="text-base font-semibold" style={{ color: isSkipped ? '#4b5563' : phaseStatus === 'idle' ? '#e5e7eb' : phaseAccent }}>
+                          {phase.label}
+                        </h3>
+                        {isSkipped && <span className="mono-ui text-[7px] text-gray-600 rounded px-1.5 py-0.5" style={{ background: 'rgba(255,255,255,0.03)' }}>Skipped</span>}
+                        {phaseStatus === 'running' && (
+                          <span className="mono-ui text-[7px] rounded-full px-2.5 py-0.5 animate-pulse" style={{ color: phaseAccent, background: `${phaseAccent}15`, border: `1px solid ${phaseAccent}20` }}>LIVE</span>
+                        )}
+                        {phaseStatus === 'paused' && (
+                          <span className="mono-ui text-[7px] text-amber-400 bg-amber-500/10 rounded-full px-2.5 py-0.5 border border-amber-500/20">PAUSED</span>
+                        )}
+                      </div>
+                      <p className="mono-ui text-[8px] text-gray-600">
                         {enabledCount} {enabledCount === 1 ? 'agent' : 'agents'}
-                        {phaseStatus === 'done' && ' — completed'}
-                        {phaseStatus === 'running' && ' — processing live data'}
-                        {phaseStatus === 'paused' && ' — paused'}
-                        {phaseStatus === 'error' && ' — has errors'}
+                        {phaseStatus === 'done' && ' — completed'}{phaseStatus === 'running' && ' — processing'}{phaseStatus === 'error' && ' — has errors'}
                       </p>
+
+                      {/* ── Moon dots preview (collapsed view) ── */}
+                      {!isExpanded && !isSkipped && (
+                        <div className="flex items-center gap-2 mt-2.5">
+                          {phaseAgents.map(agent => {
+                            const s = agentStatuses[agent.id] || 'idle';
+                            const sc = s === 'done' ? '#10b981' : s === 'running' ? '#00f2ff' : s === 'error' ? '#ef4444' : 'rgba(255,255,255,0.1)';
+                            return (
+                              <div key={agent.id} className="relative" title={agent.name}>
+                                <div className="w-3 h-3 rounded-full transition-all duration-500"
+                                  style={{ background: sc, boxShadow: s !== 'idle' ? `0 0 6px ${sc}` : undefined }} />
+                                {s === 'running' && <div className="absolute inset-0 rounded-full" style={{ border: `1px solid ${sc}`, animation: 'pulse-ring 2s ease-out infinite' }} />}
+                              </div>
+                            );
+                          })}
+                          <span className="mono-ui text-[7px] text-gray-600 ml-1">
+                            {phaseAgents.filter(a => (agentStatuses[a.id] || 'idle') === 'done').length}/{phaseAgents.length}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {!isSkipped && (
-                      isExpanded
-                        ? <ChevronUp className="h-4 w-4 text-gray-500" />
-                        : <ChevronDown className="h-4 w-4 text-gray-500" />
+                      <div className="p-1.5 rounded-lg transition-colors group-hover:bg-white/5">
+                        {isExpanded ? <ChevronUp className="h-4 w-4 text-gray-500" /> : <ChevronDown className="h-4 w-4 text-gray-500" />}
+                      </div>
                     )}
                   </button>
 
-                  {/* Expanded agent list */}
+                  {/* ════ MOONS — Agent Cards ════ */}
+                  <AnimatePresence>
                   {isExpanded && !isSkipped && (
-                    <div className="px-4 pb-3 space-y-1.5">
-                      <div className="h-px bg-white/[0.03] mb-2" />
-                      {phaseAgents.map(agent => {
-                        const meta = AGENT_META[agent.id];
-                        const Icon = meta?.icon || Bot;
-                        const rawStatus = agentStatuses[agent.id] || 'idle';
-                        const status = (rawStatus === 'running' && isPaused) ? 'paused' : rawStatus;
-                        const pipelineAgent = pipeline.agents.find(a => a.id === agent.id);
-                        const elapsed = elapsedTimes[agent.id];
-                        const isThisRunning = runningAgentId === agent.id || rawStatus === 'running';
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.3 }} className="overflow-hidden">
+                      <div className="px-4 pb-4">
+                        {/* Connector line from planet to moons */}
+                        <div className="flex items-center gap-3 mb-3 ml-5">
+                          <div className="flex-1 h-px" style={{ background: `linear-gradient(90deg, ${phaseAccent}20, ${phaseAccent}08)` }} />
+                          <span className="mono-ui text-[7px] shrink-0" style={{ color: `${phaseAccent}50` }}>Moons</span>
+                          <div className="flex-1 h-px" style={{ background: `linear-gradient(90deg, ${phaseAccent}08, ${phaseAccent}20)` }} />
+                        </div>
 
-                        return (
-                          <div
-                            key={agent.id}
-                            onClick={() => setSelectedAgent(agent.id)}
-                            className={cn(
-                              'group relative rounded-lg border transition-all cursor-pointer',
-                              status === 'done' ? 'border-emerald-500/20 bg-emerald-950/5 hover:border-emerald-500/40 hover:bg-emerald-950/10' :
-                              status === 'running' ? 'border-blue-500/30 bg-blue-950/10' :
-                              status === 'paused' ? 'border-amber-500/30 bg-amber-950/10 hover:border-amber-500/40' :
-                              status === 'error' ? 'border-red-500/30 bg-red-950/10 hover:border-red-500/40 hover:bg-red-950/15' :
-                              'border-white/[0.04]/60 bg-zinc-900/20 hover:border-cyan-500/30 hover:bg-cyan-950/5'
-                            )}
-                          >
-                            {/* Agent row */}
-                            <div
-                              className="flex items-center gap-3 px-3 py-2.5"
-                            >
-                              {/* Agent icon */}
-                              <div className={cn(
-                                'flex h-8 w-8 items-center justify-center rounded-lg shrink-0',
-                                status === 'done' ? 'bg-emerald-900/30' :
-                                status === 'running' ? 'bg-blue-900/30' :
-                                status === 'paused' ? 'bg-amber-900/30' :
-                                status === 'error' ? 'bg-red-900/30' :
-                                'bg-white/5/80'
-                              )}>
-                                {status === 'running' ? (
-                                  <Loader2 className="h-3.5 w-3.5 text-blue-400 animate-spin" />
-                                ) : status === 'paused' ? (
-                                  <Pause className="h-3.5 w-3.5 text-amber-400" />
-                                ) : status === 'done' ? (
-                                  <Check className="h-3.5 w-3.5 text-emerald-400" />
-                                ) : status === 'error' ? (
-                                  <AlertCircle className="h-3.5 w-3.5 text-red-400" />
-                                ) : (
-                                  <Icon className={cn('h-3.5 w-3.5', meta?.color || 'text-gray-400')} />
-                                )}
-                              </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {phaseAgents.map((agent, agentIdx) => {
+                            const meta = AGENT_META[agent.id];
+                            const Icon = meta?.icon || Bot;
+                            const rawStatus = agentStatuses[agent.id] || 'idle';
+                            const status = (rawStatus === 'running' && isPaused) ? 'paused' : rawStatus;
+                            const pipelineAgent = pipeline.agents.find(a => a.id === agent.id);
+                            const elapsed = elapsedTimes[agent.id];
+                            const isThisRunning = runningAgentId === agent.id || rawStatus === 'running';
+                            const sc = status === 'done' ? '#10b981' : status === 'running' ? '#00f2ff' : status === 'paused' ? '#f59e0b' : status === 'error' ? '#ef4444' : phaseAccent;
 
-                              {/* Agent info */}
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <p className={cn(
-                                    'text-xs font-medium truncate',
-                                    status === 'done' ? 'text-emerald-400' :
-                                    status === 'running' ? 'text-blue-400' :
-                                    status === 'paused' ? 'text-amber-400' :
-                                    status === 'error' ? 'text-red-400' : 'text-gray-200'
-                                  )}>
-                                    {agent.name}
-                                  </p>
-                                  {status === 'running' && (
-                                    <span className="text-[9px] text-blue-400/70 bg-blue-500/10 rounded px-1 py-0.5">
-                                      LIVE
-                                    </span>
-                                  )}
-                                  {status === 'paused' && (
-                                    <span className="text-[9px] text-amber-400/70 bg-amber-500/10 rounded px-1 py-0.5">
-                                      PAUSED
-                                    </span>
-                                  )}
-                                </div>
-                                {pipelineAgent?.outputPreview && status === 'done' && (
-                                  <p className="text-[10px] text-gray-500 truncate mt-0.5">{typeof pipelineAgent.outputPreview === 'string' ? pipelineAgent.outputPreview : 'Completed successfully'}</p>
-                                )}
-                                {pipelineAgent?.error && status === 'error' && (
-                                  <p className="text-[10px] text-red-400 truncate mt-0.5">{pipelineAgent.error}</p>
-                                )}
+                            return (
+                              <motion.div key={agent.id}
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ duration: 0.3, delay: agentIdx * 0.06 }}
+                                onClick={() => setSelectedAgent(agent.id)}
+                                whileHover={{ y: -3, transition: { duration: 0.25 } }}
+                                className="group relative rounded-xl cursor-pointer transition-all duration-500 overflow-hidden"
+                                style={{ background: 'rgba(2,2,5,0.5)', border: `1px solid ${status === 'idle' ? 'rgba(255,255,255,0.04)' : `${sc}18`}` }}>
+
+                                {/* Running top aurora */}
                                 {status === 'running' && (
-                                  <p className="text-[10px] text-blue-400/70 mt-0.5">
-                                    Fetching live data from {meta?.tools?.slice(0, 2).join(', ')}...
-                                  </p>
+                                  <div className="absolute top-0 left-0 right-0 h-px aurora-bg" style={{ background: `linear-gradient(90deg, transparent, ${sc}50, transparent)`, backgroundSize: '300% 100%' }} />
                                 )}
-                                {status === 'paused' && (
-                                  <p className="text-[10px] text-amber-400/70 mt-0.5">
-                                    Paused — resume pipeline to continue
-                                  </p>
-                                )}
-                                {!hasRun && status === 'idle' && (
-                                  <p className="text-[10px] text-gray-600 truncate mt-0.5">{meta?.description}</p>
-                                )}
-                              </div>
 
-                              {/* Status / action */}
-                              <div className="flex items-center gap-2 shrink-0">
-                                {status === 'running' && elapsed !== undefined && (
-                                  <span className="text-[10px] text-blue-400 flex items-center gap-1">
-                                    <Clock className="h-3 w-3" />
-                                    {formatElapsed(elapsed)}
-                                  </span>
-                                )}
-                                {status === 'done' && pipelineAgent?.lastRunTime && (
-                                  <span className="text-[10px] text-gray-600">
-                                    {new Date(pipelineAgent.lastRunTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                  </span>
-                                )}
-                                {status === 'idle' && !isRunning && (
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); handleRunAgent(agent.id); }}
-                                    disabled={isThisRunning}
-                                    className="rounded-md p-1.5 text-gray-600 opacity-0 group-hover:opacity-100 hover:bg-white/5 hover:text-white transition-all disabled:opacity-50"
-                                    title="Run this agent"
-                                  >
-                                    <Play className="h-3 w-3" />
-                                  </button>
-                                )}
-                                {status === 'error' && !isRunning && (
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); handleRunAgent(agent.id); }}
-                                    disabled={isThisRunning}
-                                    className="rounded-md p-1.5 text-red-400/60 hover:text-red-400 hover:bg-red-950/30 transition-all"
-                                    title="Retry agent"
-                                  >
-                                    <RefreshCw className="h-3 w-3" />
-                                  </button>
-                                )}
-                                {status === 'done' && !isRunning && (
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); handleRunAgent(agent.id); }}
-                                    disabled={isThisRunning}
-                                    className="rounded-md p-1.5 text-gray-600 opacity-0 group-hover:opacity-100 hover:bg-white/5 hover:text-white transition-all"
-                                    title="Re-run agent"
-                                  >
-                                    <RefreshCw className="h-3 w-3" />
-                                  </button>
-                                )}
-                                {/* View details indicator */}
-                                <span className="flex items-center gap-1 text-[10px] text-gray-600 group-hover:text-cyan-400 transition-colors">
-                                  <span className="hidden group-hover:inline">Details</span>
-                                  <ChevronRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
-                                </span>
-                              </div>
-                            </div>
+                                <div className="p-4">
+                                  <div className="flex items-start gap-3">
+                                    {/* Moon orb */}
+                                    <div className="relative w-10 h-10 shrink-0">
+                                      <div className="absolute inset-0 rounded-full transition-all duration-500"
+                                        style={{ border: `1.5px solid ${status === 'idle' ? 'rgba(255,255,255,0.06)' : `${sc}30`}`, boxShadow: status === 'running' ? `0 0 15px ${sc}15` : undefined }}>
+                                        {status === 'running' && (
+                                          <div className="absolute -top-[2px] -right-[2px] w-2 h-2 rounded-full" style={{ background: sc, boxShadow: `0 0 6px ${sc}`, animation: 'pulse-ring 2s ease-out infinite' }} />
+                                        )}
+                                        {status === 'done' && (
+                                          <div className="absolute -top-[2px] -right-[2px] w-1.5 h-1.5 rounded-full bg-emerald-400" style={{ boxShadow: '0 0 4px #10b981' }} />
+                                        )}
+                                      </div>
+                                      <div className="absolute inset-1 rounded-full flex items-center justify-center"
+                                        style={{ background: `radial-gradient(circle at 40% 40%, ${sc}15, ${sc}05)` }}>
+                                        {status === 'running' ? <Loader2 className="h-4 w-4 animate-spin" style={{ color: sc }} /> :
+                                         status === 'done' ? <Check className="h-4 w-4 text-emerald-400" /> :
+                                         status === 'error' ? <AlertCircle className="h-4 w-4 text-red-400" /> :
+                                         status === 'paused' ? <Pause className="h-4 w-4 text-amber-400" /> :
+                                         <Icon className={cn('h-4 w-4', meta?.color || 'text-gray-400')} />}
+                                      </div>
+                                    </div>
 
-                            {/* Running indicator bar */}
-                            {status === 'running' && (
-                              <div className="px-3 pb-2">
-                                <div className="h-0.5 w-full overflow-hidden rounded-full bg-blue-950/50">
-                                  <div className="h-full w-1/3 rounded-full bg-blue-500 animate-pulse" style={{
-                                    animation: 'indeterminate 1.5s infinite ease-in-out',
-                                  }} />
+                                    {/* Content */}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 mb-0.5">
+                                        <p className="text-xs font-semibold truncate" style={{ color: status === 'idle' ? '#d1d5db' : sc }}>{agent.name}</p>
+                                        {status === 'running' && <span className="mono-ui text-[6px] rounded-full px-1.5 py-0.5 animate-pulse" style={{ color: sc, background: `${sc}12`, border: `1px solid ${sc}18` }}>LIVE</span>}
+                                        {status === 'paused' && <span className="mono-ui text-[6px] text-amber-400 bg-amber-500/10 rounded-full px-1.5 py-0.5">PAUSED</span>}
+                                      </div>
+
+                                      {status === 'idle' && !hasRun && <p className="text-[10px] text-gray-600 leading-relaxed line-clamp-2">{meta?.description}</p>}
+                                      {status === 'running' && <p className="text-[10px]" style={{ color: `${sc}80` }}>Fetching from {meta?.tools?.slice(0, 2).join(' & ')}...</p>}
+                                      {status === 'paused' && <p className="text-[10px] text-amber-400/60">Paused — resume to continue</p>}
+                                      {pipelineAgent?.outputPreview && status === 'done' && <p className="text-[10px] text-gray-500 truncate">{typeof pipelineAgent.outputPreview === 'string' ? pipelineAgent.outputPreview : 'Completed'}</p>}
+                                      {pipelineAgent?.error && status === 'error' && <p className="text-[10px] text-red-400 truncate">{pipelineAgent.error}</p>}
+                                    </div>
+
+                                    {/* Actions */}
+                                    <div className="flex flex-col items-end gap-1 shrink-0">
+                                      {status === 'running' && elapsed !== undefined && (
+                                        <span className="mono-ui text-[7px] flex items-center gap-1 rounded-full px-2 py-0.5" style={{ color: sc, background: `${sc}10` }}>
+                                          <Clock className="h-2.5 w-2.5" />{formatElapsed(elapsed)}
+                                        </span>
+                                      )}
+                                      {status === 'done' && pipelineAgent?.lastRunTime && (
+                                        <span className="mono-ui text-[7px] text-gray-600">{new Date(pipelineAgent.lastRunTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                      )}
+                                      <div className="flex items-center gap-1">
+                                        {status === 'idle' && !isRunning && (
+                                          <button onClick={(e) => { e.stopPropagation(); handleRunAgent(agent.id); }} disabled={isThisRunning}
+                                            className="rounded-full p-1 text-gray-600 opacity-0 group-hover:opacity-100 transition-all" style={{ border: '1px solid rgba(255,255,255,0.06)' }} title="Run"><Play className="h-2.5 w-2.5" /></button>
+                                        )}
+                                        {status === 'error' && !isRunning && (
+                                          <button onClick={(e) => { e.stopPropagation(); handleRunAgent(agent.id); }} disabled={isThisRunning}
+                                            className="rounded-full p-1 text-red-400/60 hover:text-red-400 transition-all" style={{ border: '1px solid rgba(239,68,68,0.15)' }} title="Retry"><RefreshCw className="h-2.5 w-2.5" /></button>
+                                        )}
+                                        {status === 'done' && !isRunning && (
+                                          <button onClick={(e) => { e.stopPropagation(); handleRunAgent(agent.id); }} disabled={isThisRunning}
+                                            className="rounded-full p-1 text-gray-600 opacity-0 group-hover:opacity-100 transition-all" style={{ border: '1px solid rgba(255,255,255,0.06)' }} title="Re-run"><RefreshCw className="h-2.5 w-2.5" /></button>
+                                        )}
+                                        <ChevronRight className="h-3 w-3 text-gray-700 group-hover:text-cyan-400 group-hover:translate-x-0.5 transition-all" />
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Running progress bar */}
+                                  {status === 'running' && (
+                                    <div className="mt-3 h-1 w-full overflow-hidden rounded-full" style={{ background: `${sc}08` }}>
+                                      <div className="h-full w-1/3 rounded-full" style={{ background: `linear-gradient(90deg, ${sc}80, ${sc})`, boxShadow: `0 0 8px ${sc}25`, animation: 'indeterminate 1.5s infinite ease-in-out' }} />
+                                    </div>
+                                  )}
                                 </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
+                              </motion.div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </motion.div>
                   )}
+                  </AnimatePresence>
                 </div>
 
-                {/* Connector arrow between phases */}
+                {/* ════ Energy Connector between planets ════ */}
                 {phaseIndex < PIPELINE_PHASES.length - 1 && !isSkipped && (
-                  <div className="flex justify-center py-1">
-                    <ArrowDown className="h-4 w-4 text-zinc-700" />
+                  <div className="flex justify-center py-2">
+                    <div className="flex flex-col items-center gap-1">
+                      <div className="w-px h-3" style={{ background: `linear-gradient(to bottom, ${phaseAccent}25, transparent)` }} />
+                      <div className="w-2 h-2 rounded-full" style={{
+                        background: phaseStatus === 'done' ? phaseAccent : 'rgba(255,255,255,0.06)',
+                        boxShadow: phaseStatus === 'done' ? `0 0 8px ${phaseAccent}40` : phaseStatus === 'running' ? `0 0 6px ${phaseAccent}30` : undefined,
+                      }}>
+                        {phaseStatus === 'running' && <div className="w-full h-full rounded-full" style={{ background: phaseAccent, animation: 'pulse-ring 2s ease-out infinite' }} />}
+                      </div>
+                      <div className="w-px h-3" style={{ background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.06))' }} />
+                    </div>
                   </div>
                 )}
               </motion.div>
