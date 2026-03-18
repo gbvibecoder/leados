@@ -66,19 +66,19 @@ export default function CampaignForm({ onSubmit, isLoading }: CampaignFormProps)
   };
 
   const inputCls =
-    'w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-colors';
-  const labelCls = 'block text-xs font-medium text-zinc-400 mb-1.5';
+    'w-full bg-zinc-900 border border-white/[0.08] rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-colors';
+  const labelCls = 'block text-xs font-medium text-gray-400 mb-1.5';
   const errorCls = 'text-xs text-red-400 mt-1';
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="flex items-center gap-3 pb-4 border-b border-zinc-800">
+      <div className="flex items-center gap-3 pb-4 border-b border-white/[0.04]">
         <div className="p-2 bg-blue-500/10 rounded-lg">
           <Megaphone className="w-5 h-5 text-blue-400" />
         </div>
         <div>
           <h2 className="text-lg font-semibold text-white">Create Meta Ad Campaign</h2>
-          <p className="text-xs text-zinc-500">Configure and launch your campaign on Facebook & Instagram</p>
+          <p className="text-xs text-gray-500">Configure and launch your campaign on Facebook & Instagram</p>
         </div>
       </div>
 
@@ -124,7 +124,7 @@ export default function CampaignForm({ onSubmit, isLoading }: CampaignFormProps)
           onChange={(e) => set('dailyBudget', Number(e.target.value))}
           disabled={isLoading}
         />
-        <p className="text-xs text-zinc-500 mt-1">
+        <p className="text-xs text-gray-500 mt-1">
           = ₹{(form.dailyBudget / 100).toFixed(2)} per day / ₹{((form.dailyBudget / 100) * 30).toFixed(0)} per month
         </p>
         {errors.dailyBudget && <p className={errorCls}>{errors.dailyBudget}</p>}
@@ -239,7 +239,7 @@ export default function CampaignForm({ onSubmit, isLoading }: CampaignFormProps)
       <button
         type="submit"
         disabled={isLoading}
-        className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white font-semibold rounded-lg transition-colors text-sm"
+        className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-gray-500 text-white font-semibold rounded-lg transition-colors text-sm"
       >
         {isLoading ? 'Creating Campaign...' : 'Create Campaign'}
       </button>

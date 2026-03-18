@@ -26,7 +26,7 @@ const AGENT_META: Record<string, { icon: any; color: string; description: string
   'content-creative': { icon: Mail, color: 'text-pink-400', description: 'Produces ad copies, email sequences, LinkedIn scripts, and video scripts per channel.', tools: ['Claude AI', 'Multi-channel'] },
   'paid-traffic': { icon: MousePointer, color: 'text-orange-400', description: 'Manages Google Ads + Meta Ads — keyword research, audience targeting, bidding, budgets.', tools: ['Google Ads API', 'Meta Ads API'] },
   'outbound-outreach': { icon: Mail, color: 'text-yellow-400', description: 'Orchestrates cold email sequences via Instantly/Smartlead and LinkedIn DM automation.', tools: ['Instantly.ai', 'LinkedIn', 'Apollo.io'] },
-  'inbound-capture': { icon: Bot, color: 'text-indigo-400', description: 'Captures form/chat/webhook leads, enriches via Apollo/Clay/Clearbit, scores and segments.', tools: ['Apollo.io', 'Clearbit', 'HubSpot'] },
+  'inbound-capture': { icon: Bot, color: 'text-cyan-400', description: 'Captures form/chat/webhook leads, enriches via Apollo/Clay/Clearbit, scores and segments.', tools: ['Apollo.io', 'Clearbit', 'HubSpot'] },
   'ai-qualification': { icon: Phone, color: 'text-violet-400', description: 'Conducts AI voice calls to qualify leads using BANT criteria and scores responses.', tools: ['Bland AI', 'Vapi', 'ElevenLabs'] },
   'sales-routing': { icon: ArrowRight, color: 'text-teal-400', description: 'Routes qualified leads — high intent to checkout, complex to sales, medium to nurture.', tools: ['CRM Rules Engine', 'Calendly'] },
   'tracking-attribution': { icon: BarChart3, color: 'text-sky-400', description: 'Sets up GTM, Meta Pixel, Google Ads conversion tracking, and multi-touch attribution.', tools: ['Google Tag Manager', 'Meta Pixel', 'GA4'] },
@@ -457,10 +457,10 @@ export default function LeadOSPage() {
         >
           <div>
             <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-              <Zap className="h-6 w-6 text-indigo-400" />
+              <Zap className="h-6 w-6 text-cyan-400" />
               {selectedProject ? `${selectedProject.name} Pipeline` : 'LeadOS Pipeline'}
             </h1>
-            <p className="mt-1 text-sm text-zinc-400">
+            <p className="mt-1 text-sm text-gray-400">
               {isRunning
                 ? `${completedCount}/${totalAgents} completed, ${runningCount} running${errorCount > 0 ? `, ${errorCount} failed` : ''}`
                 : hasRun
@@ -514,7 +514,7 @@ export default function LeadOSPage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.1, ease: [0.25, 0.4, 0.25, 1] }}
-          className="mb-6 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
+          className="mb-6 rounded-xl p-4"
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -524,7 +524,7 @@ export default function LeadOSPage() {
                   isRunning ? 'bg-blue-500/10 text-blue-400' :
                   pipeline.status === 'paused' ? 'bg-amber-500/10 text-amber-400' :
                   pipeline.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400' :
-                  pipeline.status === 'error' ? 'bg-red-500/10 text-red-400' : 'text-zinc-400'
+                  pipeline.status === 'error' ? 'bg-red-500/10 text-red-400' : 'text-gray-400'
                 )}>
                   <span className={cn(
                     'h-1.5 w-1.5 rounded-full',
@@ -537,8 +537,8 @@ export default function LeadOSPage() {
                 </span>
               )}
               {!hasRun && (
-                <span className="text-sm text-zinc-400 flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
+                <span className="text-sm text-gray-400 flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-cyan-500" />
                   {enabledAgentIds.size} of {LEADOS_AGENTS.length} agents enabled
                 </span>
               )}
@@ -551,8 +551,8 @@ export default function LeadOSPage() {
                   className={cn(
                     'flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-colors',
                     showConfig
-                      ? 'border-indigo-500/40 bg-indigo-950/20 text-indigo-400'
-                      : 'border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                      ? 'border-cyan-500/40 bg-cyan-950/20 text-cyan-400'
+                      : 'border-white/[0.08] text-gray-400 hover:bg-white/5 hover:text-gray-200'
                   )}
                 >
                   <Settings2 className="h-3.5 w-3.5" />
@@ -563,7 +563,7 @@ export default function LeadOSPage() {
                 <button
                   onClick={handleRunPipeline}
                   disabled={enabledAgentIds.size === 0}
-                  className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="flex items-center gap-1.5 rounded-lg bg-cyan-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <Play className="h-3.5 w-3.5" />
                   {hasRun ? 'Run Again' : 'Run Pipeline'}
@@ -602,7 +602,7 @@ export default function LeadOSPage() {
                       }
                     }
                   }}
-                  className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 transition-colors"
+                  className="flex items-center gap-1.5 rounded-lg bg-cyan-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-cyan-500 transition-colors"
                 >
                   <Play className="h-3.5 w-3.5" />
                   Resume
@@ -641,7 +641,7 @@ export default function LeadOSPage() {
                     setSnackbar('Pipeline reset successfully');
                     setTimeout(() => setSnackbar(null), 3000);
                   }}
-                  className="flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
+                  className="flex items-center gap-1.5 rounded-lg border border-white/[0.08] px-3 py-1.5 text-xs text-gray-400 hover:bg-white/5 hover:text-gray-200 transition-colors"
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
                   Reset
@@ -654,21 +654,21 @@ export default function LeadOSPage() {
           {hasRun && (
             <div className="mt-3">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] text-zinc-500 flex items-center gap-1">
+                <span className="text-[10px] text-gray-500 flex items-center gap-1">
                   {isRunning && <Loader2 className="h-3 w-3 animate-spin" />}
                   {isRunning ? 'Processing agents sequentially...' : 'Progress'}
                 </span>
-                <span className="text-[10px] text-zinc-500">
+                <span className="text-[10px] text-gray-500">
                   {completedCount}/{totalAgents} ({progressPercent}%)
                 </span>
               </div>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-800">
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5">
                 <div
                   className={cn(
                     'h-full rounded-full transition-all duration-700',
                     pipeline.status === 'completed' ? 'bg-emerald-500' :
                     pipeline.status === 'paused' ? 'bg-amber-500' :
-                    pipeline.status === 'error' ? 'bg-red-500' : 'bg-indigo-500'
+                    pipeline.status === 'error' ? 'bg-red-500' : 'bg-cyan-500'
                   )}
                   style={{ width: `${progressPercent}%` }}
                 />
@@ -687,9 +687,9 @@ export default function LeadOSPage() {
             transition={{ duration: 0.3, ease: [0.25, 0.4, 0.25, 1] }}
             className="mb-6 overflow-hidden"
           >
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+          <div className="rounded-xl p-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-medium text-zinc-200">Agent Configuration</h3>
+              <h3 className="text-sm font-medium text-gray-200">Agent Configuration</h3>
               <div className="flex gap-2">
                 <button onClick={enableAllAgents} className="text-[10px] text-emerald-400 hover:text-emerald-300">Enable All</button>
                 <span className="text-zinc-700">|</span>
@@ -710,17 +710,17 @@ export default function LeadOSPage() {
                     key={agent.id}
                     className={cn(
                       'flex items-center gap-2 rounded-lg border px-3 py-2 transition-colors',
-                      isSkipped ? 'border-zinc-800/40 bg-zinc-900/20 opacity-40' :
-                      isEnabled ? 'border-indigo-500/30 bg-indigo-950/10' : 'border-zinc-800 bg-zinc-900/30'
+                      isSkipped ? 'border-white/[0.04]/40 bg-zinc-900/20 opacity-40' :
+                      isEnabled ? 'border-cyan-500/30 bg-cyan-950/10' : 'border-white/[0.04] bg-[rgba(2,2,5,0.6)]/30'
                     )}
                   >
-                    {meta && <meta.icon className={cn('h-3.5 w-3.5 shrink-0', isEnabled ? meta.color : 'text-zinc-600')} />}
+                    {meta && <meta.icon className={cn('h-3.5 w-3.5 shrink-0', isEnabled ? meta.color : 'text-gray-600')} />}
                     <div className="flex-1 min-w-0">
-                      <span className={cn('text-xs truncate block', isEnabled ? 'text-zinc-200' : 'text-zinc-500')}>
+                      <span className={cn('text-xs truncate block', isEnabled ? 'text-gray-200' : 'text-gray-500')}>
                         {agent.name.replace(' Agent', '')}
                       </span>
                       {meta?.tools && isEnabled && (
-                        <span className="text-[9px] text-zinc-600 truncate block">{meta.tools.join(' · ')}</span>
+                        <span className="text-[9px] text-gray-600 truncate block">{meta.tools.join(' · ')}</span>
                       )}
                     </div>
                     <button
@@ -728,8 +728,8 @@ export default function LeadOSPage() {
                       disabled={isSkipped}
                       className={cn(
                         'h-5 w-9 rounded-full p-0.5 transition-colors shrink-0',
-                        isSkipped ? 'bg-zinc-800 cursor-not-allowed' :
-                        isEnabled ? 'bg-indigo-600' : 'bg-zinc-700'
+                        isSkipped ? 'bg-white/5 cursor-not-allowed' :
+                        isEnabled ? 'bg-cyan-600' : 'bg-zinc-700'
                       )}
                     >
                       <div className={cn(
@@ -776,11 +776,11 @@ export default function LeadOSPage() {
                 <div
                   className={cn(
                     'rounded-xl border transition-all',
-                    isSkipped ? 'border-zinc-800/40 bg-zinc-900/20 opacity-40' :
+                    isSkipped ? 'border-white/[0.04]/40 bg-zinc-900/20 opacity-40' :
                     phaseStatus === 'done' ? 'border-emerald-500/30 bg-emerald-950/10' :
                     phaseStatus === 'running' ? cn(colors.border, colors.bg) :
                     phaseStatus === 'error' ? 'border-red-500/30 bg-red-950/10' :
-                    'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700'
+                    'border-white/[0.04] bg-[rgba(2,2,5,0.6)]/40 hover:border-cyan-500/15'
                   )}
                 >
                   {/* Phase header */}
@@ -791,11 +791,11 @@ export default function LeadOSPage() {
                   >
                     <div className={cn(
                       'flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold shrink-0',
-                      isSkipped ? 'bg-zinc-800 text-zinc-600' :
+                      isSkipped ? 'bg-white/5 text-gray-600' :
                       phaseStatus === 'done' ? 'bg-emerald-900/50 text-emerald-400' :
                       phaseStatus === 'running' ? 'bg-blue-900/50 text-blue-400' :
                       phaseStatus === 'error' ? 'bg-red-900/50 text-red-400' :
-                      'bg-zinc-800 text-zinc-400'
+                      'bg-white/5 text-gray-400'
                     )}>
                       {phaseStatus === 'done' ? <Check className="h-4 w-4" /> :
                        phaseStatus === 'running' ? <Loader2 className="h-4 w-4 animate-spin" /> :
@@ -807,15 +807,15 @@ export default function LeadOSPage() {
                       <div className="flex items-center gap-2">
                         <h3 className={cn(
                           'text-sm font-semibold',
-                          isSkipped ? 'text-zinc-600' :
+                          isSkipped ? 'text-gray-600' :
                           phaseStatus === 'done' ? 'text-emerald-400' :
                           phaseStatus === 'running' ? 'text-blue-400' :
-                          phaseStatus === 'paused' ? 'text-amber-400' : 'text-zinc-200'
+                          phaseStatus === 'paused' ? 'text-amber-400' : 'text-gray-200'
                         )}>
                           {phase.label}
                         </h3>
                         {isSkipped && (
-                          <span className="text-[10px] text-zinc-600 bg-zinc-800 rounded px-1.5 py-0.5">Skipped</span>
+                          <span className="text-[10px] text-gray-600 bg-white/5 rounded px-1.5 py-0.5">Skipped</span>
                         )}
                         {phaseStatus === 'running' && (
                           <span className="text-[10px] text-blue-400 bg-blue-500/10 rounded px-1.5 py-0.5 animate-pulse">LIVE</span>
@@ -824,7 +824,7 @@ export default function LeadOSPage() {
                           <span className="text-[10px] text-amber-400 bg-amber-500/10 rounded px-1.5 py-0.5">PAUSED</span>
                         )}
                       </div>
-                      <p className="text-[11px] text-zinc-500 mt-0.5">
+                      <p className="text-[11px] text-gray-500 mt-0.5">
                         {enabledCount} {enabledCount === 1 ? 'agent' : 'agents'}
                         {phaseStatus === 'done' && ' — completed'}
                         {phaseStatus === 'running' && ' — processing live data'}
@@ -835,15 +835,15 @@ export default function LeadOSPage() {
 
                     {!isSkipped && (
                       isExpanded
-                        ? <ChevronUp className="h-4 w-4 text-zinc-500" />
-                        : <ChevronDown className="h-4 w-4 text-zinc-500" />
+                        ? <ChevronUp className="h-4 w-4 text-gray-500" />
+                        : <ChevronDown className="h-4 w-4 text-gray-500" />
                     )}
                   </button>
 
                   {/* Expanded agent list */}
                   {isExpanded && !isSkipped && (
                     <div className="px-4 pb-3 space-y-1.5">
-                      <div className="h-px bg-zinc-800/50 mb-2" />
+                      <div className="h-px bg-white/[0.03] mb-2" />
                       {phaseAgents.map(agent => {
                         const meta = AGENT_META[agent.id];
                         const Icon = meta?.icon || Bot;
@@ -863,7 +863,7 @@ export default function LeadOSPage() {
                               status === 'running' ? 'border-blue-500/30 bg-blue-950/10' :
                               status === 'paused' ? 'border-amber-500/30 bg-amber-950/10 hover:border-amber-500/40' :
                               status === 'error' ? 'border-red-500/30 bg-red-950/10 hover:border-red-500/40 hover:bg-red-950/15' :
-                              'border-zinc-800/60 bg-zinc-900/20 hover:border-indigo-500/30 hover:bg-indigo-950/5'
+                              'border-white/[0.04]/60 bg-zinc-900/20 hover:border-cyan-500/30 hover:bg-cyan-950/5'
                             )}
                           >
                             {/* Agent row */}
@@ -877,7 +877,7 @@ export default function LeadOSPage() {
                                 status === 'running' ? 'bg-blue-900/30' :
                                 status === 'paused' ? 'bg-amber-900/30' :
                                 status === 'error' ? 'bg-red-900/30' :
-                                'bg-zinc-800/80'
+                                'bg-white/5/80'
                               )}>
                                 {status === 'running' ? (
                                   <Loader2 className="h-3.5 w-3.5 text-blue-400 animate-spin" />
@@ -888,7 +888,7 @@ export default function LeadOSPage() {
                                 ) : status === 'error' ? (
                                   <AlertCircle className="h-3.5 w-3.5 text-red-400" />
                                 ) : (
-                                  <Icon className={cn('h-3.5 w-3.5', meta?.color || 'text-zinc-400')} />
+                                  <Icon className={cn('h-3.5 w-3.5', meta?.color || 'text-gray-400')} />
                                 )}
                               </div>
 
@@ -900,7 +900,7 @@ export default function LeadOSPage() {
                                     status === 'done' ? 'text-emerald-400' :
                                     status === 'running' ? 'text-blue-400' :
                                     status === 'paused' ? 'text-amber-400' :
-                                    status === 'error' ? 'text-red-400' : 'text-zinc-200'
+                                    status === 'error' ? 'text-red-400' : 'text-gray-200'
                                   )}>
                                     {agent.name}
                                   </p>
@@ -916,7 +916,7 @@ export default function LeadOSPage() {
                                   )}
                                 </div>
                                 {pipelineAgent?.outputPreview && status === 'done' && (
-                                  <p className="text-[10px] text-zinc-500 truncate mt-0.5">{typeof pipelineAgent.outputPreview === 'string' ? pipelineAgent.outputPreview : 'Completed successfully'}</p>
+                                  <p className="text-[10px] text-gray-500 truncate mt-0.5">{typeof pipelineAgent.outputPreview === 'string' ? pipelineAgent.outputPreview : 'Completed successfully'}</p>
                                 )}
                                 {pipelineAgent?.error && status === 'error' && (
                                   <p className="text-[10px] text-red-400 truncate mt-0.5">{pipelineAgent.error}</p>
@@ -932,7 +932,7 @@ export default function LeadOSPage() {
                                   </p>
                                 )}
                                 {!hasRun && status === 'idle' && (
-                                  <p className="text-[10px] text-zinc-600 truncate mt-0.5">{meta?.description}</p>
+                                  <p className="text-[10px] text-gray-600 truncate mt-0.5">{meta?.description}</p>
                                 )}
                               </div>
 
@@ -945,7 +945,7 @@ export default function LeadOSPage() {
                                   </span>
                                 )}
                                 {status === 'done' && pipelineAgent?.lastRunTime && (
-                                  <span className="text-[10px] text-zinc-600">
+                                  <span className="text-[10px] text-gray-600">
                                     {new Date(pipelineAgent.lastRunTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                   </span>
                                 )}
@@ -953,7 +953,7 @@ export default function LeadOSPage() {
                                   <button
                                     onClick={(e) => { e.stopPropagation(); handleRunAgent(agent.id); }}
                                     disabled={isThisRunning}
-                                    className="rounded-md p-1.5 text-zinc-600 opacity-0 group-hover:opacity-100 hover:bg-zinc-800 hover:text-white transition-all disabled:opacity-50"
+                                    className="rounded-md p-1.5 text-gray-600 opacity-0 group-hover:opacity-100 hover:bg-white/5 hover:text-white transition-all disabled:opacity-50"
                                     title="Run this agent"
                                   >
                                     <Play className="h-3 w-3" />
@@ -973,14 +973,14 @@ export default function LeadOSPage() {
                                   <button
                                     onClick={(e) => { e.stopPropagation(); handleRunAgent(agent.id); }}
                                     disabled={isThisRunning}
-                                    className="rounded-md p-1.5 text-zinc-600 opacity-0 group-hover:opacity-100 hover:bg-zinc-800 hover:text-white transition-all"
+                                    className="rounded-md p-1.5 text-gray-600 opacity-0 group-hover:opacity-100 hover:bg-white/5 hover:text-white transition-all"
                                     title="Re-run agent"
                                   >
                                     <RefreshCw className="h-3 w-3" />
                                   </button>
                                 )}
                                 {/* View details indicator */}
-                                <span className="flex items-center gap-1 text-[10px] text-zinc-600 group-hover:text-indigo-400 transition-colors">
+                                <span className="flex items-center gap-1 text-[10px] text-gray-600 group-hover:text-cyan-400 transition-colors">
                                   <span className="hidden group-hover:inline">Details</span>
                                   <ChevronRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
                                 </span>

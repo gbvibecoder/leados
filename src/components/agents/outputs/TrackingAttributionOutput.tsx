@@ -96,9 +96,9 @@ export function TrackingAttributionOutput({ data }: Props) {
       {/* Header */}
       <div className="flex items-center justify-between pb-3 border-b border-border">
         <div className="flex items-center gap-2">
-          <BarChart3 className="w-5 h-5 text-indigo-500" />
+          <BarChart3 className="w-5 h-5 text-cyan-500" />
           <h3 className="font-semibold">Tracking & Attribution</h3>
-          <span className="px-2 py-0.5 text-xs bg-indigo-500/20 text-indigo-400 rounded-full">
+          <span className="px-2 py-0.5 text-xs bg-cyan-500/20 text-cyan-400 rounded-full">
             {summary.trackingCoverage || 0}% coverage
           </span>
         </div>
@@ -111,12 +111,12 @@ export function TrackingAttributionOutput({ data }: Props) {
 
       {/* Summary Metrics */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-3">
-        <div className="p-2.5 sm:p-3 rounded-lg border bg-indigo-500/5 border-indigo-500/20">
+        <div className="p-2.5 sm:p-3 rounded-lg border bg-cyan-500/5 border-cyan-500/20">
           <div className="flex items-center gap-1.5 mb-1">
-            <Activity className="w-3.5 h-3.5 text-indigo-400" />
-            <span className="text-[10px] sm:text-xs text-indigo-400/80 font-medium uppercase tracking-wide">Events</span>
+            <Activity className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="text-[10px] sm:text-xs text-cyan-400/80 font-medium uppercase tracking-wide">Events</span>
           </div>
-          <div className="text-xl sm:text-2xl font-bold text-indigo-400">{(summary.totalEventsTracked || 0).toLocaleString()}</div>
+          <div className="text-xl sm:text-2xl font-bold text-cyan-400">{(summary.totalEventsTracked || 0).toLocaleString()}</div>
           <div className="text-[10px] text-muted-foreground mt-0.5">tracked</div>
         </div>
         <div className="p-2.5 sm:p-3 rounded-lg border bg-green-500/5 border-green-500/20">
@@ -447,9 +447,9 @@ export function TrackingAttributionOutput({ data }: Props) {
 
       {/* Reasoning */}
       {d.reasoning && (
-        <div className="p-3 sm:p-4 bg-gradient-to-r from-indigo-500/10 to-violet-500/10 rounded-lg border border-indigo-500/20">
+        <div className="p-3 sm:p-4 bg-gradient-to-r from-indigo-500/10 to-violet-500/10 rounded-lg border border-cyan-500/20">
           <div className="flex items-center gap-2 mb-2">
-            <Sparkles className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+            <Sparkles className="w-4 h-4 text-cyan-400 flex-shrink-0" />
             <span className="text-xs sm:text-sm font-medium">Attribution Strategy</span>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed break-words">{typeof d.reasoning === 'string' ? d.reasoning : JSON.stringify(d.reasoning)}</p>

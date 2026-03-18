@@ -24,7 +24,7 @@ interface PipelineExecutionProps {
 }
 
 const statusConfig: Record<AgentStatus, { icon: typeof Bot; color: string; bg: string; borderColor: string }> = {
-  idle: { icon: Clock, color: 'text-zinc-400', bg: 'bg-zinc-800', borderColor: 'border-zinc-800' },
+  idle: { icon: Clock, color: 'text-gray-400', bg: 'bg-white/5', borderColor: 'border-white/[0.04]' },
   running: { icon: Loader2, color: 'text-blue-400', bg: 'bg-blue-900/30', borderColor: 'border-blue-500/40' },
   done: { icon: CheckCircle2, color: 'text-emerald-400', bg: 'bg-emerald-900/30', borderColor: 'border-emerald-500/30' },
   error: { icon: AlertCircle, color: 'text-red-400', bg: 'bg-red-900/30', borderColor: 'border-red-500/30' },
@@ -62,7 +62,7 @@ export function PipelineExecution({
                 allDone ? 'bg-emerald-900/50 text-emerald-400' :
                 anyRunning ? 'bg-blue-900/50 text-blue-400' :
                 anyError ? 'bg-red-900/50 text-red-400' :
-                'bg-zinc-800 text-zinc-400'
+                'bg-white/5 text-gray-400'
               )}>
                 {allDone ? <CheckCircle2 className="h-3.5 w-3.5" /> :
                  anyRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> :
@@ -72,14 +72,14 @@ export function PipelineExecution({
                 'text-xs font-semibold uppercase tracking-wider',
                 allDone ? 'text-emerald-400' :
                 anyRunning ? 'text-blue-400' :
-                'text-zinc-500'
+                'text-gray-500'
               )}>
                 {phase.label}
               </h4>
             </div>
 
             {/* Agent rows */}
-            <div className="space-y-2 pl-3 border-l-2 border-zinc-800/50 ml-3">
+            <div className="space-y-2 pl-3 border-l-2 border-white/[0.03] ml-3">
               {phaseAgents.map((agent) => {
                 const config = statusConfig[agent.status];
                 const Icon = config.icon;
@@ -90,7 +90,7 @@ export function PipelineExecution({
                     key={agent.id}
                     onClick={() => onAgentClick(agent.id)}
                     className={cn(
-                      'group cursor-pointer rounded-xl border p-4 transition-all hover:border-zinc-600',
+                      'group cursor-pointer rounded-xl border p-4 transition-all hover:border-cyan-500/20',
                       config.borderColor,
                       isActive && 'bg-blue-950/10 border-blue-500/50 shadow-lg shadow-blue-500/5',
                       agent.status === 'done' && 'bg-emerald-950/5'
@@ -102,9 +102,9 @@ export function PipelineExecution({
                       </div>
 
                       <div className="min-w-0 flex-1">
-                        <h5 className="text-sm font-medium text-zinc-200">{agent.name}</h5>
+                        <h5 className="text-sm font-medium text-gray-200">{agent.name}</h5>
                         {agent.outputPreview && agent.status === 'done' && (
-                          <p className="mt-0.5 truncate text-xs text-zinc-500">{agent.outputPreview}</p>
+                          <p className="mt-0.5 truncate text-xs text-gray-500">{agent.outputPreview}</p>
                         )}
                         {agent.error && agent.status === 'error' && (
                           <p className="mt-0.5 truncate text-xs text-red-400">{agent.error}</p>
@@ -114,14 +114,14 @@ export function PipelineExecution({
                       {agent.status === 'idle' && pipelineStatus !== 'running' && (
                         <button
                           onClick={(e) => { e.stopPropagation(); onRunAgent(agent.id); }}
-                          className="rounded-lg p-2 text-zinc-600 opacity-0 transition-all hover:bg-zinc-800 hover:text-white group-hover:opacity-100"
+                          className="rounded-lg p-2 text-gray-600 opacity-0 transition-all hover:bg-white/5 hover:text-white group-hover:opacity-100"
                         >
                           <Play className="h-4 w-4" />
                         </button>
                       )}
 
                       {agent.lastRunTime && agent.status === 'done' && (
-                        <span className="text-[10px] text-zinc-600">
+                        <span className="text-[10px] text-gray-600">
                           {new Date(agent.lastRunTime).toLocaleTimeString()}
                         </span>
                       )}
@@ -130,13 +130,13 @@ export function PipelineExecution({
                     {/* Progress bar */}
                     {agent.progress !== undefined && agent.status === 'running' && (
                       <div className="mt-3">
-                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-800">
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5">
                           <div
                             className="h-full rounded-full bg-blue-500 transition-all duration-500"
                             style={{ width: `${agent.progress}%` }}
                           />
                         </div>
-                        <p className="mt-1 text-right text-[10px] text-zinc-600">{agent.progress}%</p>
+                        <p className="mt-1 text-right text-[10px] text-gray-600">{agent.progress}%</p>
                       </div>
                     )}
                   </div>

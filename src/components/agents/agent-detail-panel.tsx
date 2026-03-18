@@ -115,19 +115,19 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
       >
         <div
           onClick={(e) => e.stopPropagation()}
-          className="relative w-full max-w-4xl max-h-[90vh] rounded-2xl border border-zinc-800 bg-zinc-950 shadow-2xl shadow-black/50 flex flex-col overflow-hidden"
+          className="relative w-full max-w-4xl max-h-[90vh] rounded-2xl border border-white/[0.04] bg-[#020205] shadow-2xl shadow-black/50 flex flex-col overflow-hidden"
         >
           {/* Header */}
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.25, delay: 0.1 }}
-            className="flex items-center justify-between border-b border-zinc-800 px-6 py-4 shrink-0"
+            className="flex items-center justify-between border-b border-white/[0.04] px-6 py-4 shrink-0"
           >
             <div className="flex items-center gap-3">
               <div>
                 <h3 className="text-lg font-semibold text-white">{agentName}</h3>
-                <p className="text-xs text-zinc-500 mt-0.5">{agentId}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{agentId}</p>
               </div>
               {/* Live status badge */}
               {isRunning && (
@@ -154,7 +154,7 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
             </div>
             <button
               onClick={onClose}
-              className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
+              className="rounded-lg p-2 text-gray-400 hover:bg-white/5 hover:text-white transition-colors"
             >
               <X className="h-5 w-5" />
             </button>
@@ -162,23 +162,23 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
 
           {/* Running Progress Banner */}
           {isRunning && (
-            <div className="px-6 py-4 bg-indigo-950 border-b border-indigo-500/40 shrink-0">
+            <div className="px-6 py-4 bg-cyan-950 border-b border-cyan-500/40 shrink-0">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2.5">
-                  <Loader2 className="h-5 w-5 text-indigo-400 animate-spin" />
+                  <Loader2 className="h-5 w-5 text-cyan-400 animate-spin" />
                   <span className="text-sm font-semibold text-white">Agent is processing...</span>
                 </div>
                 {typeof elapsedTime === 'number' && (
-                  <span className="text-xs font-mono text-white bg-indigo-500/30 border border-indigo-400/30 px-2.5 py-1 rounded-md">
+                  <span className="text-xs font-mono text-white bg-cyan-500/30 border border-indigo-400/30 px-2.5 py-1 rounded-md">
                     {formatElapsed(elapsedTime)}
                   </span>
                 )}
               </div>
               {/* Animated progress bar */}
-              <div className="w-full h-2 bg-indigo-500/20 rounded-full overflow-hidden">
-                <div className="h-full bg-indigo-500 rounded-full animate-progress-indeterminate" />
+              <div className="w-full h-2 bg-cyan-500/20 rounded-full overflow-hidden">
+                <div className="h-full bg-cyan-500 rounded-full animate-progress-indeterminate" />
               </div>
-              <p className="text-xs text-indigo-300 mt-2">
+              <p className="text-xs text-cyan-300 mt-2">
                 Analyzing data, calling APIs, and generating insights...
               </p>
             </div>
@@ -231,9 +231,9 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: 0.15 }}
-                className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4"
+                className="rounded-lg rounded-xl p-4"
               >
-                <p className="text-sm text-zinc-300 leading-relaxed">{description}</p>
+                <p className="text-sm text-gray-300 leading-relaxed">{description}</p>
               </motion.div>
             )}
 
@@ -244,23 +244,23 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
               transition={{ duration: 0.3, delay: 0.2 }}
               className="space-y-3"
             >
-              <h4 className="flex items-center gap-2 text-sm font-medium text-zinc-300">
+              <h4 className="flex items-center gap-2 text-sm font-medium text-gray-300">
                 <MessageSquare className="h-4 w-4" />
                 Agent Prompt
               </h4>
-              <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-1">
+              <div className="rounded-lg rounded-xl p-1">
                 <textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   placeholder={`Enter custom instructions for ${agentName}...`}
                   rows={2}
                   disabled={isRunning}
-                  className="w-full resize-none rounded-lg bg-transparent px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none disabled:opacity-50"
+                  className="w-full resize-none rounded-lg bg-transparent px-3 py-2 text-sm text-gray-200 placeholder-zinc-600 focus:outline-none disabled:opacity-50"
                 />
                 <div className="flex items-center justify-between px-2 pb-1">
-                  <p className="text-[10px] text-zinc-600">Customize how this agent processes data</p>
+                  <p className="text-[10px] text-gray-600">Customize how this agent processes data</p>
                   {prompt.trim() && (
-                    <span className="text-[10px] text-indigo-400">{prompt.length} chars</span>
+                    <span className="text-[10px] text-cyan-400">{prompt.length} chars</span>
                   )}
                 </div>
               </div>
@@ -330,8 +330,8 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
                   className={cn(
                     'flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all',
                     (prerequisiteAgent || isPipelineRunning)
-                      ? 'bg-zinc-800 border border-zinc-700 text-zinc-500 cursor-not-allowed'
-                      : 'bg-indigo-600 text-white hover:bg-indigo-500'
+                      ? 'bg-white/5 border border-white/[0.08] text-gray-500 cursor-not-allowed'
+                      : 'bg-cyan-600 text-white hover:bg-cyan-500'
                   )}
                 >
                   {prompt.trim() ? (
@@ -355,11 +355,11 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: 0.28 }}
             >
-              <h4 className="flex items-center gap-2 text-sm font-medium text-zinc-300 mb-3">
+              <h4 className="flex items-center gap-2 text-sm font-medium text-gray-300 mb-3">
                 <Clock className="h-4 w-4" />
                 Run History
                 {runs.length > 0 && (
-                  <span className="text-[10px] text-zinc-500 bg-zinc-800 rounded-full px-2 py-0.5">{runs.length}</span>
+                  <span className="text-[10px] text-gray-500 bg-white/5 rounded-full px-2 py-0.5">{runs.length}</span>
                 )}
               </h4>
 
@@ -368,7 +368,7 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
                   <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-600 border-t-indigo-500" />
                 </div>
               ) : runs.length === 0 && !isRunning ? (
-                <p className="py-4 text-center text-sm text-zinc-500">No runs yet — click Run Agent above to start</p>
+                <p className="py-4 text-center text-sm text-gray-500">No runs yet — click Run Agent above to start</p>
               ) : (
                 <div className="space-y-2">
                   {/* Latest run — always visible + selected by default */}
@@ -378,8 +378,8 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
                       className={cn(
                         'w-full rounded-lg border p-3 text-left transition-all',
                         selectedRun?.id === latestRun.id
-                          ? 'border-indigo-500 bg-indigo-950/20'
-                          : 'border-zinc-800 hover:border-zinc-700'
+                          ? 'border-cyan-500 bg-cyan-950/20'
+                          : 'border-white/[0.04] hover:border-cyan-500/15'
                       )}
                     >
                       <div className="flex items-center justify-between">
@@ -388,13 +388,13 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
                             'text-xs font-medium',
                             latestRun.status === 'done' ? 'text-emerald-400' :
                             latestRun.status === 'error' ? 'text-red-400' :
-                            latestRun.status === 'running' ? 'text-blue-400' : 'text-zinc-400'
+                            latestRun.status === 'running' ? 'text-blue-400' : 'text-gray-400'
                           )}>
                             {latestRun.status?.toUpperCase()}
                           </span>
-                          <span className="text-[10px] text-zinc-600 bg-zinc-800 rounded px-1.5 py-0.5">Latest</span>
+                          <span className="text-[10px] text-gray-600 bg-white/5 rounded px-1.5 py-0.5">Latest</span>
                         </div>
-                        <span className="text-xs text-zinc-500">
+                        <span className="text-xs text-gray-500">
                           {latestRun.startedAt ? new Date(latestRun.startedAt).toLocaleString() : 'N/A'}
                         </span>
                       </div>
@@ -406,7 +406,7 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
                     <>
                       <button
                         onClick={() => setHistoryExpanded(!historyExpanded)}
-                        className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-zinc-800/50 py-1.5 text-[11px] text-zinc-500 hover:text-zinc-400 hover:border-zinc-700 transition-colors"
+                        className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/[0.04]/50 py-1.5 text-[11px] text-gray-500 hover:text-gray-400 hover:border-cyan-500/15 transition-colors"
                       >
                         {historyExpanded ? (
                           <>
@@ -440,8 +440,8 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
                                 className={cn(
                                   'w-full rounded-lg border p-3 text-left transition-colors',
                                   selectedRun?.id === run.id
-                                    ? 'border-indigo-500 bg-indigo-950/20'
-                                    : 'border-zinc-800 hover:border-zinc-700'
+                                    ? 'border-cyan-500 bg-cyan-950/20'
+                                    : 'border-white/[0.04] hover:border-cyan-500/15'
                                 )}
                               >
                                 <div className="flex items-center justify-between">
@@ -449,11 +449,11 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
                                     'text-xs font-medium',
                                     run.status === 'done' ? 'text-emerald-400' :
                                     run.status === 'error' ? 'text-red-400' :
-                                    run.status === 'running' ? 'text-blue-400' : 'text-zinc-400'
+                                    run.status === 'running' ? 'text-blue-400' : 'text-gray-400'
                                   )}>
                                     {run.status?.toUpperCase()}
                                   </span>
-                                  <span className="text-xs text-zinc-500">
+                                  <span className="text-xs text-gray-500">
                                     {run.startedAt ? new Date(run.startedAt).toLocaleString() : 'N/A'}
                                   </span>
                                 </div>
@@ -478,11 +478,11 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
                   exit={{ opacity: 0, y: -8 }}
                   transition={{ duration: 0.3, ease: [0.25, 0.4, 0.25, 1] }}
                 >
-                  <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-zinc-300">
+                  <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-gray-300">
                     <FileJson className="h-4 w-4" />
                     Output
                   </h4>
-                  <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 overflow-x-auto">
+                  <div className="rounded-lg rounded-xl p-4 overflow-x-auto">
                     <AgentOutput
                       agentId={agentId}
                       agentName={agentName}

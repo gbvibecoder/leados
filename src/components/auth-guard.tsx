@@ -79,8 +79,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (!isPublic && !checked) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
+      <div className="min-h-screen bg-[#020205] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-cyan-400" />
       </div>
     );
   }

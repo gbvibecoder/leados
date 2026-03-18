@@ -50,7 +50,7 @@ function PipelineFlowInner({
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-white">{title}</h2>
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-gray-400">
             {completedCount}/{totalCount} agents completed ({progressPercent}%)
           </p>
         </div>
@@ -63,7 +63,7 @@ function PipelineFlowInner({
                 'flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors',
                 accentColor === 'emerald'
                   ? 'bg-emerald-600 hover:bg-emerald-700'
-                  : 'bg-indigo-600 hover:bg-indigo-700'
+                  : 'bg-cyan-600 hover:bg-cyan-700'
               )}
             >
               <Play className="h-4 w-4" />
@@ -82,7 +82,7 @@ function PipelineFlowInner({
           {pipelineStatus !== 'idle' && (
             <button
               onClick={onResetPipeline}
-              className="flex items-center gap-2 rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800"
+              className="flex items-center gap-2 rounded-lg border border-white/[0.08] px-4 py-2 text-sm font-medium text-gray-300 hover:bg-white/5"
             >
               <RotateCcw className="h-4 w-4" />
               Reset
@@ -92,11 +92,11 @@ function PipelineFlowInner({
       </div>
 
       <div className="mb-4">
-        <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-800">
+        <div className="h-2 w-full overflow-hidden rounded-full bg-white/5">
           <div
             className={cn(
               'h-full rounded-full transition-all duration-700',
-              accentColor === 'emerald' ? 'bg-emerald-500' : 'bg-indigo-500'
+              accentColor === 'emerald' ? 'bg-emerald-500' : 'bg-cyan-500'
             )}
             style={{ width: `${progressPercent}%` }}
           />

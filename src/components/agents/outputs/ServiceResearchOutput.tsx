@@ -438,10 +438,10 @@ export function ServiceResearchOutput({ data, isLive = false }: Props) {
 
                 {/* Target Audience */}
                 {opp.targetAudience && (
-                  <div className="p-2.5 sm:p-3 bg-indigo-500/5 rounded-lg border border-indigo-500/20">
+                  <div className="p-2.5 sm:p-3 bg-cyan-500/5 rounded-lg border border-cyan-500/20">
                     <div className="flex items-center gap-1.5 mb-1">
-                      <Users className="w-3.5 h-3.5 text-indigo-400" />
-                      <span className="text-xs font-medium text-indigo-400">Recommended Target Audience</span>
+                      <Users className="w-3.5 h-3.5 text-cyan-400" />
+                      <span className="text-xs font-medium text-cyan-400">Recommended Target Audience</span>
                     </div>
                     <p className="text-xs sm:text-sm leading-relaxed break-words text-indigo-200/80">{opp.targetAudience}</p>
                   </div>

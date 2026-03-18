@@ -72,13 +72,13 @@ export function PipelineWizard({
     return (
       <div className="mb-6 space-y-4">
         {/* Pipeline summary */}
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+        <div className="rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <Settings2 className="h-5 w-5 text-indigo-400" />
+              <Settings2 className="h-5 w-5 text-cyan-400" />
               <div>
                 <h3 className="text-sm font-semibold text-white">Pipeline Configuration</h3>
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-gray-500">
                   {totalEnabled} of {totalAvailable} agents enabled
                   {startFromPhaseId && ` · Starting from ${PIPELINE_PHASES.find((p) => p.id === startFromPhaseId)?.label}`}
                 </p>
@@ -86,7 +86,7 @@ export function PipelineWizard({
             </div>
             <button
               onClick={() => { setCurrentStep(0); setIsConfiguring(true); }}
-              className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+              className="rounded-lg border border-white/[0.08] px-4 py-2 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
             >
               Configure
             </button>
@@ -105,28 +105,28 @@ export function PipelineWizard({
                   key={phase.id}
                   className={cn(
                     'rounded-lg border p-3 text-center',
-                    isSkipped ? 'border-zinc-800/50 bg-zinc-900/20 opacity-40' :
-                    enabled === 0 ? 'border-zinc-800/50 bg-zinc-900/30' :
-                    enabled === total ? 'border-indigo-500/30 bg-indigo-950/20' :
+                    isSkipped ? 'border-white/[0.03] bg-zinc-900/20 opacity-40' :
+                    enabled === 0 ? 'border-white/[0.03] bg-zinc-900/30' :
+                    enabled === total ? 'border-cyan-500/30 bg-cyan-950/20' :
                     'border-amber-500/20 bg-amber-950/10'
                   )}
                 >
                   <p className={cn(
                     'text-xs font-medium',
-                    isSkipped ? 'text-zinc-600' : 'text-zinc-300'
+                    isSkipped ? 'text-gray-600' : 'text-gray-300'
                   )}>
                     {phase.shortLabel}
                   </p>
                   <p className={cn(
                     'mt-0.5 text-[10px]',
                     isSkipped ? 'text-zinc-700' :
-                    enabled === total ? 'text-indigo-400' :
-                    enabled > 0 ? 'text-amber-400' : 'text-zinc-600'
+                    enabled === total ? 'text-cyan-400' :
+                    enabled > 0 ? 'text-amber-400' : 'text-gray-600'
                   )}>
                     {isSkipped ? 'Skipped' : `${enabled}/${total}`}
                   </p>
                   {isStart && (
-                    <p className="mt-1 text-[9px] font-bold uppercase text-indigo-400">Start</p>
+                    <p className="mt-1 text-[9px] font-bold uppercase text-cyan-400">Start</p>
                   )}
                 </div>
               );
@@ -140,7 +140,7 @@ export function PipelineWizard({
             <button
               onClick={onRunPipeline}
               disabled={totalEnabled === 0}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-cyan-600 px-6 py-3 text-sm font-semibold text-white hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <Play className="h-4 w-4" />
               Run Pipeline ({totalEnabled} agents)
@@ -150,7 +150,7 @@ export function PipelineWizard({
           {pipelineStatus === 'paused' && (
             <button
               onClick={onRunPipeline}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white hover:bg-indigo-500 transition-colors"
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-cyan-600 px-6 py-3 text-sm font-semibold text-white hover:bg-cyan-500 transition-colors"
             >
               <Play className="h-4 w-4" />
               Resume Pipeline
@@ -170,7 +170,7 @@ export function PipelineWizard({
           {pipelineStatus !== 'idle' && (
             <button
               onClick={onResetPipeline}
-              className="flex items-center gap-2 rounded-xl border border-zinc-700 px-4 py-3 text-sm text-zinc-300 hover:bg-zinc-800 transition-colors"
+              className="flex items-center gap-2 rounded-xl border border-white/[0.08] px-4 py-3 text-sm text-gray-300 hover:bg-white/5 transition-colors"
             >
               <RotateCcw className="h-4 w-4" />
               Reset
@@ -193,10 +193,10 @@ export function PipelineWizard({
               className={cn(
                 'flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-all',
                 index === currentStep
-                  ? 'bg-indigo-600 text-white'
+                  ? 'bg-cyan-600 text-white'
                   : index < currentStep
-                    ? 'bg-indigo-600/20 text-indigo-400'
-                    : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
+                    ? 'bg-cyan-600/20 text-cyan-400'
+                    : 'bg-white/5 text-gray-500 hover:text-gray-300'
               )}
             >
               {index < currentStep ? (
@@ -215,14 +215,14 @@ export function PipelineWizard({
 
       {/* Current step content */}
       {currentPhase && (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
+        <div className="rounded-xl p-6">
           {/* Step header */}
           <div className="mb-2 flex items-center justify-between">
             <div>
               <h3 className="text-lg font-bold text-white">
                 Step {currentStep + 1}: {currentPhase.label}
               </h3>
-              <p className="mt-1 text-sm text-zinc-400">
+              <p className="mt-1 text-sm text-gray-400">
                 {getPhaseDescription(currentPhase.id)}
               </p>
             </div>
@@ -233,7 +233,7 @@ export function PipelineWizard({
                     if (!enabledAgentIds.has(id)) onToggleAgent(id);
                   });
                 }}
-                className="rounded-lg px-3 py-1.5 text-xs text-emerald-400 hover:bg-zinc-800 transition-colors"
+                className="rounded-lg px-3 py-1.5 text-xs text-emerald-400 hover:bg-white/5 transition-colors"
               >
                 Enable all
               </button>
@@ -243,7 +243,7 @@ export function PipelineWizard({
                     if (enabledAgentIds.has(id)) onToggleAgent(id);
                   });
                 }}
-                className="rounded-lg px-3 py-1.5 text-xs text-red-400 hover:bg-zinc-800 transition-colors"
+                className="rounded-lg px-3 py-1.5 text-xs text-red-400 hover:bg-white/5 transition-colors"
               >
                 Disable all
               </button>
@@ -259,15 +259,15 @@ export function PipelineWizard({
               className={cn(
                 'mb-5 flex w-full items-center gap-3 rounded-lg border px-4 py-2.5 text-sm transition-all',
                 startFromPhaseId === currentPhase.id
-                  ? 'border-indigo-500/40 bg-indigo-950/20 text-indigo-400'
-                  : 'border-zinc-800 bg-zinc-900/30 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300'
+                  ? 'border-cyan-500/40 bg-cyan-950/20 text-cyan-400'
+                  : 'border-white/[0.04] bg-[rgba(2,2,5,0.6)]/30 text-gray-500 hover:border-cyan-500/15 hover:text-gray-300'
               )}
             >
               <div className={cn(
                 'flex h-5 w-5 items-center justify-center rounded',
                 startFromPhaseId === currentPhase.id
-                  ? 'bg-indigo-600 text-white'
-                  : 'border border-zinc-700 bg-zinc-800'
+                  ? 'bg-cyan-600 text-white'
+                  : 'border border-white/[0.08] bg-white/5'
               )}>
                 {startFromPhaseId === currentPhase.id && <Check className="h-3 w-3" />}
               </div>
@@ -322,7 +322,7 @@ export function PipelineWizard({
                   setIsConfiguring(false);
                 }
               }}
-              className="flex items-center gap-2 rounded-lg border border-zinc-700 px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 transition-colors"
+              className="flex items-center gap-2 rounded-lg border border-white/[0.08] px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 transition-colors"
             >
               <ChevronLeft className="h-4 w-4" />
               {currentStep === 0 ? 'Back to Overview' : 'Previous Step'}
@@ -331,7 +331,7 @@ export function PipelineWizard({
             {currentStep < activePhases.length - 1 ? (
               <button
                 onClick={() => setCurrentStep(currentStep + 1)}
-                className="flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-indigo-500 transition-colors"
+                className="flex items-center gap-2 rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-cyan-500 transition-colors"
               >
                 Next Step
                 <ChevronRight className="h-4 w-4" />

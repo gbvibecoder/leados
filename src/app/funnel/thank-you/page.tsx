@@ -5,7 +5,7 @@ import Link from 'next/link';
 
 export default function ThankYouPage() {
   return (
-    <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-[#020205] flex items-center justify-center px-4">
       <div className="max-w-lg w-full text-center space-y-8">
         <div className="flex justify-center">
           <div className="w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center">
@@ -15,17 +15,17 @@ export default function ThankYouPage() {
 
         <div className="space-y-3">
           <h1 className="text-3xl font-bold text-white">You&apos;re In!</h1>
-          <p className="text-zinc-400 text-lg">
+          <p className="text-gray-400 text-lg">
             Your details have been received. We&apos;ll review your information and reach out within 24 hours.
           </p>
         </div>
 
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4 text-left">
+        <div className="bg-zinc-900 border border-white/[0.04] rounded-xl p-6 space-y-4 text-left">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2">
             <Calendar className="w-5 h-5 text-blue-400" />
             What Happens Next
           </h2>
-          <ol className="space-y-3 text-zinc-400 text-sm">
+          <ol className="space-y-3 text-gray-400 text-sm">
             <li className="flex items-start gap-3">
               <span className="w-6 h-6 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">1</span>
               <span>Our team reviews your submission and prepares a custom growth analysis</span>

@@ -7,11 +7,11 @@ import { useAppStore, ActivityItem } from '@/lib/store';
 import { leados } from '@/lib/api';
 
 const iconMap = {
-  agent_started: { icon: Bot, color: 'text-blue-400' },
+  agent_started: { icon: Bot, color: 'text-cyan-400' },
   agent_completed: { icon: CheckCircle2, color: 'text-emerald-400' },
   agent_error: { icon: AlertCircle, color: 'text-red-400' },
-  pipeline_completed: { icon: Zap, color: 'text-indigo-400' },
-  info: { icon: Info, color: 'text-zinc-400' },
+  pipeline_completed: { icon: Zap, color: 'text-cyan-400' },
+  info: { icon: Info, color: 'text-gray-500' },
 };
 
 function formatTime(timestamp: string): string {
@@ -47,7 +47,6 @@ export function ActivityFeed() {
     }).catch(() => {});
   }, []);
 
-  // Merge real-time store activity with database activity
   const items: ActivityItem[] = activityFeed.length > 0
     ? activityFeed
     : dbActivity.length > 0
@@ -55,28 +54,26 @@ export function ActivityFeed() {
       : [PLACEHOLDER_ITEM];
 
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
-      <h3 className="mb-4 text-sm font-semibold text-zinc-200">Recent Activity</h3>
+    <div className="rounded-xl p-5"
+      style={{ background: 'rgba(2,2,5,0.6)', border: '1px solid rgba(255,255,255,0.04)' }}>
+      <h3 className="mb-4 text-sm font-semibold text-gray-200">Recent Activity</h3>
       <div className="space-y-3">
         {items.slice(0, 10).map((item) => {
           const config = iconMap[item.type];
           const Icon = config.icon;
           return (
-            <div key={item.id} className="flex gap-3">
-              <div className="mt-0.5">
-                <Icon className={cn('h-4 w-4', config.color)} />
+            <div key={item.id} className="flex gap-3 group">
+              <div className="mt-0.5 shrink-0">
+                <div className="w-6 h-6 rounded-full flex items-center justify-center"
+                  style={{ background: 'rgba(255,255,255,0.03)' }}>
+                  <Icon className={cn('h-3.5 w-3.5', config.color)} />
+                </div>
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm text-zinc-300">{item.message}</p>
+                <p className="text-sm text-gray-300">{item.message}</p>
                 <div className="mt-0.5 flex items-center gap-2">
-                  {item.agentName && (
-                    <span className="text-xs text-zinc-500">{item.agentName}</span>
-                  )}
-                  {mounted && item.timestamp && (
-                    <span className="text-xs text-zinc-600">
-                      {formatTime(item.timestamp)}
-                    </span>
-                  )}
+                  {item.agentName && <span className="text-xs text-gray-600">{item.agentName}</span>}
+                  {mounted && item.timestamp && <span className="text-xs text-gray-700">{formatTime(item.timestamp)}</span>}
                 </div>
               </div>
             </div>

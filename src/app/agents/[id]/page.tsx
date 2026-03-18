@@ -53,7 +53,7 @@ function AgentDetailPageInner() {
 
   const statusBadge = (status: string) => {
     const config: Record<string, { color: string; icon: typeof Bot }> = {
-      idle: { color: 'text-zinc-400', icon: Clock },
+      idle: { color: 'text-gray-400', icon: Clock },
       running: { color: 'text-blue-400', icon: Loader2 },
       done: { color: 'text-emerald-400', icon: CheckCircle2 },
       error: { color: 'text-red-400', icon: AlertCircle },
@@ -71,58 +71,58 @@ function AgentDetailPageInner() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <button onClick={() => router.back()} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-800 hover:text-white">
+        <button onClick={() => router.back()} className="rounded-lg p-2 text-gray-400 hover:bg-white/5 hover:text-white">
           <ArrowLeft className="h-5 w-5" />
         </button>
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-white">{agent?.name || agentId}</h1>
-          <p className="text-sm text-zinc-400">{agentId}</p>
+          <p className="text-sm text-gray-400">{agentId}</p>
         </div>
         {statusBadge(running ? 'running' : 'idle')}
       </div>
 
       {/* Description */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
-        <h3 className="mb-2 text-sm font-semibold text-zinc-200">Description</h3>
-        <p className="text-sm text-zinc-300">{info.description}</p>
+      <div className="rounded-xl p-5">
+        <h3 className="mb-2 text-sm font-semibold text-gray-200">Description</h3>
+        <p className="text-sm text-gray-300">{info.description}</p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <div>
-            <p className="text-xs font-medium text-zinc-400">Key Inputs</p>
-            <p className="mt-1 text-sm text-zinc-300">{info.inputs}</p>
+            <p className="text-xs font-medium text-gray-400">Key Inputs</p>
+            <p className="mt-1 text-sm text-gray-300">{info.inputs}</p>
           </div>
           <div>
-            <p className="text-xs font-medium text-zinc-400">Key Outputs</p>
-            <p className="mt-1 text-sm text-zinc-300">{info.outputs}</p>
+            <p className="text-xs font-medium text-gray-400">Key Outputs</p>
+            <p className="mt-1 text-sm text-gray-300">{info.outputs}</p>
           </div>
         </div>
       </div>
 
       {/* Config + Run */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
-          <h3 className="mb-3 text-sm font-semibold text-zinc-200">Input Configuration</h3>
+        <div className="rounded-xl p-5">
+          <h3 className="mb-3 text-sm font-semibold text-gray-200">Input Configuration</h3>
           <textarea
             value={configJson}
             onChange={(e) => setConfigJson(e.target.value)}
             rows={8}
-            className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 font-mono text-xs text-zinc-200 focus:border-indigo-500 focus:outline-none"
+            className="w-full rounded-lg border border-white/[0.08] bg-white/5 p-3 font-mono text-xs text-gray-200 focus:border-cyan-400 focus:outline-none"
           />
           <button
             onClick={handleRun}
             disabled={running}
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-70"
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-cyan-700 disabled:opacity-70"
           >
             {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
             {running ? 'Running...' : 'Run Agent'}
           </button>
         </div>
 
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
-          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-200">
+        <div className="rounded-xl p-5">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-200">
             <Clock className="h-4 w-4" /> Run History
           </h3>
           {runs.length === 0 ? (
-            <p className="py-4 text-center text-sm text-zinc-500">No runs yet</p>
+            <p className="py-4 text-center text-sm text-gray-500">No runs yet</p>
           ) : (
             <div className="space-y-2">
               {runs.map((run: any) => (
@@ -131,12 +131,12 @@ function AgentDetailPageInner() {
                   onClick={() => setSelectedRun(run)}
                   className={cn(
                     'w-full rounded-lg border p-3 text-left transition-all',
-                    selectedRun?.id === run.id ? 'border-indigo-500 bg-indigo-950/20' : 'border-zinc-800 hover:border-zinc-700'
+                    selectedRun?.id === run.id ? 'border-cyan-500 bg-cyan-950/20' : 'border-white/[0.04] hover:border-cyan-500/15'
                   )}
                 >
                   <div className="flex items-center justify-between">
                     {statusBadge(run.status)}
-                    <span className="text-xs text-zinc-500">
+                    <span className="text-xs text-gray-500">
                       {run.startedAt ? new Date(run.startedAt).toLocaleString() : 'N/A'}
                     </span>
                   </div>
@@ -149,11 +149,11 @@ function AgentDetailPageInner() {
 
       {/* Output Viewer */}
       {selectedRun && (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
-          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-200">
+        <div className="rounded-xl p-5">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-200">
             <FileJson className="h-4 w-4" /> Output Log
           </h3>
-          <pre className="max-h-96 overflow-auto rounded-lg border border-zinc-700 bg-zinc-800 p-4 text-xs text-zinc-300">
+          <pre className="max-h-96 overflow-auto rounded-lg border border-white/[0.08] bg-white/5 p-4 text-xs text-gray-300">
             {JSON.stringify(selectedRun.outputsJson || selectedRun.outputs || {}, null, 2)}
           </pre>
           {selectedRun.error && (

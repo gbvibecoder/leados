@@ -85,12 +85,12 @@ export function AgentCustomizer({
     <div className="mb-4">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex w-full items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-3 transition-colors hover:border-zinc-700"
+        className="flex w-full items-center justify-between rounded-lg rounded-xl px-4 py-3 transition-colors hover:border-cyan-500/15"
       >
         <div className="flex items-center gap-3">
-          <Settings2 className="h-4 w-4 text-zinc-500" />
-          <span className="text-sm text-zinc-300">Customize Agents</span>
-          <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-xs font-medium text-indigo-400">
+          <Settings2 className="h-4 w-4 text-gray-500" />
+          <span className="text-sm text-gray-300">Customize Agents</span>
+          <span className="rounded-full bg-cyan-500/10 px-2 py-0.5 text-xs font-medium text-cyan-400">
             {enabledCount}/{totalAgents} enabled
           </span>
           {hasProjectConfig && (
@@ -100,28 +100,28 @@ export function AgentCustomizer({
           )}
         </div>
         {isOpen ? (
-          <ChevronUp className="h-4 w-4 text-zinc-500" />
+          <ChevronUp className="h-4 w-4 text-gray-500" />
         ) : (
-          <ChevronDown className="h-4 w-4 text-zinc-500" />
+          <ChevronDown className="h-4 w-4 text-gray-500" />
         )}
       </button>
 
       {isOpen && (
-        <div className="mt-2 rounded-lg border border-zinc-800 bg-zinc-900/80 p-4">
+        <div className="mt-2 rounded-lg border border-white/[0.04] bg-[rgba(2,2,5,0.6)]/80 p-4">
           <div className="mb-4 flex items-center justify-between">
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-gray-500">
               Toggle agents on/off. {hasProjectConfig ? 'Config is saved per project.' : 'Only enabled agents will run in the pipeline.'}
             </p>
             <div className="flex gap-2">
               <button
                 onClick={onEnableAll}
-                className="rounded px-2 py-1 text-xs text-emerald-400 hover:bg-zinc-800"
+                className="rounded px-2 py-1 text-xs text-emerald-400 hover:bg-white/5"
               >
                 Enable all
               </button>
               <button
                 onClick={onDisableAll}
-                className="rounded px-2 py-1 text-xs text-red-400 hover:bg-zinc-800"
+                className="rounded px-2 py-1 text-xs text-red-400 hover:bg-white/5"
               >
                 Disable all
               </button>
@@ -137,7 +137,7 @@ export function AgentCustomizer({
               return (
                 <div key={phase.label}>
                   <div className="mb-2 flex items-center gap-2">
-                    <p className="text-xs font-medium uppercase tracking-wider text-zinc-600">
+                    <p className="text-xs font-medium uppercase tracking-wider text-gray-600">
                       {phase.label}
                     </p>
                     {allSkippedByProject && (
@@ -168,20 +168,20 @@ export function AgentCustomizer({
                           className={cn(
                             'flex items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-all',
                             isSkipped
-                              ? 'cursor-not-allowed border-zinc-800/50 bg-zinc-900/30 opacity-40'
+                              ? 'cursor-not-allowed border-white/[0.03] bg-zinc-900/30 opacity-40'
                               : isDisabled
-                                ? 'border-zinc-800 bg-zinc-900/30 hover:border-zinc-700'
-                                : 'border-indigo-500/30 bg-indigo-500/5 hover:border-indigo-500/50'
+                                ? 'border-white/[0.04] bg-[rgba(2,2,5,0.6)]/30 hover:border-cyan-500/15'
+                                : 'border-cyan-500/30 bg-cyan-500/5 hover:border-cyan-500/50'
                           )}
                         >
                           <div
                             className={cn(
                               'flex h-5 w-5 shrink-0 items-center justify-center rounded',
                               isSkipped
-                                ? 'bg-zinc-800 text-zinc-600'
+                                ? 'bg-white/5 text-gray-600'
                                 : isDisabled
-                                  ? 'border border-zinc-700 bg-zinc-800'
-                                  : 'bg-indigo-600 text-white'
+                                  ? 'border border-white/[0.08] bg-white/5'
+                                  : 'bg-cyan-600 text-white'
                             )}
                           >
                             {isSkipped ? (
@@ -194,10 +194,10 @@ export function AgentCustomizer({
                             className={cn(
                               'text-sm',
                               isSkipped
-                                ? 'text-zinc-600 line-through'
+                                ? 'text-gray-600 line-through'
                                 : isDisabled
-                                  ? 'text-zinc-500'
-                                  : 'text-zinc-200'
+                                  ? 'text-gray-500'
+                                  : 'text-gray-200'
                             )}
                           >
                             {agentMap.get(agentId)}

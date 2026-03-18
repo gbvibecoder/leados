@@ -56,23 +56,23 @@ export default function CampaignSummary({
           <h2 className="text-lg font-bold text-green-400 flex items-center gap-2">
             <CheckCircle2 className="w-5 h-5" /> Campaign is LIVE
           </h2>
-          <p className="text-xs text-zinc-400 mt-0.5">
+          <p className="text-xs text-gray-400 mt-0.5">
             Your Meta ad campaign is now active and serving ads.
           </p>
         </div>
       </div>
 
       {/* Campaign IDs */}
-      <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-xl space-y-3">
+      <div className="p-4 bg-zinc-900 border border-white/[0.04] rounded-xl space-y-3">
         <h3 className="text-sm font-semibold text-white">Campaign IDs</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {idEntries.map((entry) => (
             <div
               key={entry.label}
-              className="flex items-center justify-between p-3 bg-zinc-800 rounded-lg"
+              className="flex items-center justify-between p-3 bg-white/5 rounded-lg"
             >
               <div>
-                <span className="text-[10px] text-zinc-500 uppercase tracking-wide">{entry.label}</span>
+                <span className="text-[10px] text-gray-500 uppercase tracking-wide">{entry.label}</span>
                 <p className="font-mono text-sm text-white">{entry.value}</p>
               </div>
               <button
@@ -83,7 +83,7 @@ export default function CampaignSummary({
                 {copied === entry.label ? (
                   <Check className="w-3.5 h-3.5 text-green-400" />
                 ) : (
-                  <Copy className="w-3.5 h-3.5 text-zinc-500" />
+                  <Copy className="w-3.5 h-3.5 text-gray-500" />
                 )}
               </button>
             </div>
@@ -92,43 +92,43 @@ export default function CampaignSummary({
       </div>
 
       {/* Insights */}
-      <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-xl space-y-3">
+      <div className="p-4 bg-zinc-900 border border-white/[0.04] rounded-xl space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-white flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-blue-400" /> Campaign Insights
           </h3>
           <button
             onClick={onFetchInsights}
-            className="p-1.5 hover:bg-zinc-800 rounded transition-colors"
+            className="p-1.5 hover:bg-white/5 rounded transition-colors"
             title="Refresh"
           >
-            <RefreshCw className="w-3.5 h-3.5 text-zinc-500" />
+            <RefreshCw className="w-3.5 h-3.5 text-gray-500" />
           </button>
         </div>
 
         {latestInsight ? (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="p-3 bg-zinc-800 rounded-lg text-center">
+            <div className="p-3 bg-white/5 rounded-lg text-center">
               <p className="text-xl font-bold text-white">{Number(latestInsight.impressions).toLocaleString()}</p>
-              <p className="text-[10px] text-zinc-500 mt-0.5">Impressions</p>
+              <p className="text-[10px] text-gray-500 mt-0.5">Impressions</p>
             </div>
-            <div className="p-3 bg-zinc-800 rounded-lg text-center">
+            <div className="p-3 bg-white/5 rounded-lg text-center">
               <p className="text-xl font-bold text-white">{Number(latestInsight.clicks).toLocaleString()}</p>
-              <p className="text-[10px] text-zinc-500 mt-0.5">Clicks</p>
+              <p className="text-[10px] text-gray-500 mt-0.5">Clicks</p>
             </div>
-            <div className="p-3 bg-zinc-800 rounded-lg text-center">
+            <div className="p-3 bg-white/5 rounded-lg text-center">
               <p className="text-xl font-bold text-white">{Number(latestInsight.reach).toLocaleString()}</p>
-              <p className="text-[10px] text-zinc-500 mt-0.5">Reach</p>
+              <p className="text-[10px] text-gray-500 mt-0.5">Reach</p>
             </div>
-            <div className="p-3 bg-zinc-800 rounded-lg text-center">
+            <div className="p-3 bg-white/5 rounded-lg text-center">
               <p className="text-xl font-bold text-white">₹{Number(latestInsight.spend).toFixed(2)}</p>
-              <p className="text-[10px] text-zinc-500 mt-0.5">Spend</p>
+              <p className="text-[10px] text-gray-500 mt-0.5">Spend</p>
             </div>
           </div>
         ) : (
           <div className="text-center py-6">
-            <p className="text-sm text-zinc-500">No insights yet</p>
-            <p className="text-xs text-zinc-600 mt-1">Stats may take a few hours to populate after campaign launch.</p>
+            <p className="text-sm text-gray-500">No insights yet</p>
+            <p className="text-xs text-gray-600 mt-1">Stats may take a few hours to populate after campaign launch.</p>
           </div>
         )}
       </div>
@@ -136,7 +136,7 @@ export default function CampaignSummary({
       {/* New campaign */}
       <button
         onClick={onReset}
-        className="w-full py-2.5 border border-zinc-700 hover:border-zinc-600 text-zinc-400 hover:text-white text-sm rounded-lg transition-colors"
+        className="w-full py-2.5 border border-white/[0.08] hover:border-cyan-500/20 text-gray-400 hover:text-white text-sm rounded-lg transition-colors"
       >
         Create Another Campaign
       </button>

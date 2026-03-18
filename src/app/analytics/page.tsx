@@ -36,7 +36,7 @@ function AnalyticsPageInner() {
           <h1 className="text-3xl font-bold text-white">
             {selectedProject ? `${selectedProject.name} Analytics` : 'Analytics'}
           </h1>
-          <p className="mt-1 text-sm text-zinc-400">
+          <p className="mt-1 text-sm text-gray-400">
             {selectedProject
               ? `Performance metrics for ${selectedProject.name}`
               : 'LeadOS performance metrics and insights'}
@@ -51,7 +51,7 @@ function AnalyticsPageInner() {
                 onClick={() => setPeriod(p)}
                 className={cn(
                   'rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
-                  period === p ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                  period === p ? 'bg-cyan-600 text-white' : 'bg-white/5 text-gray-400 hover:text-white'
                 )}
               >
                 {p}
@@ -96,28 +96,28 @@ function AnalyticsPageInner() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.45, delay: 0.4, ease: [0.25, 0.4, 0.25, 1] }}
-            className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5"
+            className="rounded-xl p-5"
           >
-            <h3 className="mb-4 text-sm font-semibold text-zinc-200">Channel Performance</h3>
+            <h3 className="mb-4 text-sm font-semibold text-gray-200">Channel Performance</h3>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-zinc-800">
-                    <th className="px-4 py-2 text-left text-xs text-zinc-400">Channel</th>
-                    <th className="px-4 py-2 text-right text-xs text-zinc-400">Leads</th>
-                    <th className="px-4 py-2 text-right text-xs text-zinc-400">Spend</th>
-                    <th className="px-4 py-2 text-right text-xs text-zinc-400">CPL</th>
-                    <th className="px-4 py-2 text-right text-xs text-zinc-400">Conv %</th>
+                  <tr className="border-b border-white/[0.04]">
+                    <th className="px-4 py-2 text-left text-xs text-gray-400">Channel</th>
+                    <th className="px-4 py-2 text-right text-xs text-gray-400">Leads</th>
+                    <th className="px-4 py-2 text-right text-xs text-gray-400">Spend</th>
+                    <th className="px-4 py-2 text-right text-xs text-gray-400">CPL</th>
+                    <th className="px-4 py-2 text-right text-xs text-gray-400">Conv %</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800/50">
                   {data.channelBreakdown?.map((ch: any) => (
                     <tr key={ch.channel}>
-                      <td className="px-4 py-2 font-medium text-zinc-200">{ch.channel}</td>
-                      <td className="px-4 py-2 text-right text-zinc-300">{ch.leads}</td>
-                      <td className="px-4 py-2 text-right text-zinc-300">${ch.spend.toLocaleString()}</td>
-                      <td className="px-4 py-2 text-right text-zinc-300">${ch.cpl}</td>
-                      <td className="px-4 py-2 text-right text-zinc-300">{ch.conversion}%</td>
+                      <td className="px-4 py-2 font-medium text-gray-200">{ch.channel}</td>
+                      <td className="px-4 py-2 text-right text-gray-300">{ch.leads}</td>
+                      <td className="px-4 py-2 text-right text-gray-300">${ch.spend.toLocaleString()}</td>
+                      <td className="px-4 py-2 text-right text-gray-300">${ch.cpl}</td>
+                      <td className="px-4 py-2 text-right text-gray-300">{ch.conversion}%</td>
                     </tr>
                   ))}
                 </tbody>
@@ -132,15 +132,15 @@ function AnalyticsPageInner() {
 
 function KPI({ title, value, icon: Icon, color }: { title: string; value: string; icon: any; color: string }) {
   const colorMap: Record<string, string> = {
-    indigo: 'bg-indigo-900/30 text-indigo-400',
+    indigo: 'bg-cyan-900/30 text-cyan-400',
     emerald: 'bg-emerald-900/30 text-emerald-400',
     amber: 'bg-amber-900/30 text-amber-400',
     blue: 'bg-blue-900/30 text-blue-400',
   };
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+    <div className="rounded-xl p-5">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-zinc-400">{title}</p>
+        <p className="text-sm text-gray-400">{title}</p>
         <div className={cn('flex h-9 w-9 items-center justify-center rounded-lg', colorMap[color]?.split(' ')[0])}>
           <Icon className={cn('h-5 w-5', colorMap[color]?.split(' ')[1])} />
         </div>

@@ -555,11 +555,11 @@ function LeadCaptureForm({ fields: rawFields }: { fields: FormField[] }) {
                     required={field.required}
                     value={formData[field.name] || ''}
                     onChange={(e) => setFormData({ ...formData, [field.name]: e.target.value })}
-                    className="w-full bg-zinc-900 border border-border/50 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500/30"
+                    className="w-full bg-zinc-900 border border-border/50 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500/30"
                   >
-                    <option value="" className="bg-zinc-900 text-zinc-400">{field.placeholder || `Select ${field.label || field.name}`}</option>
+                    <option value="" className="bg-zinc-900 text-gray-400">{field.placeholder || `Select ${field.label || field.name}`}</option>
                     {field.options?.map((opt) => (
-                      <option key={opt} value={opt} className="bg-zinc-900 text-zinc-100">{opt}</option>
+                      <option key={opt} value={opt} className="bg-zinc-900 text-gray-100">{opt}</option>
                     ))}
                   </select>
                 ) : field.type === 'textarea' ? (
