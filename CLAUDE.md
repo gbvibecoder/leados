@@ -4,106 +4,141 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-LeadOS is a fully autonomous, multi-agent AI platform — a **Service Acquisition Machine** that automates the entire go-to-market lifecycle for service-based businesses. It handles everything from identifying service opportunities and packaging offers to generating, qualifying, and routing leads with minimal human intervention.
+LeadOS is a multi-agent AI platform that automates the go-to-market lifecycle for service-based businesses. It runs 13 specialized agents sequentially through a pipeline: from service research and offer packaging, through funnel building and ad campaigns, to lead qualification and CRM hygiene.
 
 Requirements document: `../Flow/LeadOS_Requirements_Document.md`
 
+## Commands
+
+```bash
+npm run dev          # Start Next.js dev server (http://localhost:3000)
+npm run build        # Generate Prisma client + Next.js build
+npm run lint         # ESLint (Next.js core-web-vitals + TypeScript)
+npm test             # Run all tests (vitest run)
+npm run test:watch   # Run tests in watch mode (vitest)
+
+# Database
+npx prisma db push     # Push schema to database
+npx prisma generate    # Generate Prisma client
+npx prisma studio      # Open Prisma Studio GUI
+
+# Run a single test file
+npx vitest run tests/unit/store.test.ts
+# Run tests matching a pattern
+npx vitest run -t "should create pipeline"
+```
+
 ## Architecture
 
-The system is built around **13 specialized AI agents**, each owning a distinct domain of the lead generation and sales pipeline. Agents operate both in sequence and in parallel.
+### Tech Stack
 
-### Agent Pipeline
+- **Frontend:** Next.js 16 (App Router), React 19, Tailwind CSS 4, Zustand, Radix UI, Recharts
+- **Backend:** Next.js API Routes, Prisma 7 ORM
+- **Database:** PostgreSQL via Neon serverless adapter (`@prisma/adapter-neon`)
+- **AI:** Gemini (primary/free) with Anthropic Claude fallback (paid). Set `AI_ENGINE=anthropic` to reverse.
+- **Auth:** JWT (jose/jsonwebtoken), 7-day token expiry, Bearer token in Authorization header
+- **Real-time:** Server-Sent Events (SSE) via `/api/events`
+- **Testing:** Vitest + jsdom + React Testing Library
 
-**Discovery & Offer Phase:**
-1. **Service Research Agent** — identifies profitable service niches (demand scoring, competition analysis)
-2. **Offer Engineering Agent** — packages offers (ICP definition, pricing tiers, guarantees, positioning)
-3. **Validation Agent** — scores and validates opportunities before resource commitment
-
-**Funnel & Content Phase:**
-4. **Funnel Builder Agent** — generates landing pages, forms, tracking setup (deploys to Webflow/Framer)
-5. **Content & Creative Agent** — produces ad copy, email sequences, UGC scripts per channel/ICP
-6. **Paid Traffic Agent** — manages Google/Meta ad campaigns, budgets, bidding, A/B tests
-
-**Lead Generation Phase:**
-7. **Outbound Outreach Agent** — orchestrates email (Instantly/Smartlead) and LinkedIn sequences
-8. **Inbound Lead Capture Agent** — captures form/chat/webhook leads, enriches via Apollo/Clay/Clearbit
-
-**Qualification & Routing Phase:**
-9. **AI Qualification Agent** — conducts AI voice calls (Bland AI/Vapi/ElevenLabs), scores leads on BANT
-10. **Sales Routing Agent** — routes qualified leads to reps based on rules, round-robin, or scoring
-
-**Optimization Phase:**
-11. **Tracking & Attribution Agent** — multi-touch attribution, UTM tracking, GA4/CAPI integration
-12. **Performance Optimization Agent** — automated budget reallocation, creative rotation, CPL/ROAS optimization
-13. **CRM & Data Hygiene Agent** — deduplication (>99%), lifecycle management, data enrichment sync
-
-### Data Flow
+### Path Aliases
 
 ```
-Research → Offer Engineering → Validation
-                                    ↓
-                            Funnel Builder → Content & Creative
-                                    ↓
-                    Paid Traffic + Outbound Outreach
-                                    ↓
-                        Inbound Lead Capture
-                                    ↓
-                    AI Qualification → Sales Routing
-                                    ↓
-                            CRM & Data Hygiene
-                                    ↓
-            Tracking & Attribution ↔ Performance Optimization
+@/*        → ./src/*
+@backend/* → ./backend/*
+@shared/*  → ./shared/*       (vitest only — not in tsconfig)
 ```
 
-### Core Data Entities
+### Code Layout
 
-- **ServiceOpportunity** — niche, demand/competition/monetization scores
-- **Offer** — ICP, pain points, pricing tiers, guarantee, positioning
-- **Lead** — contact info, source, UTM params, lead score, segment, stage
-- **Campaign** — channel, budget, status, metrics
-- **CreativeAsset** — type, channel, content, performance tag
-- **QualificationCall** — recording, transcript, score, outcome
-- **CRMRecord** — pipeline stage, owner, journey timeline
+```
+src/
+  app/api/          # REST API routes (agents, pipelines, leados, settings, auth, events)
+  app/              # Next.js pages (dashboard, leados, leads, analytics, settings, agents/[id])
+  components/
+    ui/             # Radix-based primitives (button, card, input, badge, tabs, etc.)
+    agents/         # Agent cards, pipeline flow, agent output renderers
+    agents/outputs/ # 13 specialized output components (one per agent type)
+    pipeline/       # Pipeline wizard, execution view, preview
+    dashboard/      # KPI cards, charts, activity feed
+    layout/         # Sidebar, Navbar, PageWrapper, ErrorBoundary
+  lib/
+    store.ts        # Zustand store — pipeline state, projects, blacklist, activity feed
+    api.ts          # API client with Bearer token injection and 401 redirect
+    prisma.ts       # Prisma singleton with Neon adapter
+    auth.ts         # JWT sign/verify helpers
+    utils.ts        # cn() — Tailwind class merge utility
 
-## Infrastructure Requirements
+backend/
+  agents/
+    base-agent.ts   # Abstract base: LLM abstraction, retry, JSON parsing, logging
+    leados/         # 13 agent implementations + index.ts factory
+  orchestrator/
+    pipeline-orchestrator.ts  # Sequential agent execution with retry (3x exponential backoff)
+    event-emitter.ts          # Node EventEmitter for SSE pipeline events
+  prompts/          # System prompts for Claude/Gemini
+  integrations/     # API wrappers: bland-ai, apollo, clearbit, hubspot, google-ads, meta-ads, etc.
 
-- **Containerized**: Docker + Kubernetes (EKS/GKE/AKS)
-- **Inter-agent communication**: Message queue (Kafka or SQS) for loose coupling
-- **Infrastructure as code**: Terraform or Pulumi
-- **Observability**: OpenTelemetry distributed tracing, centralized logging (ELK)
-- **Deployment**: CI/CD with zero-downtime (blue/green or canary)
-- **Cloud**: AWS, GCP, or Azure with multi-AZ redundancy
+shared/
+  types.ts          # Core TypeScript types (AgentStatus, LeadStage, PipelineStatus, SSE events)
+  constants.ts      # LEADOS_AGENTS array — agent metadata (id, name, description, order)
 
-## Key Integrations
+prisma/
+  schema.prisma     # 10+ models: User, Pipeline, AgentRun, Lead, Campaign, etc.
 
-| Category | Systems |
-|----------|---------|
-| Ads | Google Ads API, Meta Marketing API |
-| CRM | HubSpot, GoHighLevel, Salesforce |
-| Email Outreach | Instantly, Smartlead |
-| Landing Pages | Webflow, Framer |
-| AI Voice | Bland AI, Vapi, ElevenLabs |
-| Enrichment | Apollo.io, Clay, Clearbit |
-| Analytics | GA4, Google Tag Manager |
-| Scheduling | Calendly, Cal.com |
-| Payments | Stripe |
+tests/
+  setup.ts          # Mocks: Next.js router, EventSource, global fetch
+  unit/             # Store, base agent, utilities
+  agents/           # Individual agent tests
+  api/              # API route tests
+  components/       # React component rendering tests
+```
+
+### Agent Execution Model
+
+Agents extend `BaseAgent` (in `backend/agents/base-agent.ts`):
+
+1. **LLM Failover:** `callClaude()` tries Gemini first, falls back to Anthropic. Hard 45-second timeout per call (fits Vercel Hobby 60s limit). Max tokens default: 16384.
+2. **JSON Parsing:** `parseLLMJson<T>()` / `safeParseLLMJson<T>()` extract JSON from markdown fences.
+3. **Data Integrity Rule:** Agents must zero out any LLM-fabricated numeric metrics (market sizes, revenue estimates). Only real API data or subjective LLM scores (confidence, demand) are kept. Zeroed fields get labels like `_cacEstimateLabel = 'llm_estimate'`.
+
+### Pipeline Orchestration
+
+`PipelineOrchestrator` runs agents sequentially. Each agent receives config + all previous agent outputs. On failure: 3 retries with exponential backoff (1s, 2s, 4s). Events emitted: `agent:started`, `agent:progress`, `agent:completed`, `agent:error`, `pipeline:completed` — consumed by SSE endpoint for real-time frontend updates.
+
+### State Management
+
+Zustand store (`src/lib/store.ts`) manages:
+- Pipeline execution state (status, current agent index)
+- Per-project agent customization (disable agents, set start-from agent)
+- Project CRUD with DB-first design and localStorage fallback
+- Blacklist management (company/domain exclusions)
+- Activity feed (agent events)
+- User-scoped localStorage keys (include userId) for multi-user isolation
+
+### Key API Endpoints
+
+- `POST/GET /api/pipelines` — Create/list pipelines
+- `POST /api/pipelines/:id/start` — Start pipeline execution
+- `POST /api/agents/:id/run` — Run single agent
+- `GET /api/leados/leads` — List leads with filters
+- `GET /api/events` — SSE stream for real-time updates
+- `POST /api/auth/login` — JWT login
 
 ## Design Constraints
 
 - All agents must be modular and independently deployable
-- AI prompts and qualification scripts must be configurable without code deployment
-- LLM providers must be swappable without changing agent business logic (model abstraction layer)
-- All AI scoring must provide explainability outputs
-- External integrations use OAuth 2.0 or API keys stored in a secrets manager with exponential backoff retry
-- Must support scaling from 100 to 100,000 contacts/day without architectural changes
-- Multi-tenant support architected from v1.0 (enabled in v2.0)
+- LLM providers must be swappable without changing agent business logic (model abstraction layer in `base-agent.ts`)
+- AI prompts must be configurable without code deployment (see `backend/prompts/`)
+- All AI scoring must provide explainability outputs (reasoning + confidence in `AgentOutput`)
+- External integrations use exponential backoff retry
+- GDPR, CAN-SPAM, TCPA, CASL compliance required: consent verification before voice calls, DNC list checking, unsubscribe processing, audit trail
 
-## Compliance
+## Environment Variables
 
-GDPR, CAN-SPAM, TCPA, CASL compliance is required. The system must enforce:
-- Consent verification before AI voice calls
-- Unsubscribe processing within 24 hours
-- DNC list checking
-- Right to erasure / data portability
-- Configurable data retention with automated enforcement
-- Complete audit trail of all data access and modifications
+Required: `DATABASE_URL`, `ANTHROPIC_API_KEY` or `GEMINI_API_KEY`
+
+Optional integrations: `SERPAPI_KEY`, `BLANDAI_API_KEY`, `APOLLO_API_KEY`, `HUBSPOT_API_KEY`, `META_ACCESS_TOKEN`, `GOOGLE_ADS_*`, `INSTANTLY_API_KEY`, `SMARTLEAD_API_KEY`
+
+Set `AI_ENGINE=anthropic` to prefer Anthropic over Gemini. The app runs with mock data when API keys are not configured.
+
+See `.env.example` for the full list.
