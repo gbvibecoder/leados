@@ -187,7 +187,7 @@ export class OfferEngineeringAgent extends BaseAgent {
     try {
       await this.log('ai_offer_engineering', { phase: 'Sending market data to Claude for offer engineering' });
 
-      const response = await this.callClaude(SYSTEM_PROMPT, userMessage, 1, 4096);
+      const response = await this.callClaude(SYSTEM_PROMPT, userMessage, 1, 8192);
       let parsed: any = {};
       try {
         parsed = this.safeParseLLMJson<any>(response, ['offer']);

@@ -223,7 +223,7 @@ CRITICAL: For projectedMetrics, set ALL numeric values to 0. Do NOT fabricate me
       // ── Call LLM ──────────────────────────────────────────────────
       let parsed: any = {};
       try {
-        const response = await this.callClaude(SYSTEM_PROMPT, userMessage, 1, 6144);
+        const response = await this.callClaude(SYSTEM_PROMPT, userMessage, 1, 8192);
         parsed = this.safeParseLLMJson<any>(response, ['coldEmail', 'linkedIn']);
       } catch (err: any) {
         await this.log('llm_or_parse_error', { error: err.message });
