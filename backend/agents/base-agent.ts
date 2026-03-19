@@ -319,21 +319,49 @@ export abstract class BaseAgent {
   }
 
   protected parseLLMJson<T>(text: string): T {
-    // Try to extract JSON from markdown code blocks
+    // Extract JSON from markdown code blocks if present
     const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[1].trim());
+    let jsonStr = jsonMatch ? jsonMatch[1].trim() : text;
+
+    // If no code block, try to find JSON object in text
+    if (!jsonMatch) {
+      const objMatch = jsonStr.match(/\{[\s\S]*\}/);
+      if (objMatch) jsonStr = objMatch[0];
     }
-    // Try direct parse
+
+    // Try direct parse first
     try {
-      return JSON.parse(text);
-    } catch {
-      // Try to find JSON object in text
-      const objMatch = text.match(/\{[\s\S]*\}/);
-      if (objMatch) {
-        return JSON.parse(objMatch[0]);
+      return JSON.parse(jsonStr);
+    } catch (firstError: any) {
+      // Fix common LLM JSON issues:
+      // 1. Bad escape characters (e.g., \' or \x or unescaped control chars)
+      // 2. Trailing commas before } or ]
+      // 3. Single quotes instead of double quotes in keys
+      let fixed = jsonStr
+        .replace(/\\'/g, "'")                           // \' → '
+        .replace(/\\x[0-9a-fA-F]{2}/g, '')             // \x00 hex escapes
+        .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '') // control chars
+        .replace(/,\s*([\]}])/g, '$1')                  // trailing commas
+        .replace(/\n/g, '\\n')                          // unescaped newlines in strings
+        .replace(/\r/g, '\\r')                          // unescaped carriage returns
+        .replace(/\t/g, '\\t');                         // unescaped tabs
+
+      // Re-extract JSON object after fixing
+      const fixedMatch = fixed.match(/\{[\s\S]*\}/);
+      if (fixedMatch) fixed = fixedMatch[0];
+
+      try {
+        return JSON.parse(fixed);
+      } catch {
+        // Last resort: try to truncate at last valid closing brace
+        const lastBrace = fixed.lastIndexOf('}');
+        if (lastBrace > 0) {
+          try {
+            return JSON.parse(fixed.substring(0, lastBrace + 1));
+          } catch { /* fall through */ }
+        }
+        throw new Error(`${firstError.message}`);
       }
-      throw new Error('Failed to parse LLM JSON response');
     }
   }
 
