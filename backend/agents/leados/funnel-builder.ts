@@ -36,7 +36,7 @@ Do NOT generate any performance metrics. Do NOT include leadForm, bookingCalenda
 
 // ─── Integration Helpers ────────────────────────────────────────────────────
 
-const API_TIMEOUT = 8_000; // 8s — fast-fail on integrations
+const API_TIMEOUT = 5_000; // 5s — fast-fail on integrations (Vercel 60s limit)
 
 interface CalendlyEventType {
   name: string;
@@ -238,7 +238,7 @@ export class FunnelBuilderAgent extends BaseAgent {
 
       // ── Run LLM + ALL integrations in parallel ────────────────────
       const [llmResult, calendlyResult, hubspotResult] = await Promise.all([
-        this.callClaude(SYSTEM_PROMPT, llmInput, 1, 4096)
+        this.callClaude(SYSTEM_PROMPT, llmInput, 1, 2048)
           .catch((err: any) => {
             this.log('llm_failed', { error: err.message });
             return null;

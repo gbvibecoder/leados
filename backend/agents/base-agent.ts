@@ -110,11 +110,11 @@ export abstract class BaseAgent {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const client = new Anthropic({ apiKey, timeout: 120_000 });
+        const client = new Anthropic({ apiKey, timeout: 45_000 });
 
-        // Hard 90s total timeout — AbortController kills the request regardless of activity
+        // Hard 45s total timeout — must fit within Vercel Hobby's 60s function limit
         const abortController = new AbortController();
-        const hardTimeout = setTimeout(() => abortController.abort(), 90_000);
+        const hardTimeout = setTimeout(() => abortController.abort(), 45_000);
 
         let message;
         try {
@@ -152,14 +152,14 @@ export abstract class BaseAgent {
         const isConnectionError = error.message?.includes('Connection error') || error.message?.includes('ECONNRESET') || error.message?.includes('fetch failed') || error.name === 'AbortError';
         const isOverloaded = error.status === 429 || error.status === 529 || error.message?.includes('overloaded') || error.message?.includes('rate_limit');
         if ((isConnectionError || isOverloaded) && attempt < maxRetries) {
-          const waitSec = isOverloaded ? 5 * attempt : 3 * attempt;
-          await this.log('anthropic_wait_retry', { waitSeconds: waitSec, reason: isConnectionError ? 'connection_error' : 'overloaded' });
-          await new Promise(resolve => setTimeout(resolve, waitSec * 1000));
+          const waitMs = isOverloaded ? 2000 : 1000;
+          await this.log('anthropic_wait_retry', { waitMs, reason: isConnectionError ? 'connection_error' : 'overloaded' });
+          await new Promise(resolve => setTimeout(resolve, waitMs));
           continue;
         }
 
         if (attempt < maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)));
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
       }
     }
@@ -175,7 +175,7 @@ export abstract class BaseAgent {
     for (let attempt = 1; attempt <= totalAttempts; attempt++) {
       try {
         const geminiController = new AbortController();
-        const geminiTimeout = setTimeout(() => geminiController.abort(), 120_000);
+        const geminiTimeout = setTimeout(() => geminiController.abort(), 45_000);
         const res = await fetch(`${GEMINI_BASE}/gemini-2.0-flash:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -218,17 +218,17 @@ export abstract class BaseAgent {
           throw error;
         }
 
-        // For per-minute rate limits: short wait and retry
+        // For per-minute rate limits: short wait and retry (keep short for Vercel 60s limit)
         if (isRateLimit && attempt < totalAttempts) {
-          const waitSec = Math.min(5 + attempt * 5, 20);
-          await this.log('gemini_rate_limit_wait', { waitSeconds: waitSec, attempt });
-          await new Promise(resolve => setTimeout(resolve, waitSec * 1000));
+          const waitMs = Math.min(2000 + attempt * 1000, 5000);
+          await this.log('gemini_rate_limit_wait', { waitMs, attempt });
+          await new Promise(resolve => setTimeout(resolve, waitMs));
           continue;
         }
 
-        // For non-rate-limit errors: standard exponential backoff
+        // For non-rate-limit errors: short backoff
         if (!isRateLimit && attempt < totalAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)));
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
       }
     }
