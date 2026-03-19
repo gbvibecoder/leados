@@ -3,6 +3,7 @@
 import { X, Play, Clock, FileJson, Terminal, MessageSquare, Send, ChevronDown, ChevronUp, Loader2, CheckCircle2, AlertCircle, Pause, RotateCcw, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { agents as agentsApi } from '@/lib/api';
 import { ErrorBoundary } from '@/components/layout/error-boundary';
 import { AgentOutput } from './AgentOutput';
@@ -92,7 +93,7 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
   const latestRun = runs[0];
   const olderRuns = runs.slice(1);
 
-  return (
+  return createPortal(
     <>
       {/* Backdrop */}
       <motion.div
@@ -100,7 +101,7 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.2 }}
-        className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm"
+        className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm"
         onClick={onClose}
       />
 
@@ -110,7 +111,7 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
         transition={{ duration: 0.3, ease: [0.25, 0.4, 0.25, 1] }}
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
+        className="fixed inset-0 z-[70] flex items-center justify-center p-4 sm:p-6"
         onClick={onClose}
       >
         <div
@@ -526,7 +527,8 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
           animation: progress-indeterminate 1.5s ease-in-out infinite;
         }
       `}</style>
-    </>
+    </>,
+    document.body
   );
 }
 
