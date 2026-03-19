@@ -50,59 +50,139 @@ export abstract class BaseAgent {
     return this.logs;
   }
 
-  /** Call LLM — tries Gemini first (free), falls back to Anthropic (paid).
-   *  Set AI_ENGINE=anthropic in .env to force Anthropic-first.
-   *  maxTokens: output limit (default 16384) */
+  /**
+   * Call LLM — priority order:
+   *  1. OpenRouter (if OPENROUTER_API_KEY set) — cheapest, no quota issues, auto-fallback
+   *  2. Gemini (if GEMINI_API_KEY set) — free tier
+   *  3. Anthropic (if ANTHROPIC_API_KEY set) — paid
+   *
+   * Override with AI_ENGINE=openrouter|gemini|anthropic to force a specific engine.
+   */
   protected async callClaude(systemPrompt: string, userMessage: string, maxRetries = 3, maxTokens = 16384): Promise<string> {
-    const preferAnthropic = process.env.AI_ENGINE === 'anthropic';
-    const anthropicKey = process.env.ANTHROPIC_API_KEY;
+    const aiEngine = process.env.AI_ENGINE;
+    const openrouterKey = process.env.OPENROUTER_API_KEY;
     const geminiKey = process.env.GEMINI_API_KEY;
+    const anthropicKey = process.env.ANTHROPIC_API_KEY;
 
-    // Determine order: Gemini first (free) unless AI_ENGINE=anthropic
-    const primary = preferAnthropic ? 'anthropic' : 'gemini';
-    let primaryError = '';
+    // Build ordered engine list based on AI_ENGINE preference
+    type Engine = { name: string; call: () => Promise<string> };
+    const engines: Engine[] = [];
 
-    // Try primary engine
-    if (primary === 'gemini' && geminiKey) {
-      try {
-        const result = await this.callGemini(systemPrompt, userMessage, geminiKey, maxRetries, maxTokens);
-        return result;
-      } catch (error: any) {
-        primaryError = error.message || 'Gemini failed';
-        await this.log('gemini_failed', { error: primaryError });
-      }
-    } else if (primary === 'anthropic' && anthropicKey) {
-      try {
-        const result = await this.callAnthropic(systemPrompt, userMessage, anthropicKey, maxRetries, maxTokens);
-        return result;
-      } catch (error: any) {
-        primaryError = error.message || 'Anthropic failed';
-        await this.log('anthropic_failed', { error: primaryError, status: error.status });
-      }
+    const addOpenRouter = () => {
+      if (openrouterKey) engines.push({
+        name: 'openrouter',
+        call: () => this.callOpenRouter(systemPrompt, userMessage, openrouterKey, maxRetries, maxTokens),
+      });
+    };
+    const addGemini = () => {
+      if (geminiKey) engines.push({
+        name: 'gemini',
+        call: () => this.callGemini(systemPrompt, userMessage, geminiKey, maxRetries, maxTokens),
+      });
+    };
+    const addAnthropic = () => {
+      if (anthropicKey) engines.push({
+        name: 'anthropic',
+        call: () => this.callAnthropic(systemPrompt, userMessage, anthropicKey, maxRetries, maxTokens),
+      });
+    };
+
+    if (aiEngine === 'openrouter') { addOpenRouter(); addGemini(); addAnthropic(); }
+    else if (aiEngine === 'anthropic') { addAnthropic(); addOpenRouter(); addGemini(); }
+    else if (aiEngine === 'gemini') { addGemini(); addOpenRouter(); addAnthropic(); }
+    else { addOpenRouter(); addGemini(); addAnthropic(); } // default: openrouter > gemini > anthropic
+
+    if (engines.length === 0) {
+      throw new Error('No LLM API key configured — set OPENROUTER_API_KEY, GEMINI_API_KEY, or ANTHROPIC_API_KEY');
     }
 
-    // Try fallback engine
-    const fallback = primary === 'gemini' ? 'anthropic' : 'gemini';
-    const fallbackKey = fallback === 'anthropic' ? anthropicKey : geminiKey;
-
-    if (fallbackKey) {
+    let lastError = '';
+    for (let i = 0; i < engines.length; i++) {
+      const engine = engines[i];
       try {
-        await this.log(`${fallback}_fallback`, { reason: `${primary} failed: ${primaryError}` });
-        if (fallback === 'anthropic') {
-          return await this.callAnthropic(systemPrompt, userMessage, fallbackKey, maxRetries, maxTokens);
-        } else {
-          return await this.callGemini(systemPrompt, userMessage, fallbackKey, maxRetries, maxTokens);
+        const result = await engine.call();
+        return result;
+      } catch (error: any) {
+        lastError = `${engine.name}: ${error.message || 'Unknown error'}`;
+        await this.log(`${engine.name}_failed`, { error: error.message, status: error.status });
+        if (i < engines.length - 1) {
+          await this.log('engine_fallback', { from: engine.name, to: engines[i + 1].name, reason: lastError });
         }
-      } catch (error: any) {
-        await this.log(`${fallback}_failed`, { error: error.message });
-        throw new Error(`Both engines failed. ${primary}: ${primaryError}. ${fallback}: ${error.message}`);
       }
     }
 
-    if (primaryError) {
-      throw new Error(`${primary} failed: ${primaryError}. No fallback engine configured.`);
+    throw new Error(`All engines failed. ${lastError}`);
+  }
+
+  private async callOpenRouter(systemPrompt: string, userMessage: string, apiKey: string, maxRetries: number, maxTokens: number): Promise<string> {
+    let lastError: Error | null = null;
+    const isVercel = !!process.env.VERCEL;
+    const timeoutMs = isVercel ? 45_000 : 180_000;
+    const model = process.env.OPENROUTER_MODEL || 'google/gemini-2.0-flash-001';
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+        const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'https://leados.app',
+            'X-Title': 'LeadOS',
+          },
+          signal: controller.signal,
+          body: JSON.stringify({
+            model,
+            max_tokens: maxTokens,
+            temperature: 0.7,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userMessage },
+            ],
+          }),
+        });
+
+        clearTimeout(timeout);
+
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`OpenRouter API error ${res.status}: ${errText}`);
+        }
+
+        const data = await res.json();
+        const text = data.choices?.[0]?.message?.content;
+
+        if (!text || text.trim().length === 0) {
+          throw new Error('Empty response from OpenRouter');
+        }
+
+        await this.log('openrouter_success', { model, attempt });
+        return text;
+      } catch (error: any) {
+        lastError = error;
+        await this.log('openrouter_retry', { attempt, maxRetries, error: error.message });
+
+        // Don't retry on auth errors
+        if (error.message?.includes('401') || error.message?.includes('403')) {
+          throw error;
+        }
+
+        // Retry on rate limits with short wait
+        if (error.message?.includes('429') && attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+          continue;
+        }
+
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
     }
-    throw new Error('No LLM API key configured — set ANTHROPIC_API_KEY or GEMINI_API_KEY');
+
+    throw lastError || new Error('OpenRouter call failed after retries');
   }
 
   private async callAnthropic(systemPrompt: string, userMessage: string, apiKey: string, maxRetries: number, maxTokens: number = 16384): Promise<string> {
@@ -110,11 +190,12 @@ export abstract class BaseAgent {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const client = new Anthropic({ apiKey, timeout: 45_000 });
+        const isVercel = !!process.env.VERCEL;
+        const timeoutMs = isVercel ? 45_000 : 180_000; // 45s on Vercel, 3min locally
+        const client = new Anthropic({ apiKey, timeout: timeoutMs });
 
-        // Hard 45s total timeout — must fit within Vercel Hobby's 60s function limit
         const abortController = new AbortController();
-        const hardTimeout = setTimeout(() => abortController.abort(), 45_000);
+        const hardTimeout = setTimeout(() => abortController.abort(), timeoutMs);
 
         let message;
         try {
@@ -175,7 +256,8 @@ export abstract class BaseAgent {
     for (let attempt = 1; attempt <= totalAttempts; attempt++) {
       try {
         const geminiController = new AbortController();
-        const geminiTimeout = setTimeout(() => geminiController.abort(), 45_000);
+        const geminiTimeoutMs = !!process.env.VERCEL ? 45_000 : 180_000;
+        const geminiTimeout = setTimeout(() => geminiController.abort(), geminiTimeoutMs);
         const res = await fetch(`${GEMINI_BASE}/gemini-2.0-flash:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
