@@ -75,6 +75,7 @@ export default function LeadOSPage() {
   const [elapsedTimes, setElapsedTimes] = useState<Record<string, number>>({});
   const [snackbar, setSnackbar] = useState<string | null>(null);
   const timerRef = useRef<Record<string, NodeJS.Timeout>>({});
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Total pipeline timer
   const [pipelineStartTime, setPipelineStartTime] = useState<number | null>(null);
@@ -282,11 +283,22 @@ export default function LeadOSPage() {
 
         try {
           // Call single agent endpoint — awaits result (< 60s per agent)
+          const controller = new AbortController();
+          abortControllerRef.current = controller;
           const agentResult = await agentsApi.run(agentId, {
             pipelineId: created.id,
             config: projectConfig,
             previousOutputs,
-          });
+          }, controller.signal);
+          abortControllerRef.current = null;
+
+          // Check if pipeline was paused/cancelled while agent was running
+          const statusAfterAgent = useAppStore.getState().pipeline.status;
+          if (statusAfterAgent !== 'running') {
+            stopAgentTimer(agentId);
+            // Keep agent in 'running' visual state so Resume can pick it up
+            break;
+          }
 
           // Store output for chaining to next agent
           if (agentResult.output?.success) {
@@ -307,6 +319,11 @@ export default function LeadOSPage() {
           addActivity({ type: 'agent_completed', agentId, agentName, message: `${agentName} completed` });
 
         } catch (agentErr: any) {
+          // If aborted due to pause, don't treat as error
+          if (agentErr.name === 'AbortError') {
+            stopAgentTimer(agentId);
+            break;
+          }
           stopAgentTimer(agentId);
           const errMsg = agentErr.message || 'Agent failed';
           updateAgentStatus(agentId, { status: 'error', error: errMsg });
@@ -327,17 +344,20 @@ export default function LeadOSPage() {
         }
       }
 
-      // All agents completed
+      // Only mark as completed if the pipeline was not paused or cancelled
+      const finalStatus = useAppStore.getState().pipeline.status;
       setRunningAgentId(null);
-      updatePipelineStatus('completed');
-      addActivity({ type: 'pipeline_completed', message: 'LeadOS pipeline completed' });
+      if (finalStatus === 'running') {
+        updatePipelineStatus('completed');
+        addActivity({ type: 'pipeline_completed', message: 'LeadOS pipeline completed' });
 
-      try {
-        await apiFetch(`/api/pipelines/${created.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ status: 'completed' }),
-        });
-      } catch { /* ignore */ }
+        try {
+          await apiFetch(`/api/pipelines/${created.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ status: 'completed' }),
+          });
+        } catch { /* ignore */ }
+      }
 
     } catch (err: any) {
       const errorMsg = err.message || 'Failed to start pipeline';
@@ -774,6 +794,11 @@ export default function LeadOSPage() {
                 <button
                   onClick={() => {
                     updatePipelineStatus('paused');
+                    // Abort the in-flight agent request so it doesn't complete
+                    if (abortControllerRef.current) {
+                      abortControllerRef.current.abort();
+                      abortControllerRef.current = null;
+                    }
                     // Pause in backend too so the background runner stops
                     if (pipeline.id) {
                       pipelinesApi.pause(pipeline.id).catch(() => {});
