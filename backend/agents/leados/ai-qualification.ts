@@ -255,7 +255,12 @@ export class AIQualificationAgent extends BaseAgent {
         const niche = inputs.config?.niche || 'B2B SaaS Lead Generation';
         const leadsToCall = callableLeads.slice(0, 8);
 
-        for (const lead of leadsToCall) {
+        // Fire all calls in parallel WITHOUT waiting for completion.
+        // Bland AI handles calls asynchronously — each call takes 1-5 minutes.
+        // We can't wait inside a 60s serverless function. Instead, we initiate
+        // the calls and record the callIds. Results can be fetched later via
+        // the Bland AI dashboard or a separate polling endpoint.
+        const callPromises = leadsToCall.map(async (lead: any) => {
           try {
             const callTask = `You are Alex, an AI qualification specialist from LeadOS. You're calling ${lead.name || 'the prospect'} at ${lead.company || 'their company'} to qualify them for ${niche} services. Follow the BANT framework: ask about Budget, Authority, Need, and Timeline. Be warm, consultative, never pushy. Keep the call under 5 minutes. Start by obtaining consent to record.`;
 
@@ -270,42 +275,33 @@ export class AIQualificationAgent extends BaseAgent {
 
             await this.log('bland_ai_call_initiated', { callId: call.callId, lead: lead.name });
 
-            // Wait for call to complete (max 6 min)
-            const completed = await blandAI.waitForCall(call.callId);
-
-            // Analyze the call for BANT signals
-            let analysis: Record<string, string> = {};
-            if (completed.status === 'completed') {
-              try {
-                analysis = await blandAI.analyzeCall(call.callId, [
-                  'What is the prospect\'s monthly budget for marketing?',
-                  'Is the prospect a decision maker?',
-                  'What is their main pain point or need?',
-                  'What is their timeline for implementation?',
-                  'What objections did they raise?',
-                  'What is the overall sentiment - positive, neutral, or negative?',
-                ]);
-              } catch { /* analysis is optional */ }
-            }
-
-            realCallResults.push({
+            return {
               leadName: lead.name,
               leadEmail: lead.email,
               company: lead.company,
               phone: lead.phone,
               callId: call.callId,
-              callStatus: completed.status === 'completed' ? 'completed' : completed.status === 'no-answer' ? 'no_answer' : 'declined',
-              duration: completed.duration,
-              transcript: completed.transcript || completed.concatenatedTranscript || '',
-              recordingUrl: completed.recordingUrl || '',
-              analysis,
+              callStatus: 'initiated' as const,
+              duration: 0,
+              transcript: '',
+              recordingUrl: '',
+              analysis: {},
               dataSource: 'live_bland_ai',
-            });
+            };
           } catch (err: any) {
             await this.log('bland_ai_call_error', { lead: lead.name, error: err.message });
+            return null;
+          }
+        });
+
+        // Wait for all calls to be INITIATED (not completed) — this is fast (~1-2s per call)
+        const results = await Promise.allSettled(callPromises);
+        for (const r of results) {
+          if (r.status === 'fulfilled' && r.value) {
+            realCallResults.push(r.value);
           }
         }
-        await this.log('bland_ai_calls_completed', { total: realCallResults.length });
+        await this.log('bland_ai_calls_initiated', { total: realCallResults.length });
       }
 
       const userMessage = JSON.stringify({
