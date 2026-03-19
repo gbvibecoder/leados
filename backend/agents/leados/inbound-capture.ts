@@ -311,7 +311,7 @@ export class InboundCaptureAgent extends BaseAgent {
         },
       });
 
-      const response = await this.callClaude(SYSTEM_PROMPT, userMessage, 1, 4096);
+      const response = await this.callClaude(SYSTEM_PROMPT, userMessage, 1, 6144);
       let parsed: any = {};
       try {
         parsed = this.safeParseLLMJson<any>(response, ['crmSetup', 'scoringModel', 'segmentation']);
