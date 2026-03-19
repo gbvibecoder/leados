@@ -372,15 +372,50 @@ For leads in emailOnlyLeads: set callStatus to "no_valid_phone", outcome to "med
           }
         }
       } else {
-        // Real calls exist — recompute summary from actual data, not LLM guesses
+        // Real calls exist — check if any actually COMPLETED (not just initiated)
+        const completed = realCallResults.filter(r => r.callStatus === 'completed');
+        const allJustInitiated = completed.length === 0;
+
         if (parsed.summary) {
-          const completed = realCallResults.filter(r => r.callStatus === 'completed');
           parsed.summary.totalCallsAttempted = realCallResults.length;
           parsed.summary.totalCallsCompleted = completed.length;
           parsed.summary.totalNoAnswer = realCallResults.filter(r => r.callStatus === 'no_answer').length;
           parsed.summary.avgCallDuration = completed.length > 0
             ? Math.round(completed.reduce((sum: number, r: any) => sum + (r.duration || 0), 0) / completed.length)
             : 0;
+
+          // If no calls completed yet (all just initiated), zero out LLM-fabricated scores
+          if (allJustInitiated) {
+            parsed.summary.avgScore = 0;
+            parsed.summary.highIntentCheckout = 0;
+            parsed.summary.highIntentSales = 0;
+            parsed.summary.mediumIntent = 0;
+            parsed.summary.lowIntent = 0;
+            parsed.summary.qualificationRate = 0;
+          }
+        }
+
+        // Zero individual call results for calls that haven't completed
+        if (parsed.callResults) {
+          for (const result of parsed.callResults) {
+            // Find matching real call
+            const realCall = realCallResults.find(
+              (r: any) => r.leadEmail === result.leadEmail || r.leadName === result.leadName
+            );
+            const callCompleted = realCall?.callStatus === 'completed';
+
+            if (!callCompleted) {
+              // Call not completed — don't trust LLM fabricated scores
+              result.score = 0;
+              result.duration = 0;
+              result.bantBreakdown = { budget: 0, authority: 0, need: 0, timeline: 0 };
+              result.transcript = '';
+              result.callStatus = realCall?.callStatus || 'initiated';
+              result.outcome = 'pending_call';
+              result.callId = realCall?.callId || null;
+              result.routingAction = 'Call initiated — awaiting completion. Check Bland AI dashboard for results.';
+            }
+          }
         }
       }
 
