@@ -30,6 +30,8 @@ import {
 
 interface Props {
   data?: any;
+  agentRunId?: string;
+  onResolved?: (resolvedData: any) => void;
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -100,10 +102,13 @@ const OUTCOME_CONFIG: Record<string, { icon: React.ReactNode; label: string; col
   high_intent_sales: { icon: <Calendar className="w-3 h-3" />, label: 'Sales Call', color: 'text-blue-400', bgColor: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
   medium_intent: { icon: <Mail className="w-3 h-3" />, label: 'Nurture', color: 'text-yellow-400', bgColor: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
   low_intent: { icon: <XCircle className="w-3 h-3" />, label: 'Disqualified', color: 'text-red-400', bgColor: 'bg-red-500/20 text-red-400 border-red-500/30' },
+  pending_resolution: { icon: <Clock className="w-3 h-3" />, label: 'Pending', color: 'text-yellow-400', bgColor: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
+  pending_call: { icon: <Clock className="w-3 h-3" />, label: 'Not Called', color: 'text-gray-400', bgColor: 'bg-gray-500/20 text-gray-400 border-gray-500/30' },
 };
 
 const STATUS_CONFIG: Record<string, { icon: React.ReactNode; color: string }> = {
   completed: { icon: <Phone className="w-3 h-3" />, color: 'text-green-400' },
+  initiated: { icon: <Clock className="w-3 h-3" />, color: 'text-yellow-400' },
   no_answer: { icon: <PhoneMissed className="w-3 h-3" />, color: 'text-orange-400' },
   voicemail: { icon: <Voicemail className="w-3 h-3" />, color: 'text-yellow-400' },
   declined: { icon: <PhoneOff className="w-3 h-3" />, color: 'text-red-400' },
@@ -123,9 +128,43 @@ function formatDuration(seconds: number): string {
   return `${m}m ${s}s`;
 }
 
-export function AIQualificationOutput({ data }: Props) {
-  const d = data?.data || data;
+export function AIQualificationOutput({ data, agentRunId, onResolved }: Props) {
+  const [liveData, setLiveData] = useState<any>(null);
+  const [resolving, setResolving] = useState(false);
+  const [resolveError, setResolveError] = useState<string | null>(null);
   const [expandedCall, setExpandedCall] = useState<number | null>(null);
+
+  const d = liveData || data?.data || data;
+
+  const isPending = d?._pendingResolution === true;
+
+  const handleResolve = async () => {
+    if (!agentRunId || resolving) return;
+    setResolving(true);
+    setResolveError(null);
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('leados_token') : null;
+      const res = await fetch('/api/agents/ai-qualification/resolve', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ agentRunId }),
+      });
+      const result = await res.json();
+      if (res.ok && result.output?.data) {
+        setLiveData(result.output.data);
+        onResolved?.(result.output.data);
+      } else {
+        setResolveError(result.error || 'Failed to resolve calls');
+      }
+    } catch (err: any) {
+      setResolveError(err.message || 'Network error');
+    } finally {
+      setResolving(false);
+    }
+  };
 
   if (!d || (!d.callScript && !d.callResults)) {
     return (
@@ -145,6 +184,33 @@ export function AIQualificationOutput({ data }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* Pending Resolution Banner */}
+      {isPending && agentRunId && (
+        <div className="p-3 sm:p-4 rounded-lg border border-yellow-500/30 bg-yellow-500/5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <Clock className="w-4 h-4 text-yellow-400 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-yellow-400">Calls in progress</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">
+                  AI calls have been initiated. Once your calls finish, click resolve to fetch transcripts and score them.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleResolve}
+              disabled={resolving}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 hover:bg-yellow-500/30 transition-colors disabled:opacity-50 flex-shrink-0"
+            >
+              {resolving ? 'Resolving...' : 'Resolve Call Results'}
+            </button>
+          </div>
+          {resolveError && (
+            <p className="text-[10px] text-red-400 mt-2">{resolveError}</p>
+          )}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between pb-3 border-b border-border">
         <div className="flex items-center gap-2">
@@ -209,7 +275,9 @@ export function AIQualificationOutput({ data }: Props) {
       <div className="p-3 bg-muted/30 rounded-lg border border-border/50">
         <div className="text-xs font-medium text-muted-foreground mb-2">Routing Distribution</div>
         <div className="grid grid-cols-4 gap-2">
-          {Object.entries(OUTCOME_CONFIG).map(([key, config]) => {
+          {Object.entries(OUTCOME_CONFIG)
+            .filter(([key]) => !['pending_resolution', 'pending_call'].includes(key))
+            .map(([key, config]) => {
             const count = key === 'high_intent_checkout' ? (summary.highIntentCheckout || 0) :
                           key === 'high_intent_sales' ? (summary.highIntentSales || 0) :
                           key === 'medium_intent' ? (summary.mediumIntent || 0) :

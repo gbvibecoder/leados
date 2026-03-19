@@ -14,6 +14,7 @@ Your job is NOT to make up data. You receive real data and must:
 2. Adjust scores based on the actual data quality and cross-platform validation
 3. Provide reasoning that references the specific real data points
 4. Rank by composite score: (demandScore * 0.4) + ((100 - competitionScore) * 0.3) + (monetizationScore * 0.3)
+5. For each opportunity, include a geographic demand breakdown showing which regions/countries have the highest demand based on Google Trends regional interest data, Reddit/LinkedIn geographic signals, and Upwork job locations
 
 Return ONLY valid JSON output (no markdown, no explanation outside JSON) with this structure:
 {
@@ -28,7 +29,8 @@ Return ONLY valid JSON output (no markdown, no explanation outside JSON) with th
       "estimatedMarketSize": "string",
       "targetAudience": "string - recommended target audience per service (e.g., 'B2B SaaS companies with 10-200 employees')",
       "targetPlatforms": ["string"],
-      "risingQueries": ["string - actual breakout search terms from Google Trends data"]
+      "risingQueries": ["string - actual breakout search terms from Google Trends data"],
+      "geographicDemand": [{ "region": "string - country or region name", "demandLevel": "high|medium|low", "interestScore": "number 0-100", "notes": "string - why this region shows demand" }]
     }
   ],
   "dataSourcesSummary": {
@@ -44,7 +46,7 @@ Return ONLY valid JSON output (no markdown, no explanation outside JSON) with th
 
 CRITICAL DATA INTEGRITY RULE: Do NOT generate projected, estimated, or fabricated metrics. Only include data that comes from real API responses provided in the input. For any metric that has not been measured from a real source, set it to 0 or null. Never invent numbers. The estimatedMarketSize field must reflect real data — if no authoritative market size data is provided, set it to "not_measured". Do NOT inflate demand, competition, or monetization scores beyond what the real data supports.
 
-Return top 5 opportunities. Base your analysis on the REAL data provided, not general knowledge.`;
+Return top 10 opportunities. Base your analysis on the REAL data provided, not general knowledge.`;
 
 export class ServiceResearchAgent extends BaseAgent {
   constructor() {
@@ -162,7 +164,7 @@ export class ServiceResearchAgent extends BaseAgent {
     return {
       success: true,
       data: {
-        opportunities: realData.opportunities.slice(0, 5).map(opp => ({
+        opportunities: realData.opportunities.slice(0, 10).map(opp => ({
           niche: opp.niche,
           demandScore: opp.demandScore,
           competitionScore: opp.competitionScore,
@@ -173,6 +175,12 @@ export class ServiceResearchAgent extends BaseAgent {
           targetAudience: opp.targetAudience,
           targetPlatforms: opp.targetPlatforms,
           risingQueries: opp.trendData.googleTrends?.risingQueries?.map(q => q.query) || [],
+          geographicDemand: opp.trendData.googleTrends?.interestByRegion?.map((r: any) => ({
+            region: r.region || r.geoName || r.location,
+            demandLevel: (r.value || r.interest || 0) >= 70 ? 'high' : (r.value || r.interest || 0) >= 40 ? 'medium' : 'low',
+            interestScore: r.value || r.interest || 0,
+            notes: `Google Trends regional interest score: ${r.value || r.interest || 0}`,
+          })) || [],
         })),
         dataSourcesSummary: {
           redditPostsAnalyzed: realData.dataSourcesSummary.reddit.postsAnalyzed,

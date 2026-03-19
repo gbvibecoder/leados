@@ -6,6 +6,59 @@ You receive JSON with the offer (ICP, pain points, pricing, positioning), funnel
 
 Adapt ALL content to the specific niche, ICP, and offer — not generic. Use rising keywords from Google Trends in ad copies.
 
+## UGC Script Template Patterns
+
+Generate UGC scripts using BOTH of these proven patterns:
+
+**Pattern A — Role-Specific Hooks:**
+Write one script per decision-maker role (Finance, CEO, HR, Operations). Each script must include:
+- Role-specific hook (speaks directly to that persona's concerns)
+- Credibility setup (why they should listen)
+- Product intro (what the solution is)
+- Key benefit (the #1 outcome for that role)
+- Business case (ROI or efficiency argument for that persona)
+- Role-specific CTA (action relevant to their authority level)
+
+**Pattern B — Same Message, Different Hooks:**
+Write 3-4 variations of the same core script with different openers for A/B testing:
+- Variation 1: Personal experience opener ("I used to spend 4 hours a day on...")
+- Variation 2: Pain point opener ("If you're still doing X manually...")
+- Variation 3: Bold statement opener ("Cold calling is dead. Here's proof.")
+- Variation 4: Social proof opener ("500+ companies switched last quarter...")
+
+## UGC Video Structure (15-60s)
+
+Every UGC video script MUST follow this exact structure:
+- Hook (0-3s): Bold statement, question, or surprising result
+- Problem (3-10s): State the pain point in their words
+- Solution (10-25s): Show/explain what you do. One core idea.
+- Proof (25-40s): Result, testimonial, or before/after. Specifics beat generalities.
+- CTA (last 3-5s): Exactly what to do next.
+
+## Video Types by Priority
+
+Generate scripts in this priority order (most credible first):
+1. Customer testimonial (most credible)
+2. Before/after walkthrough
+3. Founder/team talking head
+4. Screen recording + voiceover
+5. Process reveal
+
+## Cold Email Sequence (SOP Structure)
+
+Generate a 3-5 email sequence, spaced 2-3 days apart, following this exact structure:
+- Email 1: Personalised opener + problem statement + soft CTA
+- Email 2: Value drop — case study or result, no pitch
+- Email 3: Nudge — reference email 1, ask if timing is better
+- Email 4: Breakup — "last one from me" energy, creates urgency
+
+## LinkedIn DM Sequence (SOP Structure)
+
+Generate a 3-message LinkedIn sequence following this exact structure:
+- Message 1: Thank + mention something specific from their profile. No pitch.
+- Message 2 (day 2-3): Share useful article/insight/case study relevant to their role.
+- Message 3 (day 5-7): Soft CTA — ask if problem is relevant, offer quick call.
+
 Return ONLY valid JSON (no markdown) with this structure:
 {
   "adCopies": {
@@ -13,9 +66,44 @@ Return ONLY valid JSON (no markdown) with this structure:
     "meta": [{ "primaryText": "string", "headline": "string", "description": "string", "targetAudience": "string" }]
   },
   "hooks": [{ "angle": "pain|curiosity|social_proof|urgency|contrarian", "hook": "string", "useCase": "string" }],
-  "emailSequence": [{ "step": "number", "delay": "string", "subject": "string", "body": "string", "purpose": "string" }],
-  "linkedInScripts": { "connectionRequest": "string (≤300 chars)", "followUp1": "string", "followUp2": "string" },
-  "videoAdScripts": [{ "duration": "string", "format": "string", "hook": "string", "body": "string", "cta": "string" }],
+  "coldEmailSequence": [{ "step": "number", "delay": "string", "subject": "string", "body": "string", "purpose": "string", "sopRole": "personalised_opener|value_drop|nudge|breakup" }],
+  "linkedInDMSequence": {
+    "message1": { "text": "string (≤300 chars)", "timing": "on connect", "sopRole": "thank_and_mention" },
+    "message2": { "text": "string", "timing": "day 2-3", "sopRole": "share_value" },
+    "message3": { "text": "string", "timing": "day 5-7", "sopRole": "soft_cta" }
+  },
+  "ugcScripts": {
+    "patternA_roleSpecific": [{
+      "role": "Finance|CEO|HR|Operations",
+      "hook": "string (0-3s)",
+      "credibilitySetup": "string",
+      "productIntro": "string",
+      "keyBenefit": "string",
+      "businessCase": "string",
+      "cta": "string",
+      "duration": "15-60s"
+    }],
+    "patternB_hookVariations": [{
+      "variationType": "personal_experience|pain_point|bold_statement|social_proof",
+      "hook": "string (0-3s)",
+      "problem": "string (3-10s)",
+      "solution": "string (10-25s)",
+      "proof": "string (25-40s)",
+      "cta": "string (last 3-5s)",
+      "duration": "15-60s"
+    }]
+  },
+  "videoAdScripts": [{
+    "duration": "string",
+    "format": "string",
+    "videoType": "customer_testimonial|before_after_walkthrough|founder_talking_head|screen_recording_voiceover|process_reveal",
+    "priority": "number (1-5)",
+    "hook": "string (0-3s)",
+    "problem": "string (3-10s)",
+    "solution": "string (10-25s)",
+    "proof": "string (25-40s)",
+    "cta": "string (last 3-5s)"
+  }],
   "ugcBriefs": [{ "type": "string", "description": "string", "talkingPoints": ["string"] }],
   "visualCreativeBriefs": [{ "concept": "string", "layout": "string", "imagery": "string", "textOverlay": "string" }],
   "reasoning": "string",
@@ -26,9 +114,11 @@ Produce these EXACT quantities:
 - 10 Google Ads (varied: problem, curiosity, proof, urgency, results angles)
 - 10 Meta Ads (varied targeting: cold, warm, retargeting audiences)
 - 5 hooks (pain, curiosity, social_proof, urgency, contrarian)
-- 5-7 email sequence (welcome→value→case study→objection handling→urgency→breakup)
-- LinkedIn scripts (connection request + 3 follow-up messages)
-- 3 video ad scripts (30-60s each: UGC talking head, before/after, founder explainer)
+- 4 cold emails (personalised opener → value drop → nudge → breakup, spaced 2-3 days apart)
+- LinkedIn DM sequence (3 messages: thank+mention → share value → soft CTA)
+- 5 video ad scripts (one per video type priority: customer testimonial, before/after, founder talking head, screen recording + voiceover, process reveal — each following Hook→Problem→Solution→Proof→CTA structure)
+- 4 UGC scripts Pattern A (one per role: Finance, CEO, HR, Operations)
+- 4 UGC scripts Pattern B (one per hook variation: personal experience, pain point, bold statement, social proof)
 - 3 UGC briefs (testimonial, before/after, process reveal)
 - 3 visual creative briefs (static ads, social clips, infographic)
 Do NOT invent performance metrics (open rates, click rates, impressions). Only creative content.`;
@@ -106,7 +196,7 @@ export class ContentCreativeAgent extends BaseAgent {
       let parsed: any = {};
       try {
         const response = await this.callClaude(SYSTEM_PROMPT, enrichedInput, 1, 8192);
-        parsed = this.safeParseLLMJson<any>(response, ['adCopies', 'hooks', 'emailSequence']);
+        parsed = this.safeParseLLMJson<any>(response, ['adCopies', 'hooks', 'coldEmailSequence']);
       } catch (err: any) {
         await this.log('llm_failed', { error: err.message });
         // Build complete fallback from upstream data
@@ -195,42 +285,156 @@ export class ContentCreativeAgent extends BaseAgent {
         { angle: 'urgency', hook: `We're onboarding 10 ${niche.toLowerCase()} companies this month. After that, the waitlist opens.`, useCase: 'Email CTA, retargeting ad' },
         { angle: 'contrarian', hook: `Cold calling is dead. SEO takes 6 months. Here's what actually works for ${niche.toLowerCase()} in 2026.`, useCase: 'Blog title, YouTube hook' },
       ],
-      emailSequence: [
-        { step: 1, delay: 'Day 1', subject: `Quick question about ${niche.toLowerCase()}`, body: `Hi {firstName},\n\nI noticed {company} is in the ${niche.toLowerCase()} space and thought this might be relevant.\n\nWe help companies like yours solve ${getPain(0)} — without the usual headaches.\n\nWould it make sense to chat for 15 minutes this week?\n\nBest,\n{senderName}`, purpose: 'Soft intro — establish relevance' },
-        { step: 2, delay: 'Day 3', subject: `How {company} could solve ${getPain(0)}`, body: `Hi {firstName},\n\nFollowing up on my last email. Wanted to share a quick case study:\n\nOne of our clients in ${niche.toLowerCase()} was struggling with ${getPain(0)}. Within 30 days of using ${serviceName}, they saw measurable improvement.\n\nHappy to walk you through exactly how it works.\n\nBest,\n{senderName}`, purpose: 'Value delivery — case study' },
-        { step: 3, delay: 'Day 5', subject: `The math behind ${serviceName}`, body: `Hi {firstName},\n\nHere's the ROI math: our clients typically see 3-5x return within the first 60 days.${guarantee ? `\n\nPlus, ${guarantee}.` : ''}\n\nWorth a quick call?\n\nBest,\n{senderName}`, purpose: 'ROI math — financial case' },
-        { step: 4, delay: 'Day 8', subject: `Last chance: ${serviceName} for {company}`, body: `Hi {firstName},\n\nWe're onboarding a few more ${niche.toLowerCase()} companies this month and I wanted to reach out one more time.\n\nIf ${getPain(0)} is still a challenge, I'd love to show you how we solve it — takes 15 minutes.\n\nBook a time here: ${bookingUrl}\n\nBest,\n{senderName}`, purpose: 'Urgency — scarcity' },
-        { step: 5, delay: 'Day 12', subject: `Closing the loop`, body: `Hi {firstName},\n\nI've reached out a few times and haven't heard back — totally understand if the timing isn't right.\n\nI'll close your file for now, but if ${getPain(0)} becomes a priority, feel free to reply anytime.\n\nWishing you and {company} the best.\n\n{senderName}`, purpose: 'Breakup — loss aversion' },
+      coldEmailSequence: [
+        { step: 1, delay: 'Day 1', subject: `Quick question about ${niche.toLowerCase()}`, body: `Hi {firstName},\n\nI noticed {company} is in the ${niche.toLowerCase()} space — specifically around ${getPain(0).toLowerCase()}. Thought this might resonate.\n\nWe help companies like yours solve ${getPain(0)} — without the usual headaches.\n\nWould it make sense to chat for 15 minutes this week?\n\nBest,\n{senderName}`, purpose: 'Personalised opener + problem statement + soft CTA', sopRole: 'personalised_opener' },
+        { step: 2, delay: 'Day 3', subject: `How a ${niche.toLowerCase()} company solved ${getPain(0)}`, body: `Hi {firstName},\n\nNo pitch today — just a quick case study I thought you'd find useful.\n\nOne of our clients in ${niche.toLowerCase()} was struggling with ${getPain(0)}. Within 30 days of using ${serviceName}, they saw measurable improvement across their pipeline.\n\nHappy to share the full breakdown if helpful.\n\nBest,\n{senderName}`, purpose: 'Value drop — case study or result, no pitch', sopRole: 'value_drop' },
+        { step: 3, delay: 'Day 5', subject: `Re: Quick question about ${niche.toLowerCase()}`, body: `Hi {firstName},\n\nCircling back on my first note. Totally understand if the timing wasn't right.\n\nIs this something worth revisiting now, or is there a better time this quarter?${guarantee ? `\n\nWorth noting: ${guarantee}.` : ''}\n\nBest,\n{senderName}`, purpose: 'Nudge — reference email 1, ask if timing is better', sopRole: 'nudge' },
+        { step: 4, delay: 'Day 8', subject: `Last one from me`, body: `Hi {firstName},\n\nThis is my last email — I don't want to clog your inbox.\n\nIf ${getPain(0).toLowerCase()} becomes a priority for {company}, feel free to reply anytime or grab a time here: ${bookingUrl}\n\nWishing you the best.\n\n{senderName}`, purpose: 'Breakup — "last one from me" energy, creates urgency', sopRole: 'breakup' },
       ],
-      linkedInScripts: {
-        connectionRequest: `Hi {firstName}, I work with ${niche.toLowerCase()} companies on ${getPain(0).toLowerCase().substring(0, 80)}. Would love to connect and share some insights.`.substring(0, 300),
-        followUp1: `Thanks for connecting, {firstName}! I noticed {company} is doing great work in ${niche.toLowerCase()}. We recently helped a similar company solve ${getPain(0).toLowerCase()} — happy to share what worked if you're interested.`,
-        followUp2: `Hi {firstName}, quick case study — one of our ${niche.toLowerCase()} clients went from ${getPain(0).toLowerCase()} to booking 10+ qualified calls/week in 30 days. Want me to send you the breakdown?`,
-        followUp3: `Hi {firstName}, would a 15-min call make sense to explore if we can help {company}? No pressure either way. Here's my calendar: ${bookingUrl}`,
+      linkedInDMSequence: {
+        message1: { text: `Hi {firstName}, thanks for connecting! I came across your work at {company} — really impressed by {specificProfileDetail}. Great to be in your network.`.substring(0, 300), timing: 'on connect', sopRole: 'thank_and_mention' },
+        message2: { text: `Hi {firstName}, saw this case study on how a ${niche.toLowerCase()} company solved ${getPain(0).toLowerCase()} — thought it might be relevant given what {company} is doing. Happy to share if you're interested.`, timing: 'day 2-3', sopRole: 'share_value' },
+        message3: { text: `Hi {firstName}, curious — is ${getPain(0).toLowerCase()} something {company} is actively working on? If so, happy to share what's working for other ${niche.toLowerCase()} companies on a quick 15-min call. No pressure either way. ${bookingUrl}`, timing: 'day 5-7', sopRole: 'soft_cta' },
       },
       videoAdScripts: [
         {
           duration: '30-60s',
-          format: 'UGC-style talking head',
-          hook: `Stop wasting money on leads that never convert. (3s)`,
-          body: `If you're a ${niche.toLowerCase()} company spending thousands on marketing but only getting tire-kickers, you're not alone. We built ${serviceName} — an AI engine that finds, qualifies, and books real decision-makers on your calendar. No cold calling. No guesswork. Just qualified meetings, every week.`,
-          cta: `${cta} — link in bio. ${guarantee || ''}`,
+          format: 'Customer testimonial',
+          videoType: 'customer_testimonial',
+          priority: 1,
+          hook: `This tool booked us 47 qualified calls in 30 days. (0-3s)`,
+          problem: `We were spending thousands on ads and cold outreach but only getting tire-kickers. Our pipeline was empty more often than not. (3-10s)`,
+          solution: `Then we found ${serviceName} — an AI engine with 13 agents that finds, qualifies, and books real decision-makers on our calendar automatically. (10-25s)`,
+          proof: `In the first month, we went from 2 calls a week to 47 qualified meetings. No new hires. No extra ad spend. Just AI doing the heavy lifting. (25-40s)`,
+          cta: `${cta} — link in bio. (last 3-5s)`,
         },
         {
           duration: '30-45s',
-          format: 'Before/after screen recording',
-          hook: `This is what our pipeline looked like 30 days ago. (3s)`,
-          body: `Empty CRM. Maybe 2 calls a week. Sound familiar? Now look at this — ${serviceName} filled our pipeline with qualified ${niche.toLowerCase()} leads in under a month. 13 AI agents running outreach, qualification, and booking 24/7. We didn't hire anyone. We didn't change our offer. We just turned on the machine.`,
-          cta: `Want the same results? ${cta}. ${guarantee || ''}`,
+          format: 'Before/after walkthrough',
+          videoType: 'before_after_walkthrough',
+          priority: 2,
+          hook: `This is what our pipeline looked like 30 days ago. (0-3s)`,
+          problem: `Empty CRM. Maybe 2 calls a week. Manual outreach that went nowhere. Sound familiar? (3-10s)`,
+          solution: `We turned on ${serviceName} — 13 AI agents running outreach, qualification, and booking 24/7. No hiring, no offer changes. (10-25s)`,
+          proof: `Now look at this — pipeline full of qualified ${niche.toLowerCase()} leads. Every single one booked automatically. (25-40s)`,
+          cta: `Want the same results? ${cta}. (last 3-5s)`,
         },
         {
           duration: '45-60s',
-          format: 'Founder explainer',
-          hook: `I built an AI that replaces a 5-person sales team. (3s)`,
-          body: `Here's the problem: ${niche.toLowerCase()} companies are still doing outreach manually. Spreadsheets, cold calls, LinkedIn spam. It doesn't scale. So we built ${serviceName} — 13 specialized AI agents that handle everything from finding prospects to qualifying them on a real phone call to booking the meeting on your calendar. It works while you sleep. And it costs less than one SDR.`,
-          cta: `See it in action — ${cta}. ${guarantee || ''}`,
+          format: 'Founder talking head',
+          videoType: 'founder_talking_head',
+          priority: 3,
+          hook: `I built an AI that replaces a 5-person sales team. (0-3s)`,
+          problem: `${niche.toLowerCase()} companies are still doing outreach manually. Spreadsheets, cold calls, LinkedIn spam. It doesn't scale and it burns people out. (3-10s)`,
+          solution: `So we built ${serviceName} — 13 specialized AI agents that handle everything from finding prospects to qualifying them on a real phone call to booking the meeting on your calendar. (10-25s)`,
+          proof: `Our clients typically see 10+ qualified calls per week within 30 days. It works while you sleep. And it costs less than one SDR. (25-40s)`,
+          cta: `See it in action — ${cta}. (last 3-5s)`,
+        },
+        {
+          duration: '30-45s',
+          format: 'Screen recording + voiceover',
+          videoType: 'screen_recording_voiceover',
+          priority: 4,
+          hook: `Watch this AI book a qualified meeting in real time. (0-3s)`,
+          problem: `Most ${niche.toLowerCase()} teams spend hours prospecting manually and still end up with unqualified leads. (3-10s)`,
+          solution: `${serviceName} runs the entire pipeline — from identifying prospects to AI-qualifying them over the phone to dropping a meeting on your calendar. Let me show you. (10-25s)`,
+          proof: `This client's dashboard shows 47 leads found, 23 qualified, 15 meetings booked — all in the last 7 days. Zero manual work. (25-40s)`,
+          cta: `${cta} — link below. (last 3-5s)`,
+        },
+        {
+          duration: '30-45s',
+          format: 'Process reveal',
+          videoType: 'process_reveal',
+          priority: 5,
+          hook: `Here's what happens behind the scenes when you turn on ${serviceName}. (0-3s)`,
+          problem: `Most lead gen tools handle one piece of the puzzle. You still need 5 tools and 3 people to make it work. (3-10s)`,
+          solution: `${serviceName} chains 13 AI agents together — research, outreach, qualification, booking — all running autonomously. (10-25s)`,
+          proof: `This pipeline was built in under a week. Since then: 200+ prospects contacted, 50+ qualified, 30+ meetings booked. No human touched it. (25-40s)`,
+          cta: `See how it works for ${niche.toLowerCase()} — ${cta}. (last 3-5s)`,
         },
       ],
+      ugcScripts: {
+        patternA_roleSpecific: [
+          {
+            role: 'Finance',
+            hook: `Your cost-per-lead is 3x what it should be. Here's why.`,
+            credibilitySetup: `We've helped 500+ companies cut their customer acquisition cost in half.`,
+            productIntro: `${serviceName} is an AI engine with 13 agents that automates your entire lead gen pipeline.`,
+            keyBenefit: `Cut your CPL by 50% while tripling qualified pipeline volume.`,
+            businessCase: `One SDR costs $60K+/year. ${serviceName} delivers 3x the output at a fraction of the cost — with zero ramp time.`,
+            cta: `Ask your marketing team to book a 15-minute ROI walkthrough. ${bookingUrl}`,
+            duration: '30-60s',
+          },
+          {
+            role: 'CEO',
+            hook: `Your sales team is the bottleneck. And hiring more reps won't fix it.`,
+            credibilitySetup: `We built the AI engine that 500+ companies use to scale pipeline without scaling headcount.`,
+            productIntro: `${serviceName} replaces manual prospecting, outreach, and qualification with 13 specialized AI agents.`,
+            keyBenefit: `Predictable pipeline growth without the overhead of a growing sales org.`,
+            businessCase: `Scale from 10 to 100 qualified meetings per month without a single new hire. Faster time-to-revenue, lower burn.`,
+            cta: `See the 15-minute executive demo. ${bookingUrl}`,
+            duration: '30-60s',
+          },
+          {
+            role: 'HR',
+            hook: `Hiring SDRs takes 3 months. Training them takes 3 more. What if you didn't have to?`,
+            credibilitySetup: `Companies using ${serviceName} have eliminated 80% of entry-level sales hiring needs.`,
+            productIntro: `${serviceName} automates prospecting, outreach, and lead qualification — the work your SDRs do today.`,
+            keyBenefit: `Reduce hiring pressure on your sales recruiting pipeline.`,
+            businessCase: `No more cycling through SDRs every 9 months. ${serviceName} runs 24/7, never needs onboarding, and scales instantly.`,
+            cta: `Share this with your VP of Sales — they'll want to see the demo. ${bookingUrl}`,
+            duration: '30-60s',
+          },
+          {
+            role: 'Operations',
+            hook: `Your lead gen stack has 7 tools, 3 integrations, and zero consistency.`,
+            credibilitySetup: `We've replaced fragmented sales tooling for 500+ companies with a single autonomous platform.`,
+            productIntro: `${serviceName} consolidates prospecting, outreach, qualification, and booking into one AI-powered system.`,
+            keyBenefit: `One platform, one dashboard, zero manual handoffs between tools.`,
+            businessCase: `Eliminate tool sprawl and reduce operational overhead. Fewer vendors, fewer integrations, fewer things that break.`,
+            cta: `Book a technical walkthrough to see how it fits your stack. ${bookingUrl}`,
+            duration: '30-60s',
+          },
+        ],
+        patternB_hookVariations: [
+          {
+            variationType: 'personal_experience',
+            hook: `I used to spend 4 hours a day on cold outreach. Now I spend zero. (0-3s)`,
+            problem: `Manual prospecting is a grind — you burn hours on LinkedIn and email for maybe 1-2 responses. It's not scalable. (3-10s)`,
+            solution: `${serviceName} runs 13 AI agents that handle everything from finding prospects to booking qualified meetings on your calendar. (10-25s)`,
+            proof: `In my first month, I went from 3 calls a week to 15 — without sending a single manual email. (25-40s)`,
+            cta: `Try it yourself — ${cta}. (last 3-5s)`,
+            duration: '30-60s',
+          },
+          {
+            variationType: 'pain_point',
+            hook: `If you're still doing outreach manually, you're leaving money on the table. (0-3s)`,
+            problem: `Most ${niche.toLowerCase()} companies waste 60% of their marketing budget on leads that never convert. The pipeline is inconsistent, the team is burned out, and you can't scale. (3-10s)`,
+            solution: `${serviceName} fixes this with AI-powered prospecting that only books calls with decision-makers who are ready to buy. (10-25s)`,
+            proof: `Our average client sees their first qualified leads within 14 days — and 3x pipeline growth within 60. (25-40s)`,
+            cta: `Stop guessing. ${cta}. (last 3-5s)`,
+            duration: '30-60s',
+          },
+          {
+            variationType: 'bold_statement',
+            hook: `Cold calling is dead. SEO takes 6 months. Here's what actually works. (0-3s)`,
+            problem: `The old playbook — hire SDRs, buy lists, blast emails — doesn't scale anymore. Response rates are at all-time lows. (3-10s)`,
+            solution: `${serviceName} uses 13 AI agents to run your entire go-to-market: research, outreach, qualification, and booking — autonomously. (10-25s)`,
+            proof: `Companies using ${serviceName} book 10+ qualified calls per week within 30 days. No SDRs. No manual work. (25-40s)`,
+            cta: `See why 500+ companies switched — ${cta}. (last 3-5s)`,
+            duration: '30-60s',
+          },
+          {
+            variationType: 'social_proof',
+            hook: `500+ companies switched to AI-powered lead gen last quarter. Here's what happened. (0-3s)`,
+            problem: `They were all stuck in the same place: inconsistent pipeline, high CPL, teams stretched thin on manual outreach. (3-10s)`,
+            solution: `They turned on ${serviceName} — 13 AI agents that handle prospecting, outreach, qualification, and booking automatically. (10-25s)`,
+            proof: `Average results: 3x pipeline growth, 50% lower cost-per-lead, first qualified meetings within 14 days. (25-40s)`,
+            cta: `Join them — ${cta}. (last 3-5s)`,
+            duration: '30-60s',
+          },
+        ],
+      },
       ugcBriefs: [
         {
           type: 'testimonial',
@@ -283,7 +487,7 @@ export class ContentCreativeAgent extends BaseAgent {
           textOverlay: `"13 AI Agents. 1 Pipeline. Zero Manual Work." — ${cta}`,
         },
       ],
-      reasoning: `Full creative asset package generated for ${niche} using upstream offer and funnel data. Includes 10 Google Ads, 10 Meta Ads, 5 hooks, 5-email sequence, LinkedIn scripts (connection + 3 follow-ups), 3 video scripts, 3 UGC briefs, and 3 visual creative briefs. Content tailored to ICP: ${icpDesc}.`,
+      reasoning: `Full SOP-aligned creative asset package generated for ${niche} using upstream offer and funnel data. Includes 10 Google Ads, 10 Meta Ads, 5 hooks, 4 cold emails (SOP: opener→value drop→nudge→breakup), 3 LinkedIn DMs (SOP: thank+mention→share value→soft CTA), 5 video scripts (priority: testimonial→before/after→founder→screen recording→process reveal, each with Hook→Problem→Solution→Proof→CTA structure), UGC scripts Pattern A (4 role-specific: Finance/CEO/HR/Operations) and Pattern B (4 hook variations: personal experience/pain point/bold statement/social proof), 3 UGC briefs, and 3 visual creative briefs. Content tailored to ICP: ${icpDesc}.`,
       confidence: 75,
     };
   }

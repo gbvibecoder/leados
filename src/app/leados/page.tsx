@@ -476,6 +476,93 @@ export default function LeadOSPage() {
     }
   };
 
+  // After AI Qualification calls are resolved, re-run downstream agents with real data
+  const DOWNSTREAM_AGENTS = ['sales-routing', 'tracking-attribution', 'performance-optimization', 'crm-hygiene'];
+
+  const handleQualificationResolved = useCallback(async (resolvedData: any) => {
+    if (!pipeline.id) return;
+
+    // Update the AI Qualification output in local state
+    setAgentOutputs(prev => ({
+      ...prev,
+      'ai-qualification': { success: true, data: resolvedData },
+    }));
+
+    addActivity({
+      type: 'info',
+      message: 'AI Qualification calls resolved — re-running downstream agents with real scores',
+    });
+
+    // Build previousOutputs from all completed agent outputs
+    const currentOutputs: Record<string, any> = {
+      ...agentOutputs,
+      'ai-qualification': resolvedData,
+    };
+    // Flatten: each key should be the agent's data, not the full output wrapper
+    const previousOutputs: Record<string, any> = {};
+    for (const [key, val] of Object.entries(currentOutputs)) {
+      previousOutputs[key] = val?.data || val;
+    }
+
+    // Get project config from the selected project
+    const projectConfig: Record<string, any> = {};
+    if (selectedProject) {
+      projectConfig.projectName = selectedProject.name;
+      projectConfig.projectType = selectedProject.type;
+      if (selectedProject.name) {
+        projectConfig.focus = selectedProject.name;
+        projectConfig.niche = selectedProject.name;
+        projectConfig.serviceNiche = selectedProject.name;
+      }
+      if (selectedProject.config) {
+        const cfg = typeof selectedProject.config === 'string'
+          ? JSON.parse(selectedProject.config)
+          : selectedProject.config;
+        Object.assign(projectConfig, cfg);
+      }
+    }
+
+    // Re-run each downstream agent sequentially
+    for (const agentId of DOWNSTREAM_AGENTS) {
+      if (!enabledAgentIds.has(agentId)) continue;
+
+      const agentName = LEADOS_AGENTS.find(a => a.id === agentId)?.name || agentId;
+      updateAgentStatus(agentId, { status: 'running', progress: 0 });
+      startAgentTimer(agentId);
+      addActivity({ type: 'agent_started', agentId, agentName, message: `${agentName} re-running with resolved data` });
+
+      try {
+        const result = await agentsApi.run(agentId, {
+          pipelineId: pipeline.id,
+          config: projectConfig,
+          previousOutputs,
+        });
+
+        if (result.output?.success) {
+          previousOutputs[agentId] = result.output.data;
+        }
+
+        stopAgentTimer(agentId);
+        updateAgentStatus(agentId, {
+          status: 'done',
+          progress: 100,
+          lastRunTime: new Date().toISOString(),
+          outputPreview: typeof result.output?.reasoning === 'string'
+            ? result.output.reasoning
+            : 'Re-run completed with resolved data',
+        });
+        setAgentOutputs(prev => ({ ...prev, [agentId]: result.output }));
+        addActivity({ type: 'agent_completed', agentId, agentName, message: `${agentName} completed (re-run)` });
+      } catch (err: any) {
+        stopAgentTimer(agentId);
+        updateAgentStatus(agentId, { status: 'error', error: err.message || 'Re-run failed' });
+        addActivity({ type: 'agent_error', agentId, agentName, message: `${agentName} re-run failed: ${err.message}` });
+      }
+    }
+
+    addActivity({ type: 'info', message: 'All downstream agents re-run complete' });
+  }, [pipeline.id, agentOutputs, selectedProject, enabledAgentIds, updateAgentStatus, startAgentTimer, stopAgentTimer, addActivity]);
+
   // Get the prerequisite agent name that must complete before this agent can run
   const getPrerequisiteAgent = useCallback((agentId: string): string | null => {
     const agentIndex = pipeline.agents.findIndex(a => a.id === agentId);
@@ -1200,6 +1287,7 @@ export default function LeadOSPage() {
               onRun={() => handleRunAgent(selectedAgent)}
               onPause={() => handlePauseAgent(selectedAgent)}
               onReset={() => handleResetAgent(selectedAgent)}
+              onResolved={selectedAgent === 'ai-qualification' ? handleQualificationResolved : undefined}
             />
           )}
         </AnimatePresence>
