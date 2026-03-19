@@ -163,7 +163,7 @@ export class SalesRoutingAgent extends BaseAgent {
         },
       });
 
-      const response = await this.callClaude(SYSTEM_PROMPT, userMessage, 1, 4096);
+      const response = await this.callClaude(SYSTEM_PROMPT, userMessage, 1, 8192);
       let parsed: any = {};
       try {
         parsed = this.safeParseLLMJson<any>(response, ['routingEngine', 'routedLeads', 'summary']);
