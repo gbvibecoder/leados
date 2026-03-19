@@ -25,6 +25,7 @@ interface AgentDetailPanelProps {
   onRun: () => void;
   onPause?: () => void;
   onReset?: () => void;
+  onResolved?: (resolvedData: any) => void;
 }
 
 function formatElapsed(seconds: number): string {
@@ -33,7 +34,7 @@ function formatElapsed(seconds: number): string {
   return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
-function AgentDetailPanelInner({ agentId, agentName, description, isRunning, elapsedTime, agentStatus, agentError, prerequisiteAgent, isPipelineRunning, onClose, onRun, onPause, onReset }: AgentDetailPanelProps) {
+function AgentDetailPanelInner({ agentId, agentName, description, isRunning, elapsedTime, agentStatus, agentError, prerequisiteAgent, isPipelineRunning, onClose, onRun, onPause, onReset, onResolved }: AgentDetailPanelProps) {
   const [runs, setRuns] = useState<any[]>([]);
   const [selectedRun, setSelectedRun] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -495,6 +496,8 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
                       agentName={agentName}
                       data={selectedRun.outputsJson || selectedRun.outputs || {}}
                       isLive={agentId === 'service-research'}
+                      agentRunId={selectedRun.id}
+                      onResolved={onResolved}
                     />
                   </div>
 

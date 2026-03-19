@@ -12,16 +12,20 @@ You MUST use data from previous agents when available:
 - From Tracking & Attribution (agent 11): UTM parameters and touchpoint data to stitch
 - From Performance Optimization (agent 12): Campaign performance data for attribution
 
-RESPONSIBILITY 1: DEDUPLICATION
-- Fuzzy match on email, phone, company+name, LinkedIn URL
-- Target >99% deduplication accuracy
+RESPONSIBILITY 1: DEDUPLICATION (>99% accuracy required)
+Matching criteria with confidence weights (highest to lowest):
+1. Email exact match — highest confidence (100% match weight)
+2. Phone number match after E.164 normalization — high confidence (90% match weight)
+3. Company name + first name fuzzy match — medium confidence (75% match weight)
+4. LinkedIn URL match — high confidence (95% match weight)
 - Merge strategy: keep most recent, consolidate all interactions
-- Track matching criteria with confidence weights
+- When merging, preserve ALL interaction history from both records
+- Flag uncertain merges (fuzzy match only) for human review
 
 RESPONSIBILITY 2: FIELD NORMALIZATION
-- Phone: E.164 format (+1XXXXXXXXXX)
-- Email: lowercase, trim whitespace
-- Company: trim, standardize suffixes (Inc → Inc.)
+- Phone: E.164 format (+1XXXXXXXXXX) — strip all non-digit characters, prepend country code
+- Email: lowercase, trim whitespace, remove dots in gmail addresses
+- Company: proper case, remove suffixes (Inc, LLC, Ltd → standardized canonical form without suffix)
 - Country: ISO 3166-1 alpha-2 codes
 - Job titles: standardize to canonical forms
 
@@ -39,14 +43,17 @@ RESPONSIBILITY 4: ENRICHMENT
 
 RESPONSIBILITY 5: LIFECYCLE MANAGEMENT
 - Auto-assign stages based on behavioral triggers
-- Stages: new → contacted → engaged → qualified → booked → won → churned
+- Pipeline Stages (use EXACTLY these): New → Contacted → Qualified → Booked → Won / Lost
 - Event triggers: email open, form submit, call completed, meeting booked, payment confirmed
 - Log every stage transition with reason and timestamp
+- CRITICAL: Trigger downstream agents on stage changes (e.g., notify AI Qualification when stage moves to Qualified, notify Sales Routing when stage moves to Booked)
+- Include stageChangeNotifications in output: list of {fromStage, toStage, triggeredAgent, leadId} for each transition
 
 RESPONSIBILITY 6: INTERACTION LOGGING
 - Record every touchpoint: emails, calls, page visits, form submissions, ad clicks
 - Include timestamps, channels, content summaries
 - Build complete lead journey timeline
+- CRITICAL UTM RULE: Never overwrite first-touch UTM attribution data. Preserve original UTM source, medium, campaign, term, and content. Only APPEND new touchpoints to the journey timeline — do not replace or modify the original attribution record.
 
 RESPONSIBILITY 7: COMPLIANCE
 - GDPR: right to erasure, data portability, consent tracking
@@ -55,7 +62,9 @@ RESPONSIBILITY 7: COMPLIANCE
 - Data retention: configurable policies, automated enforcement
 - Complete audit trail of all data access and modifications
 
-Return ONLY valid JSON (no markdown, no explanation outside JSON). Your response MUST be a JSON object with these top-level keys: deduplication, normalization, validation, enrichment, lifecycle, compliance, interactions, reasoning, confidence.
+Return ONLY valid JSON (no markdown, no explanation outside JSON). Your response MUST be a JSON object with these top-level keys: deduplication, normalization, validation, enrichment, lifecycle, compliance, interactions, stageChangeNotifications, reasoning, confidence.
+
+stageChangeNotifications should be an array of objects: [{ "fromStage": "string", "toStage": "string", "triggeredAgent": "string (agent name to notify)", "leadId": "string" }]
 
 Data quality is the foundation of everything — bad data means bad scoring, bad routing, and wasted ad spend. Be aggressive with cleanup but conservative with merges (never lose data).
 
@@ -235,6 +244,7 @@ export class CRMHygieneAgent extends BaseAgent {
           touchpoints: [],
         },
         lifecycle: parsed.lifecycle || {},
+        stageChangeNotifications: parsed.stageChangeNotifications || [],
         compliance: parsed.compliance || {},
         summary: {
           totalContacts: dbLeadCount,

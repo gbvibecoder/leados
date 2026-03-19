@@ -21,13 +21,15 @@ interface AgentOutputProps {
   agentName?: string;
   data: any;
   isLive?: boolean;
+  agentRunId?: string;
+  onResolved?: (resolvedData: any) => void;
 }
 
 /**
  * Routes to the appropriate output component based on agent ID
  * Provides interactive, user-friendly displays instead of raw JSON
  */
-export function AgentOutput({ agentId, agentName, data, isLive = false }: AgentOutputProps) {
+export function AgentOutput({ agentId, agentName, data, isLive = false, agentRunId, onResolved }: AgentOutputProps) {
   // Normalize: if data is a string (double-serialized), parse it
   let normalizedData = data;
   if (typeof normalizedData === 'string') {
@@ -80,7 +82,7 @@ export function AgentOutput({ agentId, agentName, data, isLive = false }: AgentO
       return <InboundCaptureOutput data={normalizedData} />;
 
     case 'ai-qualification':
-      return <AIQualificationOutput data={normalizedData} />;
+      return <AIQualificationOutput data={normalizedData} agentRunId={agentRunId} onResolved={onResolved} />;
 
     case 'sales-routing':
       return <SalesRoutingOutput data={normalizedData} />;

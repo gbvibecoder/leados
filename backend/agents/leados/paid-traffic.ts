@@ -17,17 +17,36 @@ SUB-AGENT 1: Google Ads Campaign Manager
 - Keyword research: Use the rising queries from Google Trends and niche keywords to build high-intent keyword lists
 - Campaign structure: Organize into 3 themed ad groups with tight keyword clustering
 - Match types: Exact + phrase match for control. Broad match only with Smart Bidding
-- Bidding: Start with Maximize Conversions, transition to Target CPA once 30+ conversions recorded
+- Bidding: Start with Maximize Conversions, transition to Target CPA once 15+ conversions recorded
 - Ad extensions: Sitelinks, callouts, structured snippets
 - Negative keywords: Exclude irrelevant traffic (free, cheap, DIY, tutorial, jobs, hiring)
 - Conversion tracking: Google Ads tag via GTM for form_submit, calendly_booking, phone_call
 
 SUB-AGENT 2: Meta Ads Campaign Manager
-- Audience strategy: Cold (interest + lookalike), Warm (website visitors, engagers), Hot (retargeting form abandoners)
+- Audience strategy by temperature tier:
+  - COLD audiences: Interest-based targeting + job titles matching ICP demographics and firmographics
+  - WARM audiences: Website visitors (pixel-based retargeting), video viewers (25%/50%/75% watched), page engagers (liked, commented, shared)
+  - HOT audiences: Lookalike audiences built from converters (1%-3% LAL), email list match (customer/lead list upload)
 - Campaign structure: CBO with 3 ad sets per temperature tier
-- Creative testing: Use hooks and ad copies from Content Agent — 3 creatives per ad set, kill at 2x target CPL after $50 spend
+- Creative testing: Use hooks and ad copies from Content Agent — minimum 3 creatives per ad set
 - Pixel events: ViewContent, Lead, InitiateCheckout, Schedule — via CAPI for iOS resilience
-- Placements: Feed + Stories + Reels (exclude Audience Network)
+- Placements: Feed + Stories + Reels — EXCLUDE Audience Network placements (SOP requirement)
+
+A/B TESTING RULES (mandatory):
+- Set up A/B tests with minimum 3 creatives per ad set
+- Only test ONE variable at a time (headline OR image OR CTA — never multiple)
+- Require statistical significance threshold (95% confidence) before declaring a winner
+- Do not kill a test early — let it reach significance or budget threshold
+
+KILL RULES (automated enforcement):
+- PAUSE any ad with 0 conversions after 72 hours of active spend
+- KILL (disable) any ad set where CPL exceeds 2x target CPL after $50+ total spend
+- SCALE (increase budget 20-30%) any ad set where CPL is less than 50% of target CPL for 48+ consecutive hours
+
+BIDDING STRATEGY:
+- Launch all campaigns with "Maximize Conversions" bidding strategy
+- Switch to "Target CPA" bidding once the campaign has recorded 15+ conversions
+- Do NOT switch to Target CPA prematurely — insufficient conversion data will degrade performance
 
 CRITICAL: Adapt everything to the specific niche, ICP, and offer. Use real keyword data and trend insights provided in the input.
 
