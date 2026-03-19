@@ -198,42 +198,105 @@ export class SalesRoutingAgent extends BaseAgent {
         parsed = { reasoning: `LLM JSON parse failed: ${parseErr.message}`, confidence: 0 };
       }
 
-      // ── BUILD CLEAN OUTPUT — DO NOT trust ANY metric from LLM ──────────
-      // Only keep routing engine config (rules, round-robin) from LLM.
-      // routedLeads: only keep leads that match real upstream data (qualification/inbound).
-      // If no real upstream leads exist, routedLeads must be empty.
-      const hasRealUpstreamLeads = !!(
-        qualificationData.callResults?.length > 0 ||
-        inboundData.leadsProcessed?.length > 0
-      );
+      // ── BUILD CLEAN OUTPUT — route from REAL upstream data, not LLM ──────
+      // The LLM provides routing engine config (rules, round-robin) only.
+      // Actual lead routing is determined by real qualification outcomes + inbound scores.
 
-      // Only keep routedLeads if there were real upstream leads; otherwise empty
-      const routedLeads = hasRealUpstreamLeads ? (parsed.routedLeads || []).map((lead: any) => ({
-        leadName: lead.leadName || '',
-        leadEmail: lead.leadEmail || '',
-        company: lead.company || '',
-        qualificationScore: lead.qualificationScore || 0,
-        bantBreakdown: lead.bantBreakdown || { budget: 0, authority: 0, need: 0, timeline: 0 },
-        route: lead.route || 'nurture',
-        reason: lead.reason || '',
-        destination: lead.destination || '',
-        assignedRep: lead.assignedRep || null,
-        routedAt: lead.routedAt || '',
-        latency: '0ms',
-        slaStatus: 'pending' as const,
-        actions: lead.actions || [],
-      })) : [];
+      // Build routedLeads from REAL upstream data — never trust LLM routing decisions
+      const routedLeads: any[] = [];
+
+      // Route leads from AI Qualification results (these have real call outcomes)
+      const callResults = qualificationData.callResults || [];
+      for (const result of callResults) {
+        if (!result.leadName && !result.leadEmail) continue;
+        const outcome = result.outcome || 'pending_call';
+        // Map qualification outcome to routing decision
+        let route: string;
+        let reason: string;
+        if (outcome === 'high_intent_checkout') {
+          route = 'checkout';
+          reason = 'High BANT score — ready to buy, route to checkout';
+        } else if (outcome === 'high_intent_sales') {
+          route = 'sales_call';
+          reason = 'High intent but needs human conversation — book sales call';
+        } else if (outcome === 'medium_intent') {
+          route = 'nurture';
+          reason = 'Medium interest — add to nurture sequence';
+        } else if (outcome === 'low_intent' || outcome === 'disqualified') {
+          route = 'disqualified';
+          reason = 'Low BANT score or disqualified during call';
+        } else {
+          route = 'nurture';
+          reason = `Call not completed (${result.callStatus || 'unknown'}) — default to nurture`;
+        }
+        routedLeads.push({
+          leadName: result.leadName || result.name || '',
+          leadEmail: result.leadEmail || result.email || '',
+          company: result.company || '',
+          qualificationScore: result.score || 0,
+          bantBreakdown: result.bantBreakdown || { budget: 0, authority: 0, need: 0, timeline: 0 },
+          route,
+          reason,
+          destination: '',
+          assignedRep: null,
+          routedAt: new Date().toISOString(),
+          latency: '0ms',
+          slaStatus: 'pending' as const,
+          actions: [],
+        });
+      }
+
+      // Route leads from Inbound Capture that weren't in qualification (e.g. no phone → never called)
+      const inboundLeads = inboundData.leadsProcessed || [];
+      const alreadyRouted = new Set(routedLeads.map((r: any) => r.leadEmail));
+      for (const lead of inboundLeads) {
+        if (!lead.email || alreadyRouted.has(lead.email)) continue;
+        const score = lead.score || 0;
+        let route: string;
+        let reason: string;
+        if (score >= 70) {
+          route = 'nurture';
+          reason = 'High inbound score but no qualification call completed — nurture until called';
+        } else if (score >= 40) {
+          route = 'nurture';
+          reason = 'Warm lead — add to nurture sequence';
+        } else {
+          route = 'disqualified';
+          reason = `Low inbound score (${score}) — does not meet qualification threshold`;
+        }
+        routedLeads.push({
+          leadName: lead.name || '',
+          leadEmail: lead.email || '',
+          company: lead.company || '',
+          qualificationScore: score,
+          bantBreakdown: { budget: 0, authority: 0, need: 0, timeline: 0 },
+          route,
+          reason,
+          destination: '',
+          assignedRep: null,
+          routedAt: new Date().toISOString(),
+          latency: '0ms',
+          slaStatus: 'pending' as const,
+          actions: [],
+        });
+      }
+
+      await this.log('routing_built_from_upstream', {
+        fromQualification: callResults.length,
+        fromInbound: routedLeads.length - callResults.length,
+        total: routedLeads.length,
+      });
 
       const cleanOutput: any = {
         routingEngine: parsed.routingEngine || { rules: [], roundRobinConfig: { enabled: false, reps: [] } },
         routedLeads,
-        notifications: hasRealUpstreamLeads ? (parsed.notifications || []) : [],
+        notifications: parsed.notifications || [],
         summary: {
           totalRouted: routedLeads.length,
           checkout: routedLeads.filter((l: any) => l.route === 'checkout').length,
           salesCall: routedLeads.filter((l: any) => l.route === 'sales_call').length,
           nurture: routedLeads.filter((l: any) => l.route === 'nurture').length,
-          disqualified: routedLeads.filter((l: any) => l.route === 'disqualify').length,
+          disqualified: routedLeads.filter((l: any) => l.route === 'disqualified' || l.route === 'disqualify').length,
           avgRoutingLatency: '0ms',
           slaBreaches: 0,
           conversionProjection: 0,
