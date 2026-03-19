@@ -327,17 +327,20 @@ export default function LeadOSPage() {
         }
       }
 
-      // All agents completed
+      // Only mark as completed if the pipeline was not paused or cancelled
+      const finalStatus = useAppStore.getState().pipeline.status;
       setRunningAgentId(null);
-      updatePipelineStatus('completed');
-      addActivity({ type: 'pipeline_completed', message: 'LeadOS pipeline completed' });
+      if (finalStatus === 'running') {
+        updatePipelineStatus('completed');
+        addActivity({ type: 'pipeline_completed', message: 'LeadOS pipeline completed' });
 
-      try {
-        await apiFetch(`/api/pipelines/${created.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ status: 'completed' }),
-        });
-      } catch { /* ignore */ }
+        try {
+          await apiFetch(`/api/pipelines/${created.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ status: 'completed' }),
+          });
+        } catch { /* ignore */ }
+      }
 
     } catch (err: any) {
       const errorMsg = err.message || 'Failed to start pipeline';
