@@ -128,7 +128,11 @@ export class OfferEngineeringAgent extends BaseAgent {
     if (!topOpportunity) {
       try {
         await this.log('fetching_trends', { focus, region });
-        const trends = await fetchRealTrends(focus, region, false);
+        // Race with a 8s timeout — don't let trends eat into the 60s Vercel limit
+        const trends = await Promise.race([
+          fetchRealTrends(focus, region, false),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Trends timeout')), 8000)),
+        ]);
         trendData = {
           opportunities: trends.opportunities.slice(0, 3).map(o => ({
             niche: o.niche,
@@ -183,7 +187,7 @@ export class OfferEngineeringAgent extends BaseAgent {
     try {
       await this.log('ai_offer_engineering', { phase: 'Sending market data to Claude for offer engineering' });
 
-      const response = await this.callClaude(SYSTEM_PROMPT, userMessage, 3, 6000);
+      const response = await this.callClaude(SYSTEM_PROMPT, userMessage, 1, 4096);
       let parsed: any = {};
       try {
         parsed = this.safeParseLLMJson<any>(response, ['offer']);

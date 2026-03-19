@@ -97,7 +97,7 @@ export class ContentCreativeAgent extends BaseAgent {
       // ── Call LLM with fallback ────────────────────────────────────
       let parsed: any = {};
       try {
-        const response = await this.callClaude(SYSTEM_PROMPT, enrichedInput, 1, 8192);
+        const response = await this.callClaude(SYSTEM_PROMPT, enrichedInput, 1, 4096);
         parsed = this.safeParseLLMJson<any>(response, ['adCopies', 'hooks', 'emailSequence']);
       } catch (err: any) {
         await this.log('llm_failed', { error: err.message });

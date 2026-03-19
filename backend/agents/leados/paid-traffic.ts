@@ -275,7 +275,7 @@ export class PaidTrafficAgent extends BaseAgent {
         },
       };
 
-      const response = await this.callClaude(SYSTEM_PROMPT, JSON.stringify(enrichedInput), 3, 8000);
+      const response = await this.callClaude(SYSTEM_PROMPT, JSON.stringify(enrichedInput), 1, 4096);
       let parsed: any = {};
       try {
         parsed = this.safeParseLLMJson<any>(response, ['googleAds', 'metaAds']);

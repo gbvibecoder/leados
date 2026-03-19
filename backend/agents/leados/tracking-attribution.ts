@@ -223,7 +223,7 @@ export class TrackingAttributionAgent extends BaseAgent {
         },
       });
 
-      const response = await this.callClaude(SYSTEM_PROMPT, userMessage, 3, 6000);
+      const response = await this.callClaude(SYSTEM_PROMPT, userMessage, 1, 4096);
       let parsed: any = {};
       try {
         parsed = this.safeParseLLMJson<any>(response, ['trackingSetup', 'attributionModel']);
