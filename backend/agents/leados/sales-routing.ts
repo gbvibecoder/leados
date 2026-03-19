@@ -1,6 +1,32 @@
 import { BaseAgent, AgentInput, AgentOutput } from '../base-agent';
 import * as hubspot from '../../integrations/hubspot';
 
+/** Fetch Calendly scheduling link for sales rep booking */
+async function getCalendlyBookingUrl(): Promise<string | null> {
+  const apiKey = process.env.CALENDLY_API_KEY;
+  if (!apiKey) return null;
+  try {
+    const userRes = await fetch('https://api.calendly.com/users/me', {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (!userRes.ok) return null;
+    const userData = await userRes.json();
+    const userUri = userData.resource?.uri;
+    if (!userUri) return null;
+
+    const eventsRes = await fetch(
+      `https://api.calendly.com/event_types?user=${encodeURIComponent(userUri)}&active=true&count=5`,
+      { headers: { Authorization: `Bearer ${apiKey}` } },
+    );
+    if (!eventsRes.ok) return null;
+    const eventsData = await eventsRes.json();
+    const eventType = eventsData.collection?.[0];
+    return eventType?.scheduling_url || null;
+  } catch {
+    return null;
+  }
+}
+
 const SYSTEM_PROMPT = `You are the Sales Routing Agent for LeadOS — the decision engine that routes each qualified lead to the correct next step in the pipeline.
 
 You MUST use data from previous agents when available:
@@ -216,6 +242,24 @@ export class SalesRoutingAgent extends BaseAgent {
         confidence: parsed.confidence || 0,
       };
 
+      // Fetch Calendly booking URL for sales_call leads
+      let calendlyUrl: string | null = null;
+      const hasSalesCallLeads = cleanOutput.routedLeads.some((l: any) => l.route === 'sales_call');
+      if (hasSalesCallLeads) {
+        calendlyUrl = await getCalendlyBookingUrl();
+        if (calendlyUrl) {
+          await this.log('calendly_url_fetched', { url: calendlyUrl });
+          // Attach booking URL to all sales_call routed leads
+          for (const lead of cleanOutput.routedLeads) {
+            if (lead.route === 'sales_call') {
+              lead.bookingUrl = calendlyUrl;
+              lead.destination = calendlyUrl;
+            }
+          }
+          cleanOutput.calendlyBookingUrl = calendlyUrl;
+        }
+      }
+
       // Update CRM with routing data if HubSpot is available (in parallel)
       if (hubspot.isHubSpotAvailable() && cleanOutput.routedLeads.length > 0) {
         await Promise.all(cleanOutput.routedLeads.slice(0, 20).map(async (lead: any) => {
@@ -230,6 +274,7 @@ export class SalesRoutingAgent extends BaseAgent {
                 lifecyclestage: stage,
                 qualification_outcome: lead.route,
                 lead_score: String(lead.qualificationScore || 0),
+                ...(lead.bookingUrl ? { booking_url: lead.bookingUrl } : {}),
               },
             });
           } catch { /* skip individual CRM failures */ }

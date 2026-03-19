@@ -22,7 +22,15 @@ Return ONLY valid JSON (no markdown) with this structure:
   "confidence": "number 0-100"
 }
 
-Produce 3 Google Ads, 3 Meta Ads, 5 hooks, 5-email sequence (soft intro→value→case study→urgency→breakup), LinkedIn scripts (connection+2 follow-ups), 1 video ad script, 2 UGC briefs, 2 visual creative briefs.
+Produce these EXACT quantities:
+- 10 Google Ads (varied: problem, curiosity, proof, urgency, results angles)
+- 10 Meta Ads (varied targeting: cold, warm, retargeting audiences)
+- 5 hooks (pain, curiosity, social_proof, urgency, contrarian)
+- 5-7 email sequence (welcome→value→case study→objection handling→urgency→breakup)
+- LinkedIn scripts (connection request + 3 follow-up messages)
+- 3 video ad scripts (30-60s each: UGC talking head, before/after, founder explainer)
+- 3 UGC briefs (testimonial, before/after, process reveal)
+- 3 visual creative briefs (static ads, social clips, infographic)
 Do NOT invent performance metrics (open rates, click rates, impressions). Only creative content.`;
 
 export class ContentCreativeAgent extends BaseAgent {
@@ -156,14 +164,28 @@ export class ContentCreativeAgent extends BaseAgent {
     return {
       adCopies: {
         google: [
-          { headline: `${niche} Leads on Autopilot`.substring(0, 30), description: `Stop chasing leads. Our AI engine delivers qualified ${niche.toLowerCase()} prospects straight to your calendar. ${guarantee}`.substring(0, 90), targetKeyword: `${niche.toLowerCase()} lead generation` },
+          { headline: `${niche} Leads on Autopilot`.substring(0, 30), description: `Stop chasing leads. Our AI engine delivers qualified ${niche.toLowerCase()} prospects straight to your calendar.`.substring(0, 90), targetKeyword: `${niche.toLowerCase()} lead generation` },
           { headline: `AI-Powered ${niche} Growth`.substring(0, 30), description: `${transformationPromise}. No manual outreach needed. Results in 14 days or less.`.substring(0, 90), targetKeyword: `${niche.toLowerCase()} marketing` },
           { headline: `Tired of Bad Leads?`.substring(0, 30), description: `${serviceName} uses 13 AI agents to find, qualify, and book ${niche.toLowerCase()} leads automatically.`.substring(0, 90), targetKeyword: `qualified ${niche.toLowerCase()} leads` },
+          { headline: `${niche} Pipeline Fix`.substring(0, 30), description: `Feast-or-famine pipeline? Our AI builds predictable ${niche.toLowerCase()} deal flow — fully autonomous.`.substring(0, 90), targetKeyword: `${niche.toLowerCase()} pipeline` },
+          { headline: `10+ Calls/Week — AI`.substring(0, 30), description: `Book 10+ qualified ${niche.toLowerCase()} calls per week. AI handles prospecting, outreach, and qualification.`.substring(0, 90), targetKeyword: `${niche.toLowerCase()} sales calls` },
+          { headline: `Stop Wasting Ad Spend`.substring(0, 30), description: `Cut your CPL in half. ${serviceName} targets only decision-makers ready to buy in ${niche.toLowerCase()}.`.substring(0, 90), targetKeyword: `${niche.toLowerCase()} advertising` },
+          { headline: `${niche} Growth Engine`.substring(0, 30), description: `Autonomous lead gen for ${niche.toLowerCase()}. From cold outreach to booked meeting — zero manual work.`.substring(0, 90), targetKeyword: `${niche.toLowerCase()} growth` },
+          { headline: `Qualified Leads Only`.substring(0, 30), description: `No tire-kickers. ${serviceName} AI-qualifies every lead before they hit your calendar.`.substring(0, 90), targetKeyword: `qualified ${niche.toLowerCase()} leads` },
+          { headline: `Scale ${niche} Fast`.substring(0, 30), description: `${guarantee || 'Results in 14 days'}. Our 13-agent AI engine handles your entire go-to-market.`.substring(0, 90), targetKeyword: `scale ${niche.toLowerCase()}` },
+          { headline: `${niche} on Autopilot`.substring(0, 30), description: `Why hire 5 people when 13 AI agents can run your ${niche.toLowerCase()} pipeline 24/7?`.substring(0, 90), targetKeyword: `${niche.toLowerCase()} automation` },
         ],
         meta: [
-          { primaryText: `Most ${niche.toLowerCase()} companies waste 60% of their marketing budget on unqualified leads. ${serviceName} fixes that with AI-powered prospecting that only books calls with decision-makers who are ready to buy.`, headline: transformationPromise.substring(0, 40), description: cta, targetAudience: icpDesc },
-          { primaryText: `"We went from 2 booked calls a week to 15 — in under 30 days." That's the power of ${serviceName}. Our AI engine handles everything from prospecting to qualification.`, headline: `Stop Chasing. Start Closing.`, description: `${guarantee || 'Results guaranteed'}`, targetAudience: icpDesc },
-          { primaryText: `Still doing outreach manually? ${serviceName} deploys 13 AI agents to run your entire lead gen pipeline — cold email, LinkedIn, ads, qualification, and booking — 24/7.`, headline: `Your Sales Team on Autopilot`, description: `See how it works — free strategy call`, targetAudience: icpDesc },
+          { primaryText: `Most ${niche.toLowerCase()} companies waste 60% of their marketing budget on unqualified leads. ${serviceName} fixes that with AI-powered prospecting that only books calls with decision-makers who are ready to buy.`, headline: transformationPromise.substring(0, 40), description: cta, targetAudience: `Cold — ${icpDesc}` },
+          { primaryText: `"We went from 2 booked calls a week to 15 — in under 30 days." That's the power of ${serviceName}. Our AI engine handles everything from prospecting to qualification.`, headline: `Stop Chasing. Start Closing.`, description: `${guarantee || 'Results guaranteed'}`, targetAudience: `Cold — ${icpDesc}` },
+          { primaryText: `Still doing outreach manually? ${serviceName} deploys 13 AI agents to run your entire lead gen pipeline — cold email, LinkedIn, ads, qualification, and booking — 24/7.`, headline: `Your Sales Team on Autopilot`, description: `See how it works — free strategy call`, targetAudience: `Cold — ${icpDesc}` },
+          { primaryText: `${getPain(0)}? You're not alone. But the top ${niche.toLowerCase()} companies solved this months ago with AI-powered lead gen. Here's how they did it.`, headline: `How Top Companies Solved It`, description: cta, targetAudience: `Cold — problem aware` },
+          { primaryText: `Your competitors are booking 3x more qualified calls using AI. ${serviceName} automates prospecting, outreach, and qualification — so your team only talks to ready buyers.`, headline: `Don't Fall Behind`, description: `Free strategy call`, targetAudience: `Cold — competitor aware` },
+          { primaryText: `You visited our page but didn't book a call. Here's what you missed: ${transformationPromise.toLowerCase()}. ${guarantee || 'No risk.'}`, headline: `Still Thinking About It?`, description: `Book your free call now`, targetAudience: `Hot — retargeting visitors` },
+          { primaryText: `You started the form but didn't finish. We get it — big decisions take time. But ${getPain(0).toLowerCase()} won't fix itself. Let's talk for 15 minutes.`, headline: `Pick Up Where You Left Off`, description: cta, targetAudience: `Hot — retargeting form abandoners` },
+          { primaryText: `Join 500+ ${niche.toLowerCase()} companies using ${serviceName} to build a predictable pipeline. Average client sees first qualified leads within 14 days.`, headline: `500+ Companies Can't Be Wrong`, description: `${guarantee || 'See it in action'}`, targetAudience: `Warm — engaged audience` },
+          { primaryText: `Imagine waking up to 3 qualified meetings on your calendar — every single day. That's what ${serviceName} delivers for ${niche.toLowerCase()} companies.`, headline: `3 Meetings/Day on Autopilot`, description: cta, targetAudience: `Warm — lookalike` },
+          { primaryText: `Last month, our ${niche.toLowerCase()} clients generated an average of 47 qualified leads. Zero manual outreach. Zero cold calling. Just AI doing what AI does best.`, headline: `47 Leads. Zero Effort.`, description: `See how — free call`, targetAudience: `Cold — results focused` },
         ],
       },
       hooks: [
@@ -183,7 +205,8 @@ export class ContentCreativeAgent extends BaseAgent {
       linkedInScripts: {
         connectionRequest: `Hi {firstName}, I work with ${niche.toLowerCase()} companies on ${getPain(0).toLowerCase().substring(0, 80)}. Would love to connect and share some insights.`.substring(0, 300),
         followUp1: `Thanks for connecting, {firstName}! I noticed {company} is doing great work in ${niche.toLowerCase()}. We recently helped a similar company solve ${getPain(0).toLowerCase()} — happy to share what worked if you're interested.`,
-        followUp2: `Hi {firstName}, quick follow up — would a 15-min call make sense to explore if we can help {company}? No pressure either way. Here's my calendar: ${bookingUrl}`,
+        followUp2: `Hi {firstName}, quick case study — one of our ${niche.toLowerCase()} clients went from ${getPain(0).toLowerCase()} to booking 10+ qualified calls/week in 30 days. Want me to send you the breakdown?`,
+        followUp3: `Hi {firstName}, would a 15-min call make sense to explore if we can help {company}? No pressure either way. Here's my calendar: ${bookingUrl}`,
       },
       videoAdScripts: [
         {
@@ -192,6 +215,20 @@ export class ContentCreativeAgent extends BaseAgent {
           hook: `Stop wasting money on leads that never convert. (3s)`,
           body: `If you're a ${niche.toLowerCase()} company spending thousands on marketing but only getting tire-kickers, you're not alone. We built ${serviceName} — an AI engine that finds, qualifies, and books real decision-makers on your calendar. No cold calling. No guesswork. Just qualified meetings, every week.`,
           cta: `${cta} — link in bio. ${guarantee || ''}`,
+        },
+        {
+          duration: '30-45s',
+          format: 'Before/after screen recording',
+          hook: `This is what our pipeline looked like 30 days ago. (3s)`,
+          body: `Empty CRM. Maybe 2 calls a week. Sound familiar? Now look at this — ${serviceName} filled our pipeline with qualified ${niche.toLowerCase()} leads in under a month. 13 AI agents running outreach, qualification, and booking 24/7. We didn't hire anyone. We didn't change our offer. We just turned on the machine.`,
+          cta: `Want the same results? ${cta}. ${guarantee || ''}`,
+        },
+        {
+          duration: '45-60s',
+          format: 'Founder explainer',
+          hook: `I built an AI that replaces a 5-person sales team. (3s)`,
+          body: `Here's the problem: ${niche.toLowerCase()} companies are still doing outreach manually. Spreadsheets, cold calls, LinkedIn spam. It doesn't scale. So we built ${serviceName} — 13 specialized AI agents that handle everything from finding prospects to qualifying them on a real phone call to booking the meeting on your calendar. It works while you sleep. And it costs less than one SDR.`,
+          cta: `See it in action — ${cta}. ${guarantee || ''}`,
         },
       ],
       ugcBriefs: [
@@ -215,6 +252,16 @@ export class ContentCreativeAgent extends BaseAgent {
             `End with CTA: "Want the same results?"`,
           ],
         },
+        {
+          type: 'process_reveal',
+          description: `Behind-the-scenes look at how ${serviceName}'s 13 AI agents work together to fill a ${niche.toLowerCase()} company's pipeline.`,
+          talkingPoints: [
+            `Show the dashboard with all 13 agents`,
+            `Walk through the pipeline: research → outreach → qualification → booking`,
+            `Highlight real data: prospects found, calls made, meetings booked`,
+            `End with: "This runs 24/7 without a single human touch"`,
+          ],
+        },
       ],
       visualCreativeBriefs: [
         {
@@ -229,8 +276,14 @@ export class ContentCreativeAgent extends BaseAgent {
           imagery: 'Professional dark theme, trust badges, green accent for metrics',
           textOverlay: `"500+ ${niche} companies trust ${serviceName}" — ${guarantee || 'See results in 14 days'}`,
         },
+        {
+          concept: '13-Agent Infographic',
+          layout: 'Vertical flow showing 13 agents as connected nodes, each with icon + one-line description, pipeline arrow connecting them',
+          imagery: 'Dark space theme, glowing cyan connections, each agent as a small planet/node',
+          textOverlay: `"13 AI Agents. 1 Pipeline. Zero Manual Work." — ${cta}`,
+        },
       ],
-      reasoning: `Full creative asset package generated for ${niche} using upstream offer and funnel data. Includes 3 Google Ads, 3 Meta Ads, 5 hooks, 5-email sequence, LinkedIn scripts, 1 video script, 2 UGC briefs, and 2 visual creative briefs. Content tailored to ICP: ${icpDesc}.`,
+      reasoning: `Full creative asset package generated for ${niche} using upstream offer and funnel data. Includes 10 Google Ads, 10 Meta Ads, 5 hooks, 5-email sequence, LinkedIn scripts (connection + 3 follow-ups), 3 video scripts, 3 UGC briefs, and 3 visual creative briefs. Content tailored to ICP: ${icpDesc}.`,
       confidence: 75,
     };
   }

@@ -33,10 +33,10 @@ RESPONSIBILITY 3: DATA ENRICHMENT
 - Enrichment completeness score per lead
 
 RESPONSIBILITY 4: SEGMENTATION
-- Enterprise Hot (score >= 80): Route to AI Qualification call immediately
-- Mid-Market Warm (score 60-79): Schedule nurture + soft booking push
-- SMB Interested (score 40-59): Add to email nurture sequence
-- Cold/Unqualified (score < 40): Low-priority drip, re-engage in 30 days
+- Hot (score >= 70): Route to AI Qualification call immediately
+- Warm (score 40-69): Schedule nurture + soft booking push
+- Nurture (score 20-39): Add to email nurture sequence
+- Not Qualified (score < 20): Archive, low-priority drip, re-engage in 30 days
 
 RESPONSIBILITY 5: WEBHOOK PROCESSING
 - Process form submissions from landing pages
@@ -390,7 +390,7 @@ export class InboundCaptureAgent extends BaseAgent {
       for (const lead of leadsProcessed) {
         const score = lead.score || 0;
         totalScore += score;
-        if (score >= 80) hot++;
+        if (score >= 70) hot++;
         else if (score >= 40) warm++;
         else cold++;
       }
@@ -455,7 +455,7 @@ export class InboundCaptureAgent extends BaseAgent {
               properties: {
                 lead_score: String(lead.score || 0),
                 lead_segment: lead.segment || '',
-                lifecyclestage: lead.score >= 80 ? 'marketingqualifiedlead' : 'lead',
+                lifecyclestage: lead.score >= 70 ? 'marketingqualifiedlead' : 'lead',
               },
             });
           } catch { /* skip individual CRM failures */ }
