@@ -53,7 +53,7 @@ export const pipelines = {
 export const agents = {
   list: () => fetchApi<any[]>('/agents'),
   get: (id: string) => fetchApi<any>(`/agents/${id}`),
-  run: (id: string, data?: { pipelineId?: string; config?: Record<string, unknown> }) =>
+  run: (id: string, data?: { pipelineId?: string; config?: Record<string, unknown>; previousOutputs?: Record<string, unknown> }) =>
     fetchApi<any>(`/agents/${id}/run`, { method: 'POST', body: JSON.stringify(data || {}) }),
   runs: (id: string) => fetchApi<any[]>(`/agents/${id}/runs`),
 };

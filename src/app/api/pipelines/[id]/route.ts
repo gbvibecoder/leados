@@ -35,6 +35,29 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   });
 }
 
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const userId = getUserId(req);
+  const body = await req.json().catch(() => ({}));
+
+  try {
+    const pipeline = await prisma.pipeline.findFirst({ where: { id, userId: userId ?? 'no-user' } });
+    if (!pipeline) {
+      return NextResponse.json({ error: 'Pipeline not found' }, { status: 404 });
+    }
+    const updated = await prisma.pipeline.update({
+      where: { id },
+      data: {
+        ...(body.status && { status: body.status }),
+        ...(body.currentAgentIndex !== undefined && { currentAgentIndex: body.currentAgentIndex }),
+      },
+    });
+    return NextResponse.json({ id: updated.id, status: updated.status });
+  } catch {
+    return NextResponse.json({ error: 'Failed to update pipeline' }, { status: 500 });
+  }
+}
+
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const userId = getUserId(req);

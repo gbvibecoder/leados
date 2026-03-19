@@ -212,7 +212,8 @@ export default function LeadOSPage() {
     }
   }, []);
 
-  // Run full pipeline — calls real API, SSE handles status updates
+  // Run full pipeline — frontend orchestrates by calling each agent sequentially.
+  // Each agent runs in its own serverless invocation (< 60s), avoiding Vercel Hobby timeout.
   const handleRunPipeline = async () => {
     setPipelineError(null);
     setAgentOutputs({});
@@ -243,6 +244,7 @@ export default function LeadOSPage() {
     }
 
     try {
+      // Create pipeline record
       const created = await pipelinesApi.create({
         type: 'leados',
         config: { enabledAgentIds: [...enabledAgentIds] },
@@ -250,18 +252,93 @@ export default function LeadOSPage() {
       });
       setPipelineId(created.id);
 
-      addActivity({
-        type: 'info',
-        message: `Pipeline started with ${enabledAgentIds.size} agents`,
-      });
-
-      // Start pipeline — runs in background, SSE events update the UI
+      // Get ordered agent list + project config from the server
       const result = await pipelinesApi.start(created.id);
+      const agentsToRun: string[] = result.agentsToRun;
+      const projectConfig = result.projectConfig || {};
 
       addActivity({
         type: 'info',
-        message: `Pipeline running: ${result.totalAgents} agents queued`,
+        message: `Pipeline started with ${agentsToRun.length} agents`,
       });
+
+      // Orchestrate: call each agent one by one from the frontend
+      const previousOutputs: Record<string, any> = {};
+
+      for (let i = 0; i < agentsToRun.length; i++) {
+        const agentId = agentsToRun[i];
+        const agentName = LEADOS_AGENTS.find(a => a.id === agentId)?.name || agentId;
+
+        // Check if pipeline was cancelled/paused
+        const currentStatus = useAppStore.getState().pipeline.status;
+        if (currentStatus !== 'running') break;
+
+        // Update UI: mark agent as running
+        setCurrentAgentIndex(i);
+        setRunningAgentId(agentId);
+        updateAgentStatus(agentId, { status: 'running', progress: 0 });
+        startAgentTimer(agentId);
+        addActivity({ type: 'agent_started', agentId, agentName, message: `${agentName} started` });
+
+        try {
+          // Call single agent endpoint — awaits result (< 60s per agent)
+          const agentResult = await agentsApi.run(agentId, {
+            pipelineId: created.id,
+            config: projectConfig,
+            previousOutputs,
+          });
+
+          // Store output for chaining to next agent
+          if (agentResult.output?.success) {
+            previousOutputs[agentId] = agentResult.output.data;
+          }
+
+          // Update UI: mark agent as done
+          stopAgentTimer(agentId);
+          updateAgentStatus(agentId, {
+            status: 'done',
+            progress: 100,
+            lastRunTime: new Date().toISOString(),
+            outputPreview: typeof agentResult.output?.reasoning === 'string'
+              ? agentResult.output.reasoning
+              : 'Completed successfully',
+          });
+          setAgentOutputs(prev => ({ ...prev, [agentId]: agentResult.output }));
+          addActivity({ type: 'agent_completed', agentId, agentName, message: `${agentName} completed` });
+
+        } catch (agentErr: any) {
+          stopAgentTimer(agentId);
+          const errMsg = agentErr.message || 'Agent failed';
+          updateAgentStatus(agentId, { status: 'error', error: errMsg });
+          addActivity({ type: 'agent_error', agentId, agentName, message: `${agentName} failed: ${errMsg}` });
+
+          // Stop pipeline on error
+          setPipelineError(`${agentName} failed: ${errMsg}`);
+          updatePipelineStatus('error');
+          setRunningAgentId(null);
+
+          try {
+            await apiFetch(`/api/pipelines/${created.id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ status: 'error' }),
+            });
+          } catch { /* ignore */ }
+          return;
+        }
+      }
+
+      // All agents completed
+      setRunningAgentId(null);
+      updatePipelineStatus('completed');
+      addActivity({ type: 'pipeline_completed', message: 'LeadOS pipeline completed' });
+
+      try {
+        await apiFetch(`/api/pipelines/${created.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: 'completed' }),
+        });
+      } catch { /* ignore */ }
+
     } catch (err: any) {
       const errorMsg = err.message || 'Failed to start pipeline';
       setPipelineError(errorMsg);
