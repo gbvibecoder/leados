@@ -353,13 +353,40 @@ export abstract class BaseAgent {
       try {
         return JSON.parse(fixed);
       } catch {
-        // Last resort: try to truncate at last valid closing brace
-        const lastBrace = fixed.lastIndexOf('}');
-        if (lastBrace > 0) {
-          try {
-            return JSON.parse(fixed.substring(0, lastBrace + 1));
-          } catch { /* fall through */ }
+        // Last resort: repair truncated JSON by closing open brackets/braces
+        let repaired = fixed;
+
+        // Find the last valid position by truncating at last complete value
+        const lastBrace = repaired.lastIndexOf('}');
+        const lastBracket = repaired.lastIndexOf(']');
+        const lastPos = Math.max(lastBrace, lastBracket);
+        if (lastPos > 0) {
+          repaired = repaired.substring(0, lastPos + 1);
         }
+
+        // Count unclosed brackets and braces, then close them
+        let openBraces = 0, openBrackets = 0;
+        let inString = false, escaped = false;
+        for (const ch of repaired) {
+          if (escaped) { escaped = false; continue; }
+          if (ch === '\\') { escaped = true; continue; }
+          if (ch === '"') { inString = !inString; continue; }
+          if (inString) continue;
+          if (ch === '{') openBraces++;
+          else if (ch === '}') openBraces--;
+          else if (ch === '[') openBrackets++;
+          else if (ch === ']') openBrackets--;
+        }
+        // Remove trailing comma before closing
+        repaired = repaired.replace(/,\s*$/, '');
+        // Close unclosed brackets/braces in correct order
+        for (let i = 0; i < openBrackets; i++) repaired += ']';
+        for (let i = 0; i < openBraces; i++) repaired += '}';
+
+        try {
+          return JSON.parse(repaired);
+        } catch { /* fall through */ }
+
         throw new Error(`${firstError.message}`);
       }
     }
