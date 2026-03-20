@@ -141,11 +141,11 @@ export class AIQualificationAgent extends BaseAgent {
         };
       }
 
-      // Fetch real leads from database if upstream doesn't provide them
-      // Skip leads already processed (qualified, nurture, disqualified, booked, won, lost)
-      let qualifiedLeads = inboundData.leadsProcessed?.filter((l: any) => l.score >= 60) || [];
+      // ALWAYS fetch leads from database with proper userId scoping
+      // Never trust upstream leadsProcessed — it may contain other users' leads
+      let qualifiedLeads: any[] = [];
 
-      if (qualifiedLeads.length === 0) {
+      {
         try {
           const { prisma } = await import('@/lib/prisma');
 
@@ -167,10 +167,12 @@ export class AIQualificationAgent extends BaseAgent {
 
           const dbLeads = await prisma.lead.findMany({
             where: {
-              ...ownershipCondition,
-              stage: { notIn: ['qualified', 'nurture', 'disqualified', 'booked', 'won', 'lost'] },
-              qualificationOutcome: null, // not yet qualified
-              score: { gte: 30 }, // minimum score threshold for qualification
+              AND: [
+                ownershipCondition,
+                { stage: 'new' }, // only call leads that haven't been processed yet
+                { qualificationOutcome: null }, // not yet qualified
+                { score: { gte: 30 } }, // minimum score threshold for qualification
+              ],
             },
             orderBy: { score: 'desc' },
             take: 20,

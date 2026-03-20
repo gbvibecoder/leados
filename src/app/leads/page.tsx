@@ -117,7 +117,7 @@ function AddLeadModal({ onClose, onAdded }: { onClose: () => void; onAdded: () =
     e.preventDefault();
     setSaving(true);
     // Combine country code + phone number
-    const fullPhone = form.phone ? `${countryCode}${form.phone.replace(/^\+?\d{1,4}\s?/, '')}` : '';
+    const fullPhone = form.phone ? `${countryCode}${form.phone}` : '';
     try {
       await apiFetch('/api/leados/leads', {
         method: 'POST',
