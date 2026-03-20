@@ -305,6 +305,62 @@ export default function LeadOSPage() {
             previousOutputs[agentId] = agentResult.output.data;
           }
 
+          // ── AI Qualification: wait for calls to complete before continuing ──
+          if (agentId === 'ai-qualification' && agentResult.output?.data?._pendingResolution) {
+            const agentRunId = agentResult.agentRunId;
+            const callIds = agentResult.output.data._callIds || [];
+            if (agentRunId && callIds.length > 0) {
+              addActivity({ type: 'info', message: `Waiting for ${callIds.length} AI call(s) to complete...` });
+              updateAgentStatus(agentId, { status: 'running', progress: 50 });
+
+              // Poll resolve endpoint every 15s until all calls complete (max 5 min)
+              const maxPolls = 20;
+              let resolved = false;
+              for (let poll = 0; poll < maxPolls; poll++) {
+                await new Promise(r => setTimeout(r, 15000)); // wait 15s
+
+                // Check if pipeline was cancelled
+                const pollStatus = useAppStore.getState().pipeline.status;
+                if (pollStatus !== 'running') break;
+
+                try {
+                  const resolveResult = await apiFetch('/api/agents/ai-qualification/resolve', {
+                    method: 'POST',
+                    body: JSON.stringify({ agentRunId }),
+                  }).then(r => r.json());
+
+                  if (resolveResult.resolved && resolveResult.pending === 0) {
+                    // All calls resolved — update output with real scores
+                    previousOutputs[agentId] = resolveResult.output?.data || previousOutputs[agentId];
+                    setAgentOutputs(prev => ({ ...prev, [agentId]: resolveResult.output }));
+                    addActivity({ type: 'info', message: `All ${resolveResult.completed} call(s) resolved with real BANT scores` });
+                    resolved = true;
+                    break;
+                  } else if (resolveResult.completed > 0) {
+                    addActivity({ type: 'info', message: `${resolveResult.completed}/${resolveResult.totalCalls} calls resolved, ${resolveResult.pending} still in progress...` });
+                  }
+                } catch {
+                  // Resolve endpoint failed — try again next poll
+                }
+              }
+
+              if (!resolved) {
+                addActivity({ type: 'info', message: 'Some calls still pending — continuing with available results' });
+                // Try one final resolve to get whatever completed
+                try {
+                  const finalResolve = await apiFetch('/api/agents/ai-qualification/resolve', {
+                    method: 'POST',
+                    body: JSON.stringify({ agentRunId }),
+                  }).then(r => r.json());
+                  if (finalResolve.output?.data) {
+                    previousOutputs[agentId] = finalResolve.output.data;
+                    setAgentOutputs(prev => ({ ...prev, [agentId]: finalResolve.output }));
+                  }
+                } catch { /* use whatever we have */ }
+              }
+            }
+          }
+
           // Update UI: mark agent as done
           stopAgentTimer(agentId);
           updateAgentStatus(agentId, {
