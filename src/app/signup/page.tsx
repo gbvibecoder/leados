@@ -142,7 +142,7 @@ export default function SignupPage() {
           </motion.div>
 
           <motion.form initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
-            onSubmit={handleSubmit}
+            onSubmit={handleSubmit} autoComplete="off"
             className="rounded-xl p-8 relative overflow-hidden space-y-5"
             style={{ background: 'rgba(2,2,5,0.6)', border: '1px solid rgba(255,255,255,0.05)', backdropFilter: 'blur(20px)' }}>
             <div className="absolute top-0 left-[20%] right-[20%] h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(139,92,246,0.2), transparent)' }} />
@@ -157,7 +157,7 @@ export default function SignupPage() {
               <div className="relative group">
                 <User className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-600 group-focus-within:text-violet-400 transition-colors" />
                 <input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)} required placeholder="John Doe"
-                  className="w-full cosmic-input rounded-lg pl-11 pr-4 py-3 text-sm" />
+                  autoComplete="off" className="w-full cosmic-input rounded-lg pl-11 pr-4 py-3 text-sm" />
               </div>
             </div>
 
@@ -166,7 +166,7 @@ export default function SignupPage() {
               <div className="relative group">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-600 group-focus-within:text-violet-400 transition-colors" />
                 <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="you@company.com"
-                  className="w-full cosmic-input rounded-lg pl-11 pr-4 py-3 text-sm" />
+                  autoComplete="new-email" className="w-full cosmic-input rounded-lg pl-11 pr-4 py-3 text-sm" />
               </div>
             </div>
 
@@ -175,7 +175,7 @@ export default function SignupPage() {
               <div className="relative group">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-600 group-focus-within:text-violet-400 transition-colors" />
                 <input id="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} required
-                  placeholder="Create a strong password" className="w-full cosmic-input rounded-lg pl-11 pr-11 py-3 text-sm" />
+                  placeholder="Create a strong password" autoComplete="new-password" className="w-full cosmic-input rounded-lg pl-11 pr-11 py-3 text-sm" />
                 <button type="button" onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-300 transition-colors">
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
