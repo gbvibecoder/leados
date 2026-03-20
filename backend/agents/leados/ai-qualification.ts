@@ -255,11 +255,11 @@ export class AIQualificationAgent extends BaseAgent {
         const niche = inputs.config?.niche || 'B2B SaaS Lead Generation';
         const leadsToCall = callableLeads.slice(0, 8);
 
-        // Fire all calls in parallel — initiation only (~1-2s per call).
-        // Bland AI calls take 1-5 minutes, which exceeds Vercel Hobby's 60s limit.
-        // We save callIds so the /api/agents/ai-qualification/resolve endpoint
-        // can fetch transcripts and score them after calls complete.
-        const callPromises = leadsToCall.map(async (lead: any) => {
+        // Step 1: Initiate ALL calls in parallel (fast — ~1-2s total)
+        await this.log('bland_ai_initiating', { count: leadsToCall.length });
+        const initiatedCalls: Array<{ lead: any; callId: string }> = [];
+
+        const initPromises = leadsToCall.map(async (lead: any) => {
           try {
             const callTask = `You are Alex, an AI qualification specialist from LeadOS. You're calling ${lead.name || 'the prospect'} at ${lead.company || 'their company'} to qualify them for ${niche} services. Follow the BANT framework: ask about Budget, Authority, Need, and Timeline. Be warm, consultative, never pushy. Keep the call under 5 minutes. Start by obtaining consent to record.`;
 
@@ -273,34 +273,74 @@ export class AIQualificationAgent extends BaseAgent {
             });
 
             await this.log('bland_ai_call_initiated', { callId: call.callId, lead: lead.name });
-
-            return {
-              leadName: lead.name,
-              leadEmail: lead.email,
-              company: lead.company,
-              phone: lead.phone,
-              callId: call.callId,
-              callStatus: 'initiated' as const,
-              duration: 0,
-              transcript: '',
-              recordingUrl: '',
-              analysis: {},
-              dataSource: 'live_bland_ai',
-            };
+            return { lead, callId: call.callId };
           } catch (err: any) {
             await this.log('bland_ai_call_error', { lead: lead.name, error: err.message });
             return null;
           }
         });
 
-        // Wait for all calls to be INITIATED (not completed) — this is fast
-        const results = await Promise.allSettled(callPromises);
-        for (const r of results) {
+        const initResults = await Promise.allSettled(initPromises);
+        for (const r of initResults) {
           if (r.status === 'fulfilled' && r.value) {
-            realCallResults.push(r.value);
+            initiatedCalls.push(r.value);
           }
         }
-        await this.log('bland_ai_calls_initiated', { total: realCallResults.length });
+        await this.log('bland_ai_all_initiated', { total: initiatedCalls.length });
+
+        // Step 2: Wait for ALL calls to complete in parallel (each polls independently)
+        if (initiatedCalls.length > 0) {
+          await this.log('bland_ai_waiting', { message: `Waiting for ${initiatedCalls.length} call(s) to complete...` });
+
+          const waitPromises = initiatedCalls.map(async ({ lead, callId }) => {
+            try {
+              const completed = await blandAI.waitForCall(callId, 480000); // max 8 min per call
+              await this.log('bland_ai_call_completed', { callId, lead: lead.name, status: completed.status, duration: completed.duration });
+              return {
+                leadName: lead.name,
+                leadEmail: lead.email,
+                company: lead.company,
+                phone: lead.phone,
+                callId,
+                callStatus: (completed.status === 'completed' || completed.status === 'ended') ? 'completed' as const : completed.status as any,
+                duration: completed.duration || 0,
+                transcript: completed.transcript || '',
+                recordingUrl: completed.recordingUrl || '',
+                analysis: {},
+                dataSource: 'live_bland_ai',
+              };
+            } catch (err: any) {
+              await this.log('bland_ai_wait_error', { callId, lead: lead.name, error: err.message });
+              return {
+                leadName: lead.name,
+                leadEmail: lead.email,
+                company: lead.company,
+                phone: lead.phone,
+                callId,
+                callStatus: 'error' as const,
+                duration: 0,
+                transcript: '',
+                recordingUrl: '',
+                analysis: {},
+                dataSource: 'live_bland_ai',
+              };
+            }
+          });
+
+          const waitResults = await Promise.allSettled(waitPromises);
+          for (const r of waitResults) {
+            if (r.status === 'fulfilled' && r.value) {
+              realCallResults.push(r.value);
+            }
+          }
+
+          const completed = realCallResults.filter(r => r.callStatus === 'completed');
+          await this.log('bland_ai_all_completed', {
+            total: realCallResults.length,
+            completed: completed.length,
+            withTranscript: completed.filter(r => r.transcript.length > 50).length,
+          });
+        }
       }
 
       const userMessage = JSON.stringify({
@@ -372,8 +412,10 @@ For leads in emailOnlyLeads: set callStatus to "no_valid_phone", outcome to "med
           }
         }
       } else {
-        // Calls were initiated — inject real callIds into LLM results and mark as pending.
-        // Scores will be filled in by /api/agents/ai-qualification/resolve after calls complete.
+        // Real calls completed — inject real data into LLM results
+        // The LLM scored based on real transcripts, but we override with actual call metadata
+        const completedCalls = realCallResults.filter(r => r.callStatus === 'completed');
+
         if (parsed.callResults) {
           for (const result of parsed.callResults) {
             const realCall = realCallResults.find((rc) =>
@@ -381,32 +423,25 @@ For leads in emailOnlyLeads: set callStatus to "no_valid_phone", outcome to "med
             );
             if (realCall) {
               result.callId = realCall.callId;
-              result.callStatus = 'initiated';
+              result.callStatus = realCall.callStatus;
+              result.duration = realCall.duration || result.duration;
+              result.transcript = realCall.transcript || result.transcript;
+              result.recordingUrl = realCall.recordingUrl || '';
               result.dataSource = 'live_bland_ai';
+              // Keep LLM's BANT scores since they were generated from the real transcript
             }
-            // Zero LLM-fabricated scores — real scores come from resolve endpoint
-            result.score = 0;
-            result.duration = 0;
-            result.bantBreakdown = { budget: 0, authority: 0, need: 0, timeline: 0 };
-            result.transcript = '';
-            result.outcome = 'pending_resolution';
           }
         }
-        // Zero summary — will be recomputed by resolve endpoint
+
+        // Recompute summary from real data
         if (parsed.summary) {
           parsed.summary.totalCallsAttempted = realCallResults.length;
-          parsed.summary.totalCallsCompleted = 0;
-          parsed.summary.avgCallDuration = 0;
-          parsed.summary.avgScore = 0;
-          parsed.summary.highIntentCheckout = 0;
-          parsed.summary.highIntentSales = 0;
-          parsed.summary.mediumIntent = 0;
-          parsed.summary.lowIntent = 0;
-          parsed.summary.qualificationRate = 0;
+          parsed.summary.totalCallsCompleted = completedCalls.length;
+          parsed.summary.totalNoAnswer = realCallResults.filter(r => r.callStatus === 'no-answer' || r.callStatus === 'no_answer').length;
+          parsed.summary.avgCallDuration = completedCalls.length > 0
+            ? Math.round(completedCalls.reduce((sum: number, r: any) => sum + (r.duration || 0), 0) / completedCalls.length)
+            : 0;
         }
-        // Mark output as needing resolution
-        parsed._pendingResolution = true;
-        parsed._callIds = realCallResults.map(r => r.callId).filter(Boolean);
       }
 
       // Merge real data back into LLM output — LLM often fabricates company names

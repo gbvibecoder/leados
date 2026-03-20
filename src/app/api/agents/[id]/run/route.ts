@@ -3,8 +3,9 @@ import { prisma } from '@/lib/prisma';
 import { createLeadOSAgents } from '@backend/agents/leados/index';
 import { getUserId } from '@/lib/auth';
 
-// Vercel Hobby allows up to 60s per invocation
-export const maxDuration = 60;
+// AI Qualification waits for Bland AI calls (up to 8 min).
+// Vercel Pro: 300s. Vercel Hobby: 60s (will timeout — use local dev or Pro plan).
+export const maxDuration = 300;
 
 // Singleton agent instances
 let agentMap: Map<string, any> | null = null;
