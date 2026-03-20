@@ -255,11 +255,10 @@ export class AIQualificationAgent extends BaseAgent {
         const niche = inputs.config?.niche || 'B2B SaaS Lead Generation';
         const leadsToCall = callableLeads.slice(0, 8);
 
-        // Fire all calls in parallel WITHOUT waiting for completion.
-        // Bland AI handles calls asynchronously — each call takes 1-5 minutes.
-        // We can't wait inside a 60s serverless function. Instead, we initiate
-        // the calls and record the callIds. Results can be fetched later via
-        // the Bland AI dashboard or a separate polling endpoint.
+        // Fire all calls in parallel — initiation only (~1-2s per call).
+        // Bland AI calls take 1-5 minutes, which exceeds Vercel Hobby's 60s limit.
+        // We save callIds so the /api/agents/ai-qualification/resolve endpoint
+        // can fetch transcripts and score them after calls complete.
         const callPromises = leadsToCall.map(async (lead: any) => {
           try {
             const callTask = `You are Alex, an AI qualification specialist from LeadOS. You're calling ${lead.name || 'the prospect'} at ${lead.company || 'their company'} to qualify them for ${niche} services. Follow the BANT framework: ask about Budget, Authority, Need, and Timeline. Be warm, consultative, never pushy. Keep the call under 5 minutes. Start by obtaining consent to record.`;
@@ -294,7 +293,7 @@ export class AIQualificationAgent extends BaseAgent {
           }
         });
 
-        // Wait for all calls to be INITIATED (not completed) — this is fast (~1-2s per call)
+        // Wait for all calls to be INITIATED (not completed) — this is fast
         const results = await Promise.allSettled(callPromises);
         for (const r of results) {
           if (r.status === 'fulfilled' && r.value) {
@@ -319,10 +318,12 @@ export class AIQualificationAgent extends BaseAgent {
         },
         IMPORTANT_INSTRUCTION: qualifiedLeads.length > 0
           ? realCallResults.length > 0
-            ? `USE ONLY the real leads provided and the REAL call data from Bland AI. Do NOT invent fictional leads or fabricate call results. Use the actual transcript, duration, and status from the real calls to generate BANT scores.
-For leads in emailOnlyLeads (invalid/missing phone): set callStatus to "no_valid_phone", outcome to "medium_intent", and routingAction to "Route to email nurture — no valid phone for voice call".`
+            ? `USE ONLY the real leads provided and the REAL call data from Bland AI. Do NOT invent fictional leads or fabricate call results.
+CRITICAL: Each call in realData.callResults has a real transcript and duration from a completed Bland AI call. Read the transcript carefully and score each call using the BANT framework based on what was ACTUALLY said. Use the real duration and callStatus. Do NOT override them with made-up values.
+For leads in emailOnlyLeads (invalid/missing phone): set callStatus to "no_valid_phone", outcome to "medium_intent", and routingAction to "Route to email nurture — no valid phone for voice call".
+For summary: count from the real call results — totalCallsAttempted = number of calls, totalCallsCompleted = calls with callStatus "completed", avgScore = average of real BANT scores you assigned, etc.`
             : blandAvailable
-            ? `USE ONLY the real leads provided. Real Bland AI calls were attempted for callable leads — use the call data provided.
+            ? `USE ONLY the real leads provided. Real Bland AI calls were attempted but may not have completed in time.
 For leads in emailOnlyLeads (invalid/missing phone): set callStatus to "no_valid_phone", outcome to "medium_intent", and routingAction to "Route to email nurture — no valid phone for voice call".`
             : `IMPORTANT: No voice calling API (Bland AI) is configured. Do NOT pretend calls were made.
 For ALL leads: set callStatus to "not_called", outcome to "pending_call", routingAction to "Awaiting voice qualification — Bland AI API key not configured". Generate the call script, BANT questions, and qualification thresholds but do NOT fabricate call results or scores. Set score to 0 and leave transcript empty.
@@ -343,7 +344,7 @@ For leads in emailOnlyLeads: set callStatus to "no_valid_phone", outcome to "med
         parsed = { reasoning: `LLM JSON parse failed: ${parseErr.message}`, confidence: 0 };
       }
 
-      // Force-zero LLM-fabricated call metrics when no real calls were made
+      // Data integrity: handle metrics based on whether real calls were made
       if (realCallResults.length === 0) {
         // No real Bland AI calls — zero all summary metrics
         if (parsed.summary) {
@@ -358,7 +359,6 @@ For leads in emailOnlyLeads: set callStatus to "no_valid_phone", outcome to "med
           parsed.summary.lowIntent = 0;
           parsed.summary.qualificationRate = 0;
         }
-        // Zero individual call results — LLM fabricates scores and durations
         if (parsed.callResults) {
           for (const result of parsed.callResults) {
             if (!blandAvailable) {
@@ -372,51 +372,41 @@ For leads in emailOnlyLeads: set callStatus to "no_valid_phone", outcome to "med
           }
         }
       } else {
-        // Real calls exist — check if any actually COMPLETED (not just initiated)
-        const completed = realCallResults.filter(r => r.callStatus === 'completed');
-        const allJustInitiated = completed.length === 0;
-
-        if (parsed.summary) {
-          parsed.summary.totalCallsAttempted = realCallResults.length;
-          parsed.summary.totalCallsCompleted = completed.length;
-          parsed.summary.totalNoAnswer = realCallResults.filter(r => r.callStatus === 'no_answer').length;
-          parsed.summary.avgCallDuration = completed.length > 0
-            ? Math.round(completed.reduce((sum: number, r: any) => sum + (r.duration || 0), 0) / completed.length)
-            : 0;
-
-          // If no calls completed yet (all just initiated), zero out LLM-fabricated scores
-          if (allJustInitiated) {
-            parsed.summary.avgScore = 0;
-            parsed.summary.highIntentCheckout = 0;
-            parsed.summary.highIntentSales = 0;
-            parsed.summary.mediumIntent = 0;
-            parsed.summary.lowIntent = 0;
-            parsed.summary.qualificationRate = 0;
-          }
-        }
-
-        // Zero individual call results for calls that haven't completed
+        // Calls were initiated — inject real callIds into LLM results and mark as pending.
+        // Scores will be filled in by /api/agents/ai-qualification/resolve after calls complete.
         if (parsed.callResults) {
           for (const result of parsed.callResults) {
-            // Find matching real call
-            const realCall = realCallResults.find(
-              (r: any) => r.leadEmail === result.leadEmail || r.leadName === result.leadName
+            const realCall = realCallResults.find((rc) =>
+              rc.leadEmail === result.leadEmail || rc.leadName === result.leadName
             );
-            const callCompleted = realCall?.callStatus === 'completed';
-
-            if (!callCompleted) {
-              // Call not completed — don't trust LLM fabricated scores
-              result.score = 0;
-              result.duration = 0;
-              result.bantBreakdown = { budget: 0, authority: 0, need: 0, timeline: 0 };
-              result.transcript = '';
-              result.callStatus = realCall?.callStatus || 'initiated';
-              result.outcome = 'pending_call';
-              result.callId = realCall?.callId || null;
-              result.routingAction = 'Call initiated — awaiting completion. Check Bland AI dashboard for results.';
+            if (realCall) {
+              result.callId = realCall.callId;
+              result.callStatus = 'initiated';
+              result.dataSource = 'live_bland_ai';
             }
+            // Zero LLM-fabricated scores — real scores come from resolve endpoint
+            result.score = 0;
+            result.duration = 0;
+            result.bantBreakdown = { budget: 0, authority: 0, need: 0, timeline: 0 };
+            result.transcript = '';
+            result.outcome = 'pending_resolution';
           }
         }
+        // Zero summary — will be recomputed by resolve endpoint
+        if (parsed.summary) {
+          parsed.summary.totalCallsAttempted = realCallResults.length;
+          parsed.summary.totalCallsCompleted = 0;
+          parsed.summary.avgCallDuration = 0;
+          parsed.summary.avgScore = 0;
+          parsed.summary.highIntentCheckout = 0;
+          parsed.summary.highIntentSales = 0;
+          parsed.summary.mediumIntent = 0;
+          parsed.summary.lowIntent = 0;
+          parsed.summary.qualificationRate = 0;
+        }
+        // Mark output as needing resolution
+        parsed._pendingResolution = true;
+        parsed._callIds = realCallResults.map(r => r.callId).filter(Boolean);
       }
 
       // Merge real data back into LLM output — LLM often fabricates company names
@@ -435,9 +425,10 @@ For leads in emailOnlyLeads: set callStatus to "no_valid_phone", outcome to "med
         }
       }
 
-      // If we have real call data, merge it into the output
-      if (realCallResults.length > 0) {
-        // Keep LLM-generated script/thresholds but use real call results where available
+      // Merge real Bland AI call data into LLM output — real data takes precedence
+      // for callId, transcript, duration, status, recording; LLM scores are kept
+      // since they were generated from the real transcript
+      if (realCallResults.length > 0 && parsed.callResults) {
         const enrichedResults = parsed.callResults.map((r: any) => {
           const realCall = realCallResults.find((rc) => rc.leadEmail === r.leadEmail || rc.leadName === r.leadName);
           if (realCall) {
@@ -526,7 +517,7 @@ For leads in emailOnlyLeads: set callStatus to "no_valid_phone", outcome to "med
         confidence: parsed.confidence || 85,
       };
     } catch (error: any) {
-      this.status = 'done';
+      this.status = 'error';
       await this.log('run_error', { error: error.message });
       return {
         success: false,

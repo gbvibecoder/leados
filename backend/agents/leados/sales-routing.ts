@@ -42,25 +42,30 @@ Apply a prioritized set of routing rules. Each rule has:
 - SLA: maximum time allowed to route (hot leads < 60s)
 
 RESPONSIBILITY 2: ROUTING DECISIONS
-Based on BANT qualification score from Agent 9:
+Based on BANT qualification score from Agent 9 AND explicit budget confirmation from the AI qualification call transcript/data.
+You MUST check BOTH the BANT score AND whether the prospect explicitly confirmed budget availability during the qualification call. A high BANT score alone is NOT sufficient for checkout routing — budget must be explicitly confirmed (e.g., prospect stated a dollar amount, confirmed they have budget allocated, or agreed to pricing).
 
-🔥 HOT → Checkout (score >= 85, budget confirmed)
+🔥 HOT → Checkout (score >= 85 AND budget explicitly confirmed)
+  - High intent + confirmed budget → send to checkout/payment page
   - Send directly to Stripe payment page with pre-filled info
   - SLA: < 60 seconds from qualification
   - Auto-send checkout link via SMS + email
+  - If score >= 85 but budget NOT confirmed, route to sales_call instead
 
-🌡 WARM → Sales Call (score 70-84, complex/enterprise)
-  - Book into human sales rep's calendar via Calendly
+🌡 WARM → Sales Call (score 70-84, OR score >= 85 without confirmed budget, OR complex/enterprise needs)
+  - Complex needs → book into Sales Rep's calendar via Calendly
   - Round-robin assignment based on rep specialization + capacity
   - SLA: < 5 minutes — instant booking confirmation
 
-💧 MEDIUM → Nurture (score 50-69)
+💧 MEDIUM → Nurture (score 50-69, medium interest, no urgency)
+  - Medium interest, no urgency → enter nurture email sequence
   - Enter automated email drip sequence
   - 7-day cadence with value-first content
   - Re-qualification after 3 interactions
   - SLA: < 1 hour
 
-❄ COLD → Disqualify (score < 50)
+❄ COLD → Disqualify (score < 50, low interest or bad fit)
+  - Low interest or bad fit → disqualify, remove from pipeline
   - Mark as disqualified in CRM
   - Document reason for disqualification
   - Schedule re-engagement in 90 days
@@ -79,8 +84,12 @@ RESPONSIBILITY 4: LATENCY TRACKING
 - Track avg routing latency for performance monitoring
 
 RESPONSIBILITY 5: CRM UPDATES
-- Update lead stage in CRM after routing
-- Set pipeline stage based on route
+- Update CRM stage and log routing decision
+- Map routes to HubSpot lifecycle stages:
+  - checkout → "opportunity"
+  - sales_call → "salesqualifiedlead"
+  - nurture → "marketingqualifiedlead"
+  - disqualify → "other"
 - Add routing metadata (reason, score, timestamp, assigned rep)
 
 Return ONLY valid JSON (no markdown, no explanation outside JSON) with this structure:
@@ -97,12 +106,12 @@ Return ONLY valid JSON (no markdown, no explanation outside JSON) with this stru
     "roundRobinConfig": {
       "enabled": "boolean",
       "reps": [{
-        "name": "string",
-        "email": "string",
-        "specialization": "string",
-        "capacity": "number",
-        "currentLoad": "number",
-        "calendlyUrl": "string"
+        "name": "string (full name of sales rep)",
+        "email": "string (rep email for notifications and CRM assignment)",
+        "specialization": "string (Enterprise|Mid-Market|SMB|General)",
+        "maxCapacity": "number (maximum active deals this rep can handle)",
+        "currentLoad": "number (current number of active deals assigned)",
+        "calendlyUrl": "string (rep-specific Calendly booking link)"
       }]
     }
   },
@@ -210,20 +219,28 @@ export class SalesRoutingAgent extends BaseAgent {
       for (const result of callResults) {
         if (!result.leadName && !result.leadEmail) continue;
         const outcome = result.outcome || 'pending_call';
+        // Check for explicit budget confirmation from qualification call data
+        const budgetConfirmed = result.budgetConfirmed === true
+          || result.bantBreakdown?.budget >= 80
+          || (result.transcript && /budget.*(confirm|approv|allocat|ready|set aside)/i.test(result.transcript));
         // Map qualification outcome to routing decision
+        // SOP: checkout requires BOTH high intent AND confirmed budget
         let route: string;
         let reason: string;
-        if (outcome === 'high_intent_checkout') {
+        if (outcome === 'high_intent_checkout' && budgetConfirmed) {
           route = 'checkout';
-          reason = 'High BANT score — ready to buy, route to checkout';
+          reason = 'High BANT score + budget explicitly confirmed — route to checkout/payment';
+        } else if (outcome === 'high_intent_checkout' && !budgetConfirmed) {
+          route = 'sales_call';
+          reason = 'High BANT score but budget NOT explicitly confirmed — route to sales call for budget discussion';
         } else if (outcome === 'high_intent_sales') {
           route = 'sales_call';
-          reason = 'High intent but needs human conversation — book sales call';
+          reason = 'High intent, complex needs — book sales call';
         } else if (outcome === 'medium_intent') {
           route = 'nurture';
           reason = 'Medium interest — add to nurture sequence';
         } else if (outcome === 'low_intent' || outcome === 'disqualified') {
-          route = 'disqualified';
+          route = 'disqualify';
           reason = 'Low BANT score or disqualified during call';
         } else {
           route = 'nurture';
@@ -261,7 +278,7 @@ export class SalesRoutingAgent extends BaseAgent {
           route = 'nurture';
           reason = 'Warm lead — add to nurture sequence';
         } else {
-          route = 'disqualified';
+          route = 'disqualify';
           reason = `Low inbound score (${score}) — does not meet qualification threshold`;
         }
         routedLeads.push({
@@ -296,7 +313,7 @@ export class SalesRoutingAgent extends BaseAgent {
           checkout: routedLeads.filter((l: any) => l.route === 'checkout').length,
           salesCall: routedLeads.filter((l: any) => l.route === 'sales_call').length,
           nurture: routedLeads.filter((l: any) => l.route === 'nurture').length,
-          disqualified: routedLeads.filter((l: any) => l.route === 'disqualified' || l.route === 'disqualify').length,
+          disqualified: routedLeads.filter((l: any) => l.route === 'disqualify').length,
           avgRoutingLatency: '0ms',
           slaBreaches: 0,
           conversionProjection: 0,
@@ -328,7 +345,7 @@ export class SalesRoutingAgent extends BaseAgent {
         await Promise.all(cleanOutput.routedLeads.slice(0, 20).map(async (lead: any) => {
           try {
             const stage = lead.route === 'checkout' ? 'opportunity'
-              : lead.route === 'sales_call' ? 'qualifiedtobuy'
+              : lead.route === 'sales_call' ? 'salesqualifiedlead'
               : lead.route === 'nurture' ? 'marketingqualifiedlead'
               : 'other';
             await hubspot.upsertContact({

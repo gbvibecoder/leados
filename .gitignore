@@ -1,4 +1,5 @@
 node_modules
+temp_folder
 .next
 .env
 .env.local

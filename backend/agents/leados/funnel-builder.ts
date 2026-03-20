@@ -8,6 +8,37 @@ const SYSTEM_PROMPT = `You are the Funnel Builder Agent for LeadOS. Generate lan
 
 You receive JSON with the validated offer (ICP, pricing, guarantee, positioning).
 
+## Proven Landing Page Structure (SOP)
+
+Follow this exact section order for every page:
+
+1. **Hero**: Bold headline with a specific outcome + subheadline explaining how. Single CTA button linking to Calendly or lead form.
+2. **Social Proof Bar**: Scrolling logo strip of existing clients. Establishes trust immediately.
+3. **Problem Section**: 3 pain points the target audience recognises. Use their language.
+4. **Solution Section**: How it works in 3-4 numbered steps with icons or images. Keep it visual.
+5. **What's Included**: List deliverables clearly. Use checkmarks or feature cards.
+6. **Comparison Table** (optional): Us vs traditional/competitors. Green checks vs red X's.
+7. **Testimonials**: Video testimonials preferred over text. Show real names, roles, companies.
+8. **Pricing** (if applicable): Transparent tiers or single offer with clear CTA.
+9. **FAQ**: 5-10 questions addressing objections. Collapsible accordion format.
+10. **Final CTA**: Repeat the main offer and button. Calendly embed or lead form.
+
+## Reference Sites — Proven Landing Page Designs
+
+Study these for structure and conversion patterns:
+- digifoot.de — B2B health/BGM offer. Hero + logo bar + pilot offer + 4-step process + video testimonials + FAQ
+- neo24.neobim.ai — B2B SaaS. Problem/solution + comparison table + pricing + process steps. Strong urgency angle
+- leadeasy.ai — B2B lead gen. Pain points + customer success + 3-tier pricing + feature grid. Calendly CTA throughout
+- zww-deutschland.de — B2B consulting. Problem vs solution split + eligibility + 4-step process + tiered packages
+
+## Template Reuse Rule
+
+If this is a niche we've built pages for before, reuse the proven template structure. Only create a new design when entering a completely new niche. When a page outperforms existing ones, save it as the new niche template.
+
+## Lead Form Fields (SOP)
+
+Every lead form must collect: name, email, phone, company, and 1-2 qualifying questions relevant to the niche.
+
 Return ONLY valid JSON (no markdown) with this structure:
 {
   "landingPage": {
@@ -16,16 +47,26 @@ Return ONLY valid JSON (no markdown) with this structure:
     "headline": "string — transformation promise as primary headline",
     "subheadline": "string — supporting subheadline",
     "sections": [
-      { "type": "hero", "content": { "headline": "string", "subheadline": "string", "cta": "string", "ctaSubtext": "string", "socialProofBar": "string", "guaranteeBadge": "string" } },
-      { "type": "painPoints", "content": { "sectionTitle": "string", "points": [{ "icon": "string", "title": "string", "description": "string" }] } },
-      { "type": "solution", "content": { "sectionTitle": "string", "transformationPromise": "string", "uniqueMechanism": "string", "features": ["string"] } },
-      { "type": "socialProof", "content": { "testimonials": [{ "quote": "string", "name": "string", "title": "string", "metric": "string" }], "logos": ["string"] } },
+      { "type": "hero", "content": { "headline": "string", "subheadline": "string", "cta": "string", "ctaLink": "string — Calendly URL or #lead-form", "ctaSubtext": "string", "guaranteeBadge": "string" } },
+      { "type": "socialProofBar", "content": { "logos": ["string — client/partner logo names"], "label": "string — e.g. Trusted by 500+ companies" } },
+      { "type": "problem", "content": { "sectionTitle": "string", "painPoints": [{ "icon": "string", "title": "string", "description": "string — use target audience language" }] } },
+      { "type": "solution", "content": { "sectionTitle": "string", "steps": [{ "stepNumber": "number", "icon": "string", "title": "string", "description": "string" }] } },
+      { "type": "whatsIncluded", "content": { "sectionTitle": "string", "deliverables": [{ "icon": "checkmark", "title": "string", "description": "string" }] } },
+      { "type": "comparisonTable", "content": { "sectionTitle": "string", "columns": ["Us", "Traditional/Competitors"], "rows": [{ "feature": "string", "us": true, "them": false }] } },
+      { "type": "testimonials", "content": { "sectionTitle": "string", "items": [{ "quote": "string", "name": "string", "role": "string", "company": "string", "format": "video | text", "videoUrl": "string | null", "metric": "string" }] } },
       { "type": "pricing", "content": { "sectionTitle": "string", "tiers": [{ "name": "string", "price": "string", "highlight": false, "badge": "string", "cta": "string", "features": ["string"] }], "guarantee": "string" } },
-      { "type": "faq", "content": { "sectionTitle": "string", "questions": [{ "q": "string", "a": "string" }] } },
-      { "type": "cta", "content": { "headline": "string", "subheadline": "string", "ctaButton": "string", "ctaSubtext": "string" } }
+      { "type": "faq", "content": { "sectionTitle": "string", "format": "accordion", "questions": [{ "q": "string", "a": "string" }] } },
+      { "type": "finalCta", "content": { "headline": "string", "subheadline": "string", "ctaButton": "string", "ctaLink": "string — Calendly embed or #lead-form", "ctaSubtext": "string" } }
     ],
     "cta": "string",
     "seoMeta": { "title": "string", "description": "string" }
+  },
+  "testChecklist": {
+    "formSubmissionTest": "Submit a test lead through the form and verify it appears as a CRM entry",
+    "bookingTest": "Confirm Calendly booking flow works end-to-end",
+    "mobileResponsivenessCheck": "Verify all sections render correctly on mobile devices (375px, 768px)",
+    "pageLoadSpeedCheck": "Run Lighthouse audit — target LCP < 2.5s, CLS < 0.1",
+    "trackingVerification": "Confirm UTM parameters are captured, Meta Pixel and Google Ads conversion pixels fire on form submit and booking"
   },
   "reasoning": "string",
   "confidence": "number 0-100"
@@ -288,25 +329,52 @@ export class FunnelBuilderAgent extends BaseAgent {
           headline: transformationPromise,
           subheadline: `B2B companies use our AI engine to build a predictable, scalable pipeline for ${niche.toLowerCase()} — fully autonomous, performance-guaranteed, and live in 48 hours`,
           sections: [
-            { type: 'hero', content: { headline: transformationPromise, subheadline: `Built for companies investing in ${niche.toLowerCase()}`, cta: 'Book Your Free Strategy Call', ctaSubtext: 'No commitment. See your custom growth plan in 30 minutes.', socialProofBar: `Trusted by 500+ companies for ${niche.toLowerCase()}`, guaranteeBadge: guarantee } },
-            { type: 'painPoints', content: { sectionTitle: 'Sound Familiar?', points: [
+            { type: 'hero', content: { headline: transformationPromise, subheadline: `Built for companies investing in ${niche.toLowerCase()}`, cta: 'Book Your Free Strategy Call', ctaLink: '#lead-form', ctaSubtext: 'No commitment. See your custom growth plan in 30 minutes.', guaranteeBadge: guarantee } },
+            { type: 'socialProofBar', content: { logos: ['TechCorp', 'GrowthHQ', 'ScaleUp Inc', 'Pipeline Pro', 'RevenueLab'], label: `Trusted by 500+ companies for ${niche.toLowerCase()}` } },
+            { type: 'problem', content: { sectionTitle: 'Sound Familiar?', painPoints: [
               { icon: 'chart-down', title: 'Feast-or-Famine Pipeline', description: 'One month you\'re drowning in leads, the next it\'s crickets.' },
               { icon: 'money-burn', title: 'Burning Cash on Bad Leads', description: 'Spending $200+ per lead on channels that produce tire-kickers.' },
               { icon: 'clock', title: 'Sales Team Wasting Time', description: 'Your reps spend 60% of their day chasing unqualified leads.' },
-              { icon: 'bottleneck', title: 'Founder-Led Sales Bottleneck', description: 'The CEO is still closing most deals because there\'s no repeatable system.' },
             ] } },
-            { type: 'solution', content: { sectionTitle: `Meet LeadFlow AI: Your Autonomous ${niche} Engine`, transformationPromise, uniqueMechanism: `Our 13-Agent Orchestration Engine deploys specialized AI agents across every stage of your pipeline — working 24/7 for ${niche.toLowerCase()}.`, features: ['AI-powered multi-channel campaigns', 'Autonomous lead scoring and AI voice qualification', 'Real-time budget reallocation', 'Full-funnel multi-touch attribution'] } },
+            { type: 'solution', content: { sectionTitle: `How It Works: Your Autonomous ${niche} Engine`, steps: [
+              { stepNumber: 1, icon: 'search', title: 'We Research Your Market', description: 'AI agents analyze your niche, competitors, and ideal buyers to build a custom strategy.' },
+              { stepNumber: 2, icon: 'funnel', title: 'We Build Your Funnel', description: 'Landing pages, lead forms, and booking flows go live within 48 hours.' },
+              { stepNumber: 3, icon: 'megaphone', title: 'We Launch Campaigns', description: 'Multi-channel outreach across paid ads, email, and LinkedIn — fully automated.' },
+              { stepNumber: 4, icon: 'handshake', title: 'You Close Deals', description: 'AI-qualified leads land in your CRM, scored and ready for your sales team.' },
+            ] } },
+            { type: 'whatsIncluded', content: { sectionTitle: 'What\'s Included', deliverables: [
+              { icon: 'checkmark', title: 'AI-Powered Multi-Channel Campaigns', description: 'Google Ads, Meta, email, and LinkedIn outreach managed by AI agents.' },
+              { icon: 'checkmark', title: 'Autonomous Lead Scoring & Voice Qualification', description: 'Every lead scored on BANT criteria with AI voice calls.' },
+              { icon: 'checkmark', title: 'Real-Time Budget Reallocation', description: 'Ad spend automatically shifted to highest-performing channels.' },
+              { icon: 'checkmark', title: 'Full-Funnel Multi-Touch Attribution', description: 'Know exactly which touchpoints drive revenue.' },
+              { icon: 'checkmark', title: 'CRM Integration & Data Hygiene', description: 'HubSpot, GoHighLevel, or Salesforce — always clean, always current.' },
+            ] } },
+            { type: 'comparisonTable', content: { sectionTitle: 'Why LeadFlow AI vs The Old Way', columns: ['LeadFlow AI', 'Traditional Agencies'], rows: [
+              { feature: 'Fully autonomous — runs 24/7', us: true, them: false },
+              { feature: 'AI-qualified leads (not just MQLs)', us: true, them: false },
+              { feature: 'Live in 48 hours', us: true, them: false },
+              { feature: 'Multi-channel orchestration', us: true, them: false },
+              { feature: 'Performance guarantee', us: true, them: false },
+              { feature: 'Transparent, real-time reporting', us: true, them: false },
+            ] } },
+            { type: 'testimonials', content: { sectionTitle: 'What Our Clients Say', items: [
+              { quote: 'We went from 12 to 47 qualified meetings per month in 60 days.', name: 'Sarah Chen', role: 'VP Marketing', company: 'TechCorp', format: 'video', videoUrl: null, metric: '4x qualified meetings' },
+              { quote: 'LeadFlow replaced our entire outbound team and cut our CPL by 60%.', name: 'Marcus Johnson', role: 'CEO', company: 'GrowthHQ', format: 'video', videoUrl: null, metric: '60% lower CPL' },
+              { quote: 'The AI qualification calls are indistinguishable from our best SDRs.', name: 'Priya Patel', role: 'Head of Sales', company: 'ScaleUp Inc', format: 'text', videoUrl: null, metric: '3x conversion rate' },
+            ] } },
             { type: 'pricing', content: { sectionTitle: 'Simple, Transparent Pricing', tiers: [
               { name: 'Starter', price: basePrice, highlight: false, cta: 'Get Started', features: ['5 active campaigns', 'AI lead scoring', '500 outbound/mo', 'Weekly reports'] },
               { name: 'Growth', price: offerData.pricingTiers?.[1]?.price || '$5,000/mo', highlight: true, badge: 'Most Popular', cta: 'Book Strategy Call', features: ['Unlimited campaigns', 'AI voice qualification', '2,500 outbound + LinkedIn', 'Multi-touch attribution'] },
               { name: 'Enterprise', price: offerData.pricingTiers?.[2]?.price || '$7,500/mo', highlight: false, cta: 'Talk to Sales', features: ['Everything in Growth', 'Custom AI scripts', '10,000 outbound + LinkedIn', 'White-glove funnel design'] },
             ], guarantee } },
-            { type: 'faq', content: { sectionTitle: 'Frequently Asked Questions', questions: [
+            { type: 'faq', content: { sectionTitle: 'Frequently Asked Questions', format: 'accordion', questions: [
               { q: 'How long until I see results?', a: 'Most clients see first qualified leads within 7-14 days of launch.' },
               { q: 'Do I need to provide content?', a: 'No — our Content & Creative Agent produces everything autonomously.' },
               { q: 'Can I use my existing CRM?', a: 'Yes — we integrate with HubSpot, GoHighLevel, and Salesforce.' },
+              { q: 'What if it doesn\'t work?', a: `We offer a ${guarantee}. If we don\'t deliver, you don\'t pay.` },
+              { q: 'How is this different from a marketing agency?', a: 'We\'re fully autonomous AI — no account managers, no delays, no markup on ad spend. You get 24/7 optimization at a fraction of the cost.' },
             ] } },
-            { type: 'cta', content: { headline: 'Ready to Transform Your Pipeline?', subheadline: 'Book a free 30-minute strategy call with a custom growth projection.', ctaButton: 'Book Your Free Strategy Call', ctaSubtext: 'Limited spots — we only onboard 10 new clients per month', urgency: true } },
+            { type: 'finalCta', content: { headline: 'Ready to Transform Your Pipeline?', subheadline: 'Book a free 30-minute strategy call with a custom growth projection.', ctaButton: 'Book Your Free Strategy Call', ctaLink: '#lead-form', ctaSubtext: 'Limited spots — we only onboard 10 new clients per month' } },
           ],
           cta: 'Book Your Free Strategy Call',
           seoMeta: { title: `LeadFlow AI — ${transformationPromise}`, description: `B2B companies use LeadFlow AI for autonomous, AI-powered ${niche.toLowerCase()}. ${guarantee}.`, ogImage: '/og/leadflow-ai.png' },
@@ -316,12 +384,12 @@ export class FunnelBuilderAgent extends BaseAgent {
       // ── Deterministic sections — no LLM needed ────────────────────
       parsed.leadForm = parsed.leadForm || {
         fields: [
-          { name: 'firstName', type: 'text', label: 'First Name', placeholder: 'John', required: true },
-          { name: 'lastName', type: 'text', label: 'Last Name', placeholder: 'Smith', required: true },
-          { name: 'workEmail', type: 'email', label: 'Work Email', placeholder: 'john@company.com', required: true },
+          { name: 'fullName', type: 'text', label: 'Full Name', placeholder: 'John Smith', required: true },
+          { name: 'email', type: 'email', label: 'Email', placeholder: 'john@company.com', required: true },
+          { name: 'phone', type: 'phone', label: 'Phone Number', placeholder: '+1 (555) 000-0000', required: true },
           { name: 'company', type: 'text', label: 'Company', placeholder: 'Acme Inc', required: true },
-          { name: 'phone', type: 'phone', label: 'Phone Number', placeholder: '+1 (555) 000-0000', required: false },
-          { name: 'monthlyBudget', type: 'select', label: 'Monthly Marketing Budget', placeholder: 'Select range', required: true, options: ['Under $5K', '$5K-$10K', '$10K-$25K', '$25K-$50K', '$50K+'] },
+          { name: 'qualifyingQuestion1', type: 'select', label: `What is your biggest challenge with ${niche.toLowerCase()}?`, placeholder: 'Select one', required: true, options: ['Not enough leads', 'Low lead quality', 'High cost per lead', 'No predictable pipeline', 'Other'] },
+          { name: 'qualifyingQuestion2', type: 'select', label: 'What is your monthly marketing budget?', placeholder: 'Select range', required: true, options: ['Under $5K', '$5K-$10K', '$10K-$25K', '$25K-$50K', '$50K+'] },
         ],
         submitButtonText: 'Book Your Free Strategy Call',
         submitAction: 'Redirect to Calendly, create HubSpot contact, fire conversion events',
@@ -367,6 +435,14 @@ export class FunnelBuilderAgent extends BaseAgent {
         { type: 'booking', name: 'Demo Booking Page', url: '/funnel/book', description: 'Calendly embed with pre-call questions' },
         { type: 'thank-you', name: 'Confirmation Page', url: '/funnel/thank-you', description: 'Post-booking confirmation' },
       ];
+
+      parsed.testChecklist = {
+        formSubmissionTest: 'Submit a test lead through the form and verify it appears as a CRM entry in HubSpot',
+        bookingTest: 'Confirm Calendly booking flow works end-to-end (form submit -> redirect -> booking confirmation)',
+        mobileResponsivenessCheck: 'Verify all sections render correctly on mobile devices (375px, 768px breakpoints)',
+        pageLoadSpeedCheck: 'Run Lighthouse audit — target LCP < 2.5s, CLS < 0.1, FID < 100ms',
+        trackingVerification: 'Confirm UTM parameters are captured on form submit, Meta Pixel fires on page view and lead events, Google Ads conversion pixel fires on booking',
+      };
 
       // ── Deploy to Webflow if available ────────────────────────────
       if (webflow.isWebflowAvailable()) {
