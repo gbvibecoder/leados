@@ -188,7 +188,12 @@ export class InboundCaptureAgent extends BaseAgent {
         }
 
         dbLeads = await prisma.lead.findMany({
-          where: ownershipCondition,
+          where: {
+            AND: [
+              ownershipCondition,
+              { stage: 'new' }, // only process leads that haven't been handled yet
+            ],
+          },
           orderBy: { createdAt: 'desc' },
           take: 50,
           include: { interactions: true },

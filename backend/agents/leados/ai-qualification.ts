@@ -446,9 +446,14 @@ For leads in emailOnlyLeads: set callStatus to "no_valid_phone", outcome to "med
         }
       }
 
-      // Merge real data back into LLM output — LLM often fabricates company names
-      // Use DB leads as source of truth for name, email, company, phone
+      // CRITICAL: Filter callResults to ONLY include leads that exist in the user's DB
+      // Then use DB leads as source of truth for name, email, company, phone
       if (parsed.callResults && qualifiedLeads.length > 0) {
+        parsed.callResults = parsed.callResults.filter((result: any) =>
+          qualifiedLeads.some((l: any) =>
+            l.email === result.leadEmail || (l.name && l.name.toLowerCase() === (result.leadName || '').toLowerCase())
+          )
+        );
         for (const result of parsed.callResults) {
           const dbLead = qualifiedLeads.find((l: any) =>
             l.email === result.leadEmail || (l.name && l.name.toLowerCase() === (result.leadName || '').toLowerCase())
@@ -460,6 +465,9 @@ For leads in emailOnlyLeads: set callStatus to "no_valid_phone", outcome to "med
             result.phone = dbLead.phone || result.phone;
           }
         }
+      } else if (parsed.callResults && qualifiedLeads.length === 0) {
+        // No user leads found — discard all LLM-generated callResults
+        parsed.callResults = [];
       }
 
       // Merge real Bland AI call data into LLM output — real data takes precedence

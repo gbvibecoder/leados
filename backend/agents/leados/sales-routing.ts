@@ -185,14 +185,60 @@ export class SalesRoutingAgent extends BaseAgent {
         };
       }
 
+      // Fetch user's leads from DB to validate upstream data — prevent cross-user leakage
+      let userLeadEmails = new Set<string>();
+      let userLeadNames = new Set<string>();
+      try {
+        const { prisma } = await import('@/lib/prisma');
+        let ownershipCondition: any = { userId: 'no-user' };
+        if (inputs.userId) {
+          const userPipelines = await prisma.pipeline.findMany({
+            where: { userId: inputs.userId },
+            select: { id: true },
+          });
+          const pipelineIds = userPipelines.map((p: any) => p.id);
+          ownershipCondition = {
+            OR: [
+              { userId: inputs.userId },
+              ...(pipelineIds.length > 0 ? [{ pipelineId: { in: pipelineIds } }] : []),
+            ],
+          };
+        }
+        const userDbLeads = await prisma.lead.findMany({
+          where: ownershipCondition,
+          select: { email: true, name: true },
+        });
+        for (const l of userDbLeads) {
+          if (l.email) userLeadEmails.add(l.email);
+          if (l.name) userLeadNames.add(l.name.toLowerCase());
+        }
+        await this.log('user_leads_verified', { count: userDbLeads.length });
+      } catch (err: any) {
+        await this.log('user_leads_verify_error', { error: err.message });
+      }
+
+      // Helper: check if a lead belongs to the current user
+      const isUserLead = (lead: any): boolean => {
+        if (userLeadEmails.size === 0 && userLeadNames.size === 0) return false;
+        const email = lead.leadEmail || lead.email;
+        const name = lead.leadName || lead.name;
+        if (email && userLeadEmails.has(email)) return true;
+        if (name && userLeadNames.has(name.toLowerCase())) return true;
+        return false;
+      };
+
+      // Filter upstream data to only include this user's leads
+      const scopedCallResults = (qualificationData.callResults || []).filter(isUserLead);
+      const scopedInboundLeads = (inboundData.leadsProcessed || []).filter(isUserLead);
+
       const userMessage = JSON.stringify({
         serviceNiche: inputs.config?.niche || inputs.config?.serviceNiche || 'B2B SaaS Lead Generation',
         ...inputs.config,
         upstreamContext: {
-          callResults: qualificationData.callResults || null,
+          callResults: scopedCallResults.length > 0 ? scopedCallResults : null,
           qualificationThresholds: qualificationData.qualificationThresholds || null,
           qualificationSummary: qualificationData.summary || null,
-          leadsProcessed: inboundData.leadsProcessed || null,
+          leadsProcessed: scopedInboundLeads.length > 0 ? scopedInboundLeads : null,
           pricingTiers: offerData.pricingTiers || offerData.pricing || null,
           guarantee: offerData.guarantee || null,
         },
@@ -214,9 +260,8 @@ export class SalesRoutingAgent extends BaseAgent {
       // Build routedLeads from REAL upstream data — never trust LLM routing decisions
       const routedLeads: any[] = [];
 
-      // Route leads from AI Qualification results (these have real call outcomes)
-      const callResults = qualificationData.callResults || [];
-      for (const result of callResults) {
+      // Route leads from AI Qualification results (user-scoped, real call outcomes)
+      for (const result of scopedCallResults) {
         if (!result.leadName && !result.leadEmail) continue;
         const outcome = result.outcome || 'pending_call';
         // Check for explicit budget confirmation from qualification call data
@@ -263,10 +308,9 @@ export class SalesRoutingAgent extends BaseAgent {
         });
       }
 
-      // Route leads from Inbound Capture that weren't in qualification (e.g. no phone → never called)
-      const inboundLeads = inboundData.leadsProcessed || [];
+      // Route user's inbound leads that weren't in qualification (e.g. no phone → never called)
       const alreadyRouted = new Set(routedLeads.map((r: any) => r.leadEmail));
-      for (const lead of inboundLeads) {
+      for (const lead of scopedInboundLeads) {
         if (!lead.email || alreadyRouted.has(lead.email)) continue;
         const score = lead.score || 0;
         let route: string;
@@ -299,8 +343,8 @@ export class SalesRoutingAgent extends BaseAgent {
       }
 
       await this.log('routing_built_from_upstream', {
-        fromQualification: callResults.length,
-        fromInbound: routedLeads.length - callResults.length,
+        fromQualification: scopedCallResults.length,
+        fromInbound: routedLeads.length - scopedCallResults.length,
         total: routedLeads.length,
       });
 

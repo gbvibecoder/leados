@@ -113,6 +113,7 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
+  const userId = getUserId(req);
   const body = await req.json();
   const { fromStage, toStage } = body;
 
@@ -121,7 +122,7 @@ export async function PATCH(req: Request) {
   }
 
   const result = await prisma.lead.updateMany({
-    where: { stage: fromStage },
+    where: { stage: fromStage, userId: userId ?? 'no-user' },
     data: { stage: toStage },
   });
 
