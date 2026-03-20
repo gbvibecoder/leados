@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, Fragment } from 'react';
+import { useState, useEffect, useRef, Fragment } from 'react';
 import {
-  Users, Search, ChevronRight, Mail, Phone as PhoneIcon, Calendar, Bot,
+  Users, Search, ChevronRight, ChevronDown, Mail, Phone as PhoneIcon, Calendar, Bot,
   Plus, X, ShieldBan, Target, Sparkles, TrendingUp, ArrowRight, Zap, Filter,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -30,6 +30,10 @@ const typeIcons: Record<string, typeof Mail> = {
 function AddLeadModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
   const { selectedProjectId, isBlacklisted } = useAppStore();
   const [form, setForm] = useState({ name: '', email: '', company: '', phone: '', source: 'organic', stage: 'new', segment: 'smb', notes: '' });
+  const [countryCode, setCountryCode] = useState('+91');
+  const [showCountryDropdown, setShowCountryDropdown] = useState(false);
+  const [countrySearch, setCountrySearch] = useState('');
+  const countryDropdownRef = useRef<HTMLDivElement>(null);
   const [saving, setSaving] = useState(false);
   const [blacklisted, setBlacklisted] = useState(false);
 
@@ -40,14 +44,85 @@ function AddLeadModal({ onClose, onAdded }: { onClose: () => void; onAdded: () =
     } else { setBlacklisted(false); }
   }, [form.company, form.email, isBlacklisted]);
 
+  const countries = [
+    { code: '+1', iso: 'us', name: 'United States' },
+    { code: '+1', iso: 'ca', name: 'Canada' },
+    { code: '+44', iso: 'gb', name: 'United Kingdom' },
+    { code: '+91', iso: 'in', name: 'India' },
+    { code: '+49', iso: 'de', name: 'Germany' },
+    { code: '+33', iso: 'fr', name: 'France' },
+    { code: '+61', iso: 'au', name: 'Australia' },
+    { code: '+81', iso: 'jp', name: 'Japan' },
+    { code: '+86', iso: 'cn', name: 'China' },
+    { code: '+82', iso: 'kr', name: 'South Korea' },
+    { code: '+55', iso: 'br', name: 'Brazil' },
+    { code: '+52', iso: 'mx', name: 'Mexico' },
+    { code: '+34', iso: 'es', name: 'Spain' },
+    { code: '+39', iso: 'it', name: 'Italy' },
+    { code: '+31', iso: 'nl', name: 'Netherlands' },
+    { code: '+46', iso: 'se', name: 'Sweden' },
+    { code: '+41', iso: 'ch', name: 'Switzerland' },
+    { code: '+43', iso: 'at', name: 'Austria' },
+    { code: '+48', iso: 'pl', name: 'Poland' },
+    { code: '+7', iso: 'ru', name: 'Russia' },
+    { code: '+90', iso: 'tr', name: 'Turkey' },
+    { code: '+966', iso: 'sa', name: 'Saudi Arabia' },
+    { code: '+971', iso: 'ae', name: 'UAE' },
+    { code: '+972', iso: 'il', name: 'Israel' },
+    { code: '+65', iso: 'sg', name: 'Singapore' },
+    { code: '+60', iso: 'my', name: 'Malaysia' },
+    { code: '+62', iso: 'id', name: 'Indonesia' },
+    { code: '+66', iso: 'th', name: 'Thailand' },
+    { code: '+63', iso: 'ph', name: 'Philippines' },
+    { code: '+84', iso: 'vn', name: 'Vietnam' },
+    { code: '+234', iso: 'ng', name: 'Nigeria' },
+    { code: '+27', iso: 'za', name: 'South Africa' },
+    { code: '+254', iso: 'ke', name: 'Kenya' },
+    { code: '+20', iso: 'eg', name: 'Egypt' },
+    { code: '+92', iso: 'pk', name: 'Pakistan' },
+    { code: '+880', iso: 'bd', name: 'Bangladesh' },
+    { code: '+94', iso: 'lk', name: 'Sri Lanka' },
+    { code: '+977', iso: 'np', name: 'Nepal' },
+    { code: '+353', iso: 'ie', name: 'Ireland' },
+    { code: '+47', iso: 'no', name: 'Norway' },
+    { code: '+45', iso: 'dk', name: 'Denmark' },
+    { code: '+358', iso: 'fi', name: 'Finland' },
+    { code: '+64', iso: 'nz', name: 'New Zealand' },
+    { code: '+54', iso: 'ar', name: 'Argentina' },
+    { code: '+56', iso: 'cl', name: 'Chile' },
+    { code: '+57', iso: 'co', name: 'Colombia' },
+  ];
+  const FlagImg = ({ iso, size = 20 }: { iso: string; size?: number }) => (
+    <img src={`https://flagsapi.com/${iso.toUpperCase()}/flat/32.png`}
+      width={size} height={size} alt="" className="inline-block rounded-sm" style={{ objectFit: 'contain' }} />
+  );
+
+  const selectedCountry = countries.find(c => c.code === countryCode && (countryCode !== '+1' || c.iso === 'us')) || countries[3];
+  const filteredCountries = countrySearch
+    ? countries.filter(c => c.name.toLowerCase().includes(countrySearch.toLowerCase()) || c.code.includes(countrySearch))
+    : countries;
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (countryDropdownRef.current && !countryDropdownRef.current.contains(e.target as Node)) {
+        setShowCountryDropdown(false);
+      }
+    };
+    if (showCountryDropdown) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showCountryDropdown]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    // Combine country code + phone number
+    const fullPhone = form.phone ? `${countryCode}${form.phone.replace(/^\+?\d{1,4}\s?/, '')}` : '';
     try {
       await apiFetch('/api/leados/leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, projectId: selectedProjectId || undefined }),
+        body: JSON.stringify({ ...form, phone: fullPhone, projectId: selectedProjectId || undefined }),
       });
       onAdded();
       onClose();
@@ -55,7 +130,7 @@ function AddLeadModal({ onClose, onAdded }: { onClose: () => void; onAdded: () =
   };
 
   const inputClass = "w-full rounded-xl px-4 py-2.5 text-sm cosmic-input";
-  const selectClass = "rounded-xl px-4 py-2.5 text-sm text-gray-200 cosmic-input w-full";
+  const selectClass = "rounded-xl px-4 py-2.5 text-sm text-gray-200 cosmic-input w-full [&>option]:bg-[#0a0a0f] [&>option]:text-gray-200";
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -88,7 +163,40 @@ function AddLeadModal({ onClose, onAdded }: { onClose: () => void; onAdded: () =
         <input required placeholder="Name *" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className={inputClass} />
         <div className="grid grid-cols-2 gap-3">
           <input placeholder="Email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className={inputClass} />
-          <input placeholder="Phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} className={inputClass} />
+          <div className="relative flex" ref={countryDropdownRef}>
+            <button type="button" onClick={() => setShowCountryDropdown(!showCountryDropdown)}
+              className="flex items-center gap-1 rounded-l-xl px-1.5 py-2.5 text-xs shrink-0 transition-colors hover:bg-white/5"
+              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRight: 'none' }}>
+              <FlagImg iso={selectedCountry.iso} size={16} />
+              <span className="text-gray-400 text-[11px]">{countryCode}</span>
+              <ChevronDown className="h-2.5 w-2.5 text-gray-500" />
+            </button>
+            {showCountryDropdown && (
+              <div className="absolute top-full left-0 z-[60] mt-1 w-64 rounded-xl overflow-hidden shadow-2xl"
+                style={{ background: 'rgba(2,2,5,0.98)', border: '1px solid rgba(0,242,255,0.1)', backdropFilter: 'blur(20px)' }}>
+                <div className="p-2">
+                  <input autoFocus placeholder="Search country..." value={countrySearch}
+                    onChange={e => setCountrySearch(e.target.value)}
+                    className="w-full rounded-lg px-3 py-1.5 text-xs text-gray-200 placeholder-gray-600 cosmic-input" />
+                </div>
+                <div className="max-h-48 overflow-y-auto">
+                  {filteredCountries.map((c, i) => (
+                    <button key={`${c.code}-${c.name}-${i}`} type="button"
+                      onClick={() => { setCountryCode(c.code); setShowCountryDropdown(false); setCountrySearch(''); }}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs hover:bg-white/5 transition-colors ${c.code === countryCode ? 'bg-cyan-500/10 text-cyan-400' : 'text-gray-300'}`}>
+                      <FlagImg iso={c.iso} size={20} />
+                      <span className="flex-1 truncate">{c.name}</span>
+                      <span className="text-gray-500 mono-ui text-[10px]">{c.code}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <input placeholder="Phone number" value={form.phone}
+              onChange={e => setForm({ ...form, phone: e.target.value.replace(/[^0-9]/g, '') })}
+              className="flex-1 rounded-r-xl px-3 py-2.5 text-sm cosmic-input min-w-0"
+              style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }} />
+          </div>
         </div>
         <input placeholder="Company" value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} className={inputClass} />
         <div className="grid grid-cols-2 gap-3">
