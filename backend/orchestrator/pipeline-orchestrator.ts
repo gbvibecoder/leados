@@ -12,7 +12,8 @@ export class PipelineOrchestrator {
     pipelineId: string,
     type: 'leados',
     agentIds: string[],
-    config: Record<string, any>
+    config: Record<string, any>,
+    userId?: string | null
   ): Promise<Record<string, AgentOutput>> {
     const outputs: Record<string, AgentOutput> = {};
     let previousOutputs: Record<string, any> = {};
@@ -44,6 +45,7 @@ export class PipelineOrchestrator {
             pipelineId,
             config,
             previousOutputs,
+            userId,
           };
 
           output = await agent.run(input);
