@@ -147,7 +147,7 @@ export function OutboundOutreachOutput({ data }: Props) {
             </span>
           )}
         </div>
-        {d.confidence && (
+        {!!d.confidence && (
           <span className="text-xs text-muted-foreground">
             Confidence: <span className="font-semibold text-green-400">{d.confidence}%</span>
           </span>

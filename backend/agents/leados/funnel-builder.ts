@@ -219,6 +219,7 @@ export class FunnelBuilderAgent extends BaseAgent {
   }
 
   async run(inputs: AgentInput): Promise<AgentOutput> {
+    this._runConfig = inputs.config;
     this.status = 'running';
     await this.log('run_started', { inputs });
 

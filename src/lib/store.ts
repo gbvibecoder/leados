@@ -30,6 +30,7 @@ export interface Project {
   name: string;
   description?: string;
   url?: string;
+  language?: string;
   type: 'internal' | 'external';
   status: string;
   config?: ProjectConfig | null;
@@ -44,6 +45,40 @@ export interface BlacklistEntry {
   reason?: string;
   createdAt: string;
 }
+
+/** Supported output languages for agent content generation */
+export const SUPPORTED_LANGUAGES = [
+  { code: 'en', label: 'English' },
+  { code: 'es', label: 'Spanish' },
+  { code: 'fr', label: 'French' },
+  { code: 'de', label: 'German' },
+  { code: 'pt', label: 'Portuguese' },
+  { code: 'it', label: 'Italian' },
+  { code: 'nl', label: 'Dutch' },
+  { code: 'hi', label: 'Hindi' },
+  { code: 'ja', label: 'Japanese' },
+  { code: 'ko', label: 'Korean' },
+  { code: 'zh', label: 'Chinese' },
+  { code: 'ar', label: 'Arabic' },
+  { code: 'ru', label: 'Russian' },
+  { code: 'tr', label: 'Turkish' },
+  { code: 'pl', label: 'Polish' },
+  { code: 'sv', label: 'Swedish' },
+  { code: 'da', label: 'Danish' },
+  { code: 'fi', label: 'Finnish' },
+  { code: 'no', label: 'Norwegian' },
+  { code: 'th', label: 'Thai' },
+  { code: 'vi', label: 'Vietnamese' },
+  { code: 'id', label: 'Indonesian' },
+  { code: 'ms', label: 'Malay' },
+  { code: 'he', label: 'Hebrew' },
+  { code: 'cs', label: 'Czech' },
+  { code: 'ro', label: 'Romanian' },
+  { code: 'hu', label: 'Hungarian' },
+  { code: 'uk', label: 'Ukrainian' },
+  { code: 'el', label: 'Greek' },
+  { code: 'bn', label: 'Bengali' },
+] as const;
 
 // First 4 agents are skipped for internal projects
 export const DISCOVERY_AGENT_IDS = [
@@ -75,8 +110,8 @@ interface AppState {
   selectedProjectId: string | null;
   setProjects: (projects: Project[]) => void;
   addProject: (project: Project) => void;
-  createProject: (data: { name: string; description?: string; url?: string; type: 'internal' | 'external'; enabledAgentIds?: string[] }) => Project;
-  createProjectAsync: (data: { name: string; description?: string; url?: string; type: 'internal' | 'external'; enabledAgentIds?: string[] }) => Promise<Project>;
+  createProject: (data: { name: string; description?: string; url?: string; language?: string; type: 'internal' | 'external'; enabledAgentIds?: string[] }) => Project;
+  createProjectAsync: (data: { name: string; description?: string; url?: string; language?: string; type: 'internal' | 'external'; enabledAgentIds?: string[] }) => Promise<Project>;
   updateProject: (projectId: string, updates: Partial<Project>) => void;
   updateProjectConfig: (projectId: string, config: ProjectConfig) => void;
   removeProject: (projectId: string) => void;
@@ -359,6 +394,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
       name: data.name,
       description: data.description,
       url: data.url,
+      language: data.language,
       type: data.type,
       status: 'active',
       config: data.enabledAgentIds ? { enabledAgentIds: data.enabledAgentIds } : null,
@@ -378,6 +414,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
       body: JSON.stringify({
         name: data.name,
         description: data.description,
+        language: data.language,
         type: data.type,
         config: {
           ...(data.url ? { url: data.url } : {}),
@@ -395,6 +432,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
       name: dbProject.name,
       description: dbProject.description,
       url: data.url,
+      language: data.language,
       type: dbProject.type,
       status: dbProject.status || 'active',
       config: (data.url || data.enabledAgentIds) ? {
@@ -523,6 +561,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
           name: p.name,
           description: p.description,
           url: p.url,
+          language: p.language,
           type: p.type,
           status: p.status || 'active',
           config: p.config,

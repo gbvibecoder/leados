@@ -14,13 +14,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
+    const config = project.config ? JSON.parse(project.config) : null;
     return NextResponse.json({
       id: project.id,
       name: project.name,
       description: project.description,
+      url: config?.url || null,
+      language: project.language,
       type: project.type,
       status: project.status,
-      config: project.config ? JSON.parse(project.config) : null,
+      config,
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,
     });
@@ -40,6 +43,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     if (body.name !== undefined) data.name = body.name;
     if (body.description !== undefined) data.description = body.description;
+    if (body.language !== undefined) data.language = body.language;
     if (body.type !== undefined) data.type = body.type;
     if (body.status !== undefined) data.status = body.status;
     if (body.config !== undefined) data.config = JSON.stringify(body.config);
@@ -53,14 +57,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
 
     const project = await prisma.project.update({ where: { id }, data });
+    const patchConfig = project.config ? JSON.parse(project.config) : null;
 
     return NextResponse.json({
       id: project.id,
       name: project.name,
       description: project.description,
+      url: patchConfig?.url || null,
+      language: project.language,
       type: project.type,
       status: project.status,
-      config: project.config ? JSON.parse(project.config) : null,
+      config: patchConfig,
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,
     });

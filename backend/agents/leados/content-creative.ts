@@ -18,6 +18,8 @@ PRODUCT CONTEXT RULE: If "productContext" is provided, it contains data scraped 
 4. Reference real features and benefits from the website — NOT generic marketing language
 5. Match the tone and industry terminology of the website
 
+LOCALIZATION RULE: If "localization" or "outputLanguage" is provided in the input, ALL output content (ad copies, email sequences, LinkedIn messages, video scripts, UGC scripts, hooks — everything) MUST be written in the specified language. Keep brand names and product names in their original form, but write all surrounding copy in the target language.
+
 Adapt ALL content to the specific product, ICP, and offer. Use rising keywords from Google Trends in ad copies.
 
 ## UGC Script Template Patterns
@@ -147,6 +149,7 @@ export class ContentCreativeAgent extends BaseAgent {
   }
 
   async run(inputs: AgentInput): Promise<AgentOutput> {
+    this._runConfig = inputs.config;
     this.status = 'running';
     await this.log('run_started', { inputs });
 
@@ -199,7 +202,11 @@ export class ContentCreativeAgent extends BaseAgent {
     try {
       await this.log('generating_content', { phase: 'Generating creative assets' });
 
+      const localization = inputs.config?.localization;
       const enrichedInput = JSON.stringify({
+        // Language/localization — all content MUST be in this language
+        ...(localization ? { localization } : {}),
+        ...(inputs.config?.language ? { outputLanguage: inputs.config.language } : {}),
         offer: {
           serviceName: offerData.serviceName,
           icp: offerData.icp,

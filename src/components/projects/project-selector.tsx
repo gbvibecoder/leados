@@ -1,16 +1,16 @@
 'use client';
 
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { FolderOpen, Plus, Building2, Globe, ChevronDown, X, Link2, Bot, Check } from 'lucide-react';
+import { FolderOpen, Plus, Building2, Globe, ChevronDown, X, Link2, Bot, Check, Languages } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { LEADOS_AGENTS, DISCOVERY_AGENT_IDS } from '@/lib/store';
+import { LEADOS_AGENTS, DISCOVERY_AGENT_IDS, SUPPORTED_LANGUAGES } from '@/lib/store';
 import type { Project } from '@/lib/store';
 
 interface ProjectSelectorProps {
   projects: Project[];
   selectedProjectId: string | null;
   onSelectProject: (projectId: string | null) => void;
-  onCreateProject: (data: { name: string; description?: string; url?: string; type: 'internal' | 'external'; enabledAgentIds?: string[] }) => void;
+  onCreateProject: (data: { name: string; description?: string; url?: string; language?: string; type: 'internal' | 'external'; enabledAgentIds?: string[] }) => void;
 }
 
 export function ProjectSelector({
@@ -24,6 +24,8 @@ export function ProjectSelector({
   const [newName, setNewName] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newUrl, setNewUrl] = useState('');
+  const [newLanguage, setNewLanguage] = useState('en');
+  const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
   const [newType, setNewType] = useState<'internal' | 'external'>('internal');
   const [selectedAgents, setSelectedAgents] = useState<Set<string>>(
     new Set(LEADOS_AGENTS.filter(a => !DISCOVERY_AGENT_IDS.includes(a.id)).map(a => a.id))
@@ -31,6 +33,7 @@ export function ProjectSelector({
   const [showAgentDropdown, setShowAgentDropdown] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const agentDropdownRef = useRef<HTMLDivElement>(null);
+  const languageDropdownRef = useRef<HTMLDivElement>(null);
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
 
@@ -67,6 +70,18 @@ export function ProjectSelector({
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [showAgentDropdown]);
+
+  // Close language dropdown on outside click
+  useEffect(() => {
+    if (!showLanguageDropdown) return;
+    function handleClick(e: MouseEvent) {
+      if (languageDropdownRef.current && !languageDropdownRef.current.contains(e.target as Node)) {
+        setShowLanguageDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showLanguageDropdown]);
 
   const handleTypeChange = (type: 'internal' | 'external') => {
     setNewType(type);
@@ -113,16 +128,19 @@ export function ProjectSelector({
       name: newName.trim(),
       description: newDescription.trim() || undefined,
       url: newUrl.trim() || undefined,
+      language: newLanguage,
       type: newType,
       enabledAgentIds: [...selectedAgents],
     });
     setNewName('');
     setNewDescription('');
     setNewUrl('');
+    setNewLanguage('en');
     setNewType('internal');
     setSelectedAgents(new Set(LEADOS_AGENTS.filter(a => !DISCOVERY_AGENT_IDS.includes(a.id)).map(a => a.id)));
     setShowCreateForm(false);
     setShowAgentDropdown(false);
+    setShowLanguageDropdown(false);
     setIsOpen(false);
   };
 
@@ -251,6 +269,61 @@ export function ProjectSelector({
                 />
               </div>
 
+              {/* Language selector dropdown */}
+              <div className="relative" ref={languageDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowLanguageDropdown(!showLanguageDropdown)}
+                  className={cn(
+                    'flex w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs transition-colors',
+                    showLanguageDropdown
+                      ? 'border-cyan-500 bg-white/5 text-white'
+                      : 'border-white/[0.08] bg-white/5 text-gray-300 hover:border-cyan-500/20'
+                  )}
+                >
+                  <Languages className="h-3 w-3 text-cyan-400 shrink-0" />
+                  <span className="flex-1 text-left truncate">
+                    {SUPPORTED_LANGUAGES.find(l => l.code === newLanguage)?.label || 'English'}
+                  </span>
+                  <ChevronDown className={cn('h-3 w-3 text-gray-500 transition-transform', showLanguageDropdown && 'rotate-180')} />
+                </button>
+
+                {showLanguageDropdown && (
+                  <div className="absolute left-0 right-0 z-50 mt-1 rounded-lg border border-white/[0.06] bg-[#0a0a0f] shadow-xl">
+                    <div className="max-h-[200px] overflow-y-auto py-0.5">
+                      {SUPPORTED_LANGUAGES.map((lang) => {
+                        const isSelected = newLanguage === lang.code;
+                        return (
+                          <button
+                            key={lang.code}
+                            onClick={() => { setNewLanguage(lang.code); setShowLanguageDropdown(false); }}
+                            className={cn(
+                              'flex w-full items-center gap-2 px-2.5 py-1.5 text-left transition-colors hover:bg-white/5',
+                              isSelected && 'bg-cyan-950/20'
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                'flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border transition-colors',
+                                isSelected
+                                  ? 'border-cyan-500 bg-cyan-600'
+                                  : 'border-zinc-600 bg-white/5'
+                              )}
+                            >
+                              {isSelected && <Check className="h-2 w-2 text-white" />}
+                            </div>
+                            <span className={cn('text-[11px]', isSelected ? 'text-gray-200' : 'text-gray-400')}>
+                              {lang.label}
+                            </span>
+                            <span className="text-[9px] text-gray-600 ml-auto">{lang.code.toUpperCase()}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Agent selector dropdown */}
               <div className="relative" ref={agentDropdownRef}>
                 <button
@@ -362,7 +435,7 @@ export function ProjectSelector({
               {/* Action buttons */}
               <div className="flex gap-1.5">
                 <button
-                  onClick={() => { setShowCreateForm(false); setNewName(''); setNewDescription(''); setNewUrl(''); setShowAgentDropdown(false); }}
+                  onClick={() => { setShowCreateForm(false); setNewName(''); setNewDescription(''); setNewUrl(''); setNewLanguage('en'); setShowAgentDropdown(false); setShowLanguageDropdown(false); }}
                   className="flex-1 rounded-lg border border-white/[0.08] px-2 py-1.5 text-[10px] text-gray-400 hover:bg-white/5"
                 >
                   Cancel

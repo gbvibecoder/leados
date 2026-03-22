@@ -12,16 +12,21 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json(
-      projects.map((p) => ({
-        id: p.id,
-        name: p.name,
-        description: p.description,
-        type: p.type,
-        status: p.status,
-        config: p.config ? JSON.parse(p.config) : null,
-        createdAt: p.createdAt,
-        updatedAt: p.updatedAt,
-      }))
+      projects.map((p) => {
+        const config = p.config ? JSON.parse(p.config) : null;
+        return {
+          id: p.id,
+          name: p.name,
+          description: p.description,
+          url: config?.url || null,
+          language: p.language,
+          type: p.type,
+          status: p.status,
+          config,
+          createdAt: p.createdAt,
+          updatedAt: p.updatedAt,
+        };
+      })
     );
   } catch (error: any) {
     console.error('GET /api/projects error:', error.message);
@@ -77,6 +82,7 @@ export async function POST(req: Request) {
       data: {
         name: body.name.trim(),
         description: body.description || null,
+        language: body.language || null,
         type: body.type || 'external',
         config: body.config ? JSON.stringify(body.config) : null,
         ...(userId && { userId }),
@@ -87,6 +93,7 @@ export async function POST(req: Request) {
       id: project.id,
       name: project.name,
       description: project.description,
+      language: project.language,
       type: project.type,
       status: project.status,
       config: body.config || null,

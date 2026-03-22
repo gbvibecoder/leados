@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { ProjectSelector } from '@/components/projects/project-selector';
 import { PIPELINE_PHASES } from '@/components/pipeline/pipeline-preview';
 import { AgentDetailPanel } from '@/components/agents/agent-detail-panel';
-import { useAppStore, DISCOVERY_AGENT_IDS, LEADOS_AGENTS } from '@/lib/store';
+import { useAppStore, DISCOVERY_AGENT_IDS, LEADOS_AGENTS, SUPPORTED_LANGUAGES } from '@/lib/store';
 import { pipelines as pipelinesApi, agents as agentsApi, apiFetch } from '@/lib/api';
 import { ErrorBoundary } from '@/components/layout/error-boundary';
 import {
@@ -84,6 +84,37 @@ export default function LeadOSPage() {
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
   const isInternal = selectedProject?.type === 'internal';
+
+  /** Build projectConfig with language/localization from the selected project */
+  const buildProjectConfig = useCallback((): Record<string, any> => {
+    const cfg: Record<string, any> = {};
+    if (!selectedProject) return cfg;
+    cfg.projectName = selectedProject.name;
+    cfg.projectType = selectedProject.type;
+    if (selectedProject.description) cfg.projectDescription = selectedProject.description;
+    if (selectedProject.name) {
+      cfg.focus = selectedProject.name;
+      cfg.niche = selectedProject.name;
+      cfg.serviceNiche = selectedProject.name;
+    }
+    if (selectedProject.language) {
+      cfg.language = selectedProject.language;
+      const langLabel = SUPPORTED_LANGUAGES.find(l => l.code === selectedProject.language)?.label || selectedProject.language;
+      cfg.localization = {
+        instruction: `Generate all output content (ad copy, emails, landing page text, keywords, etc.) in ${langLabel}. If the product uses English brand terms, keep those in English but write surrounding copy in ${langLabel}.`,
+      };
+    }
+    if (selectedProject.config) {
+      const projCfg = typeof selectedProject.config === 'string'
+        ? JSON.parse(selectedProject.config)
+        : selectedProject.config;
+      if (projCfg.url) cfg.projectUrl = projCfg.url;
+      // Merge but preserve localization we already set
+      const { localization: _ignored, ...rest } = projCfg;
+      Object.assign(cfg, rest);
+    }
+    return cfg;
+  }, [selectedProject]);
 
   const startFromAgentId = selectedProject?.config?.startFromAgentId || (!selectedProjectId ? globalStartFromAgentId : null);
   const startFromPhaseId = useMemo(() => {
@@ -403,7 +434,7 @@ export default function LeadOSPage() {
       // Fire agent — returns immediately with status: 'running'
       await agentsApi.run(agentId, {
         pipelineId: pipeline.id,
-        config: {},
+        config: buildProjectConfig(),
       });
 
       // Poll for completion every 1.5 seconds (was 3s — halved for faster response)
@@ -504,23 +535,8 @@ export default function LeadOSPage() {
       previousOutputs[key] = val?.data || val;
     }
 
-    // Get project config from the selected project
-    const projectConfig: Record<string, any> = {};
-    if (selectedProject) {
-      projectConfig.projectName = selectedProject.name;
-      projectConfig.projectType = selectedProject.type;
-      if (selectedProject.name) {
-        projectConfig.focus = selectedProject.name;
-        projectConfig.niche = selectedProject.name;
-        projectConfig.serviceNiche = selectedProject.name;
-      }
-      if (selectedProject.config) {
-        const cfg = typeof selectedProject.config === 'string'
-          ? JSON.parse(selectedProject.config)
-          : selectedProject.config;
-        Object.assign(projectConfig, cfg);
-      }
-    }
+    // Get project config from the selected project (includes language/localization)
+    const projectConfig = buildProjectConfig();
 
     // Re-run each downstream agent sequentially
     for (const agentId of DOWNSTREAM_AGENTS) {
@@ -561,7 +577,7 @@ export default function LeadOSPage() {
     }
 
     addActivity({ type: 'info', message: 'All downstream agents re-run complete' });
-  }, [pipeline.id, agentOutputs, selectedProject, enabledAgentIds, updateAgentStatus, startAgentTimer, stopAgentTimer, addActivity]);
+  }, [pipeline.id, agentOutputs, selectedProject, enabledAgentIds, updateAgentStatus, startAgentTimer, stopAgentTimer, addActivity, buildProjectConfig]);
 
   // Get the prerequisite agent name that must complete before this agent can run
   const getPrerequisiteAgent = useCallback((agentId: string): string | null => {

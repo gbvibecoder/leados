@@ -4,10 +4,10 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Plus, Building2, Globe, ArrowRight, Trash2, AlertTriangle, X,
-  ChevronDown, Check, Link2, Bot, Pencil, Zap, Rocket, Sparkles,
+  ChevronDown, Check, Link2, Bot, Pencil, Zap, Rocket, Sparkles, Languages,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useAppStore, DISCOVERY_AGENT_IDS, LEADOS_AGENTS } from '@/lib/store';
+import { useAppStore, DISCOVERY_AGENT_IDS, LEADOS_AGENTS, SUPPORTED_LANGUAGES } from '@/lib/store';
 import type { Project } from '@/lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
 import { apiFetch } from '@/lib/api';
@@ -22,6 +22,8 @@ export default function ProjectsPage() {
   const [newName, setNewName] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newUrl, setNewUrl] = useState('');
+  const [newLanguage, setNewLanguage] = useState('en');
+  const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
   const [newType, setNewType] = useState<'internal' | 'external'>('internal');
   const [selectedAgents, setSelectedAgents] = useState<Set<string>>(
     new Set(LEADOS_AGENTS.filter(a => !DISCOVERY_AGENT_IDS.includes(a.id)).map(a => a.id))
@@ -33,15 +35,18 @@ export default function ProjectsPage() {
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editUrl, setEditUrl] = useState('');
+  const [editLanguage, setEditLanguage] = useState('en');
   const [editUrlError, setEditUrlError] = useState('');
   const [editSaving, setEditSaving] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const languageDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { loadProjects(); }, [loadProjects]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setShowAgentDropdown(false);
+      if (languageDropdownRef.current && !languageDropdownRef.current.contains(e.target as Node)) setShowLanguageDropdown(false);
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -86,20 +91,20 @@ export default function ProjectsPage() {
     if (trimmedUrl && !isValidUrl(trimmedUrl)) { setUrlError('Please enter a valid URL (e.g. https://example.com)'); return; }
     setUrlError('');
     try {
-      await createProjectAsync({ name: newName.trim(), description: newDescription.trim() || undefined, url: trimmedUrl || undefined, type: newType, enabledAgentIds: [...selectedAgents] });
+      await createProjectAsync({ name: newName.trim(), description: newDescription.trim() || undefined, url: trimmedUrl || undefined, language: newLanguage, type: newType, enabledAgentIds: [...selectedAgents] });
     } catch (err: any) {
       const msg = err?.message || '';
       if (msg.toLowerCase().includes('url')) setUrlError(msg);
       return;
     }
-    setNewName(''); setNewDescription(''); setNewUrl(''); setUrlError(''); setNewType('internal');
+    setNewName(''); setNewDescription(''); setNewUrl(''); setNewLanguage('en'); setUrlError(''); setNewType('internal');
     setSelectedAgents(new Set(LEADOS_AGENTS.filter(a => !DISCOVERY_AGENT_IDS.includes(a.id)).map(a => a.id)));
     setShowCreate(false);
   };
 
   const openEdit = (project: Project) => {
     setEditProject(project); setEditName(project.name); setEditDescription(project.description || '');
-    setEditUrl(project.url || (project.config as any)?.url || ''); setEditUrlError('');
+    setEditUrl(project.url || (project.config as any)?.url || ''); setEditLanguage(project.language || 'en'); setEditUrlError('');
   };
 
   const handleEditSave = async () => {
@@ -113,7 +118,7 @@ export default function ProjectsPage() {
         if (!res.ok) { const data = await res.json(); setEditUrlError(data.error || 'URL not reachable'); setEditSaving(false); return; }
       } catch { setEditUrlError('URL not reachable. Please check and try again.'); setEditSaving(false); return; }
     }
-    updateProject(editProject.id, { name: editName.trim(), description: editDescription.trim() || undefined, url: trimmedUrl || undefined });
+    updateProject(editProject.id, { name: editName.trim(), description: editDescription.trim() || undefined, url: trimmedUrl || undefined, language: editLanguage });
     setEditSaving(false); setEditProject(null);
   };
 
@@ -242,6 +247,44 @@ export default function ProjectsPage() {
                       </div>
                     )}
                   </div>
+                </div>
+
+                {/* Language selector */}
+                <div className="relative" ref={languageDropdownRef}>
+                  <label className="mono-ui text-[8px] text-gray-500 block mb-1.5">Language</label>
+                  <button type="button" onClick={() => setShowLanguageDropdown(!showLanguageDropdown)}
+                    className={cn('flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm transition-all w-full md:w-1/2',
+                      showLanguageDropdown ? 'text-white' : 'text-gray-300')}
+                    style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${showLanguageDropdown ? 'rgba(0,242,255,0.3)' : 'rgba(255,255,255,0.1)'}` }}>
+                    <Languages className="h-4 w-4 text-cyan-400 shrink-0" />
+                    <span className="flex-1 text-left truncate">
+                      {SUPPORTED_LANGUAGES.find(l => l.code === newLanguage)?.label || 'English'}
+                    </span>
+                    <ChevronDown className={cn('h-4 w-4 text-gray-500 transition-transform', showLanguageDropdown && 'rotate-180')} />
+                  </button>
+
+                  {showLanguageDropdown && (
+                    <div className="absolute z-50 mt-1 w-full md:w-1/2 rounded-xl shadow-2xl overflow-hidden"
+                      style={{ background: 'rgba(2,2,5,0.97)', border: '1px solid rgba(0,242,255,0.1)', backdropFilter: 'blur(20px)' }}>
+                      <div className="max-h-[250px] overflow-y-auto py-1">
+                        {SUPPORTED_LANGUAGES.map((lang) => {
+                          const isSelected = newLanguage === lang.code;
+                          return (
+                            <button key={lang.code}
+                              onClick={() => { setNewLanguage(lang.code); setShowLanguageDropdown(false); }}
+                              className={cn('flex w-full items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-white/5', isSelected && 'bg-cyan-500/5')}>
+                              <div className={cn('flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors',
+                                isSelected ? 'border-cyan-500 bg-cyan-600' : 'border-gray-700 bg-white/5')}>
+                                {isSelected && <Check className="h-3 w-3 text-white" />}
+                              </div>
+                              <span className={cn('text-xs', isSelected ? 'text-gray-200' : 'text-gray-400')}>{lang.label}</span>
+                              <span className="text-[10px] text-gray-600 ml-auto">{lang.code.toUpperCase()}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Type selector — artistic */}
@@ -397,6 +440,13 @@ export default function ProjectsPage() {
                           style={{ color: accent, background: `${accent}10`, border: `1px solid ${accent}20` }}>
                           {project.type}
                         </span>
+                        {project.language && (
+                          <span className="rounded-full px-2 py-0.5 mono-ui text-[7px] flex items-center gap-1"
+                            style={{ color: '#a78bfa', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)' }}>
+                            <Languages className="h-2.5 w-2.5" />
+                            {(SUPPORTED_LANGUAGES.find(l => l.code === project.language)?.label) || project.language.toUpperCase()}
+                          </span>
+                        )}
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={() => openEdit(project)} className="rounded-lg p-1.5 text-gray-600 hover:text-cyan-400 hover:bg-white/5 transition-colors" title="Edit">
@@ -489,6 +539,21 @@ export default function ProjectsPage() {
                     placeholder="https://example.com" className={cn("w-full rounded-xl pl-10 pr-4 py-2.5 text-sm cosmic-input", editUrlError && "!border-red-500")} />
                 </div>
                 {editUrlError && <p className="mt-1 text-xs text-red-400">{editUrlError}</p>}
+              </div>
+              <div>
+                <label className="mono-ui text-[8px] text-gray-500 block mb-1.5">Language</label>
+                <select
+                  value={editLanguage}
+                  onChange={(e) => setEditLanguage(e.target.value)}
+                  className="w-full rounded-xl px-4 py-2.5 text-sm cosmic-input appearance-none cursor-pointer"
+                  style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center' }}
+                >
+                  {SUPPORTED_LANGUAGES.map(lang => (
+                    <option key={lang.code} value={lang.code} className="bg-[#0a0a0f] text-gray-200">
+                      {lang.label}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="mono-ui text-[8px] text-gray-500 block mb-1.5">Type</label>

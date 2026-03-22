@@ -25,6 +25,8 @@ export abstract class BaseAgent {
   description: string;
   protected status: AgentStatus = 'idle';
   protected logs: Array<{ event: string; data: any; timestamp: Date }> = [];
+  /** Set by agents at the start of run() so callClaude can inject localization */
+  protected _runConfig: Record<string, any> = {};
 
   constructor(id: string, name: string, description: string) {
     this.id = id;
@@ -59,6 +61,12 @@ export abstract class BaseAgent {
    * Override with AI_ENGINE=openrouter|gemini|anthropic to force a specific engine.
    */
   protected async callClaude(systemPrompt: string, userMessage: string, maxRetries = 3, maxTokens = 16384): Promise<string> {
+    // Auto-inject language instruction from project config so ALL agents respect it
+    const locInstruction = this._runConfig?.localization?.instruction;
+    if (locInstruction) {
+      systemPrompt = `LANGUAGE REQUIREMENT (MANDATORY): ${locInstruction}\nAll text output you generate MUST be in the specified language. Do NOT default to English unless the project language is English.\n\n${systemPrompt}`;
+    }
+
     const aiEngine = process.env.AI_ENGINE;
     const openrouterKey = process.env.OPENROUTER_API_KEY;
     const geminiKey = process.env.GEMINI_API_KEY;

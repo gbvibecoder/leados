@@ -59,7 +59,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       projectConfig.projectName = proj.name;
       projectConfig.projectType = proj.type;
       if (proj.description) projectConfig.projectDescription = proj.description;
-
       if (proj.name) {
         projectConfig.focus = proj.name;
         projectConfig.niche = proj.name;
@@ -75,6 +74,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           }
           Object.assign(projectConfig, cfg);
         } catch { /* ignore */ }
+      }
+
+      // Set language/localization AFTER Object.assign so it can't be overwritten
+      if (proj.language) {
+        projectConfig.language = proj.language;
+        const langLabel = { en: 'English', es: 'Spanish', fr: 'French', de: 'German', pt: 'Portuguese', it: 'Italian', nl: 'Dutch', hi: 'Hindi', ja: 'Japanese', ko: 'Korean', zh: 'Chinese', ar: 'Arabic', ru: 'Russian', tr: 'Turkish', pl: 'Polish', sv: 'Swedish', da: 'Danish', fi: 'Finnish', no: 'Norwegian', th: 'Thai', vi: 'Vietnamese', id: 'Indonesian', ms: 'Malay', he: 'Hebrew', cs: 'Czech', ro: 'Romanian', hu: 'Hungarian', uk: 'Ukrainian', el: 'Greek', bn: 'Bengali' }[proj.language] || proj.language;
+        projectConfig.localization = {
+          instruction: `Generate all output content (ad copy, emails, landing page text, keywords, etc.) in ${langLabel}. If the product uses English brand terms, keep those in English but write surrounding copy in ${langLabel}.`,
+        };
       }
     }
   } catch {

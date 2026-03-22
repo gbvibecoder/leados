@@ -110,7 +110,7 @@ export function PaidTrafficOutput({ data }: Props) {
             2 channels
           </span>
         </div>
-        {d.confidence && (
+        {!!d.confidence && (
           <span className="text-xs text-muted-foreground">
             Confidence: <span className="font-semibold text-green-400">{d.confidence}%</span>
           </span>
@@ -203,7 +203,7 @@ export function PaidTrafficOutput({ data }: Props) {
       </div>
 
       {/* Budget Split */}
-      {budget.google && budget.meta && (
+      {budget.google != null && budget.meta != null && (
         <div className="p-3 bg-muted/30 rounded-lg border border-border/50">
           <div className="text-xs font-medium text-muted-foreground mb-2">Budget Allocation</div>
           <div className="flex items-center gap-2 h-3 rounded-full overflow-hidden bg-muted">

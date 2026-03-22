@@ -166,15 +166,18 @@ function Section({
 
 export function ContentCreativeOutput({ data }: Props) {
   // Unwrap nested data — agent output may be wrapped in {success, data: {...}} or {data: {data: {...}}}
-  let displayData: ContentData = data?.data?.data || data?.data || data;
+  let rawData: ContentData = data?.data?.data || data?.data || data;
 
   // If still no adCopies/hooks, search one level deeper in case of extra wrapping
-  if (displayData && !displayData.adCopies && !displayData.hooks) {
-    const inner = (displayData as any)?.data;
+  if (rawData && !rawData.adCopies && !rawData.hooks) {
+    const inner = (rawData as any)?.data;
     if (inner && (inner.adCopies || inner.hooks)) {
-      displayData = inner;
+      rawData = inner;
     }
   }
+
+  // Use data directly — translation is handled by the parent AgentOutput wrapper
+  const displayData: ContentData = rawData;
 
   if (!displayData || (!displayData.adCopies && !displayData.hooks)) {
     return (
@@ -205,11 +208,13 @@ export function ContentCreativeOutput({ data }: Props) {
             {totalAssets} assets
           </span>
         </div>
-        {displayData.confidence && (
-          <span className="text-xs text-muted-foreground">
-            Confidence: <span className="font-semibold text-green-400">{displayData.confidence}%</span>
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {!!displayData.confidence && (
+            <span className="text-xs text-muted-foreground">
+              Confidence: <span className="font-semibold text-green-400">{displayData.confidence}%</span>
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Asset Type Grid */}
@@ -354,35 +359,42 @@ export function ContentCreativeOutput({ data }: Props) {
       )}
 
       {/* 4. LinkedIn Scripts */}
-      {displayData.linkedInScripts && (
-        <Section
-          title="LinkedIn Scripts"
-          icon={<Linkedin className="w-4 h-4 text-sky-400" />}
-          badge="3 messages"
-          badgeColor="bg-sky-500/20 text-sky-400"
-        >
-          <div className="space-y-2 pt-3">
-            {[
-              { label: 'Connection Request', text: displayData.linkedInScripts.connectionRequest },
-              { label: 'Follow-Up 1 (Value)', text: displayData.linkedInScripts.followUp1 },
-              { label: 'Follow-Up 2 (Ask)', text: displayData.linkedInScripts.followUp2 },
-            ].map((msg, idx) => (
-              <div key={idx} className="p-3 bg-muted/30 rounded-lg border border-border/50">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[10px] font-medium text-sky-400 uppercase tracking-wide mb-1">{msg.label}</div>
-                    <p className="text-xs leading-relaxed break-words">{msg.text}</p>
+      {displayData.linkedInScripts && (() => {
+        // Handle both old format (connectionRequest/followUp1/followUp2)
+        // and new format (message1/message2/message3 from linkedInDMSequence)
+        const li = displayData.linkedInScripts as any;
+        const messages = [
+          { label: 'Connection Request', text: li.connectionRequest || li.message1?.text || li.message1 || '' },
+          { label: 'Follow-Up 1 (Value)', text: li.followUp1 || li.message2?.text || li.message2 || '' },
+          { label: 'Follow-Up 2 (Ask)', text: li.followUp2 || li.message3?.text || li.message3 || '' },
+        ].filter(m => m.text);
+        if (messages.length === 0) return null;
+        return (
+          <Section
+            title="LinkedIn Scripts"
+            icon={<Linkedin className="w-4 h-4 text-sky-400" />}
+            badge={`${messages.length} messages`}
+            badgeColor="bg-sky-500/20 text-sky-400"
+          >
+            <div className="space-y-2 pt-3">
+              {messages.map((msg, idx) => (
+                <div key={idx} className="p-3 bg-muted/30 rounded-lg border border-border/50">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[10px] font-medium text-sky-400 uppercase tracking-wide mb-1">{msg.label}</div>
+                      <p className="text-xs leading-relaxed break-words">{msg.text}</p>
+                    </div>
+                    <CopyButton text={msg.text} />
                   </div>
-                  <CopyButton text={msg.text} />
+                  <div className="mt-1.5 text-[10px] text-muted-foreground">
+                    {msg.text.length} chars {msg.text.length > 300 ? '(over limit!)' : ''}
+                  </div>
                 </div>
-                <div className="mt-1.5 text-[10px] text-muted-foreground">
-                  {msg.text.length} chars {msg.text.length > 300 ? '(over limit!)' : ''}
-                </div>
-              </div>
-            ))}
-          </div>
-        </Section>
-      )}
+              ))}
+            </div>
+          </Section>
+        );
+      })()}
 
       {/* 5. Video Ad Scripts */}
       {displayData.videoAdScripts?.length > 0 && (

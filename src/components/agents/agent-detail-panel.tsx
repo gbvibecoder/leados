@@ -200,12 +200,12 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
                 animate={{ height: 'auto', opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
                 transition={{ duration: 0.3 }}
-                className="overflow-hidden"
+                className="overflow-hidden shrink-0"
               >
                 <div className="px-6 py-3 bg-emerald-500/5 border-b border-emerald-500/20 flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
                   <span className="text-sm text-emerald-300">Agent completed successfully</span>
-                  <span className="text-xs text-emerald-400/60 ml-auto">
+                  <span className="text-xs text-emerald-400/60 ml-auto shrink-0">
                     {latestRun.startedAt ? new Date(latestRun.startedAt).toLocaleString() : ''}
                   </span>
                 </div>
@@ -221,10 +221,10 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
                 animate={{ height: 'auto', opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
                 transition={{ duration: 0.3 }}
-                className="overflow-hidden"
+                className="overflow-hidden shrink-0"
               >
                 <div className="px-6 py-3 bg-red-500/5 border-b border-red-500/20 flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 text-red-400" />
+                  <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
                   <span className="text-sm text-red-300 truncate">{agentError}</span>
                 </div>
               </motion.div>

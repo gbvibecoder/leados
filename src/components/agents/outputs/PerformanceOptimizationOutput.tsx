@@ -115,7 +115,7 @@ export function PerformanceOptimizationOutput({ data }: Props) {
             {campaigns.length} campaigns
           </span>
         </div>
-        {d.confidence && (
+        {!!d.confidence && (
           <span className="text-xs text-muted-foreground">
             Confidence: <span className="font-semibold text-green-400">{d.confidence}%</span>
           </span>

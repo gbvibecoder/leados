@@ -135,6 +135,7 @@ export class TrackingAttributionAgent extends BaseAgent {
   }
 
   async run(inputs: AgentInput): Promise<AgentOutput> {
+    this._runConfig = inputs.config;
     this.status = 'running';
     await this.log('run_started', { inputs });
 
@@ -223,7 +224,7 @@ export class TrackingAttributionAgent extends BaseAgent {
         },
       });
 
-      const response = await this.callClaude(SYSTEM_PROMPT, userMessage, 1, 4096);
+      const response = await this.callClaude(SYSTEM_PROMPT, userMessage, 2, 8192);
       let parsed: any = {};
       try {
         parsed = this.safeParseLLMJson<any>(response, ['trackingSetup', 'attributionModel']);
