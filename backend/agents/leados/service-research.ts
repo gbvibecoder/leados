@@ -1,7 +1,14 @@
 import { BaseAgent, AgentInput, AgentOutput } from '../base-agent';
+import { scrapeProductContext, type ProductContext } from '../scrape-url';
 import { fetchRealTrends, type TrendResearchResult } from '../../../src/lib/real-trends';
 
 const SYSTEM_PROMPT = `You are the Service Research Agent for LeadOS. Your job is to analyze REAL market data and rank the best service opportunities.
+
+PRODUCT CONTEXT: If "productContext" is provided, it contains data scraped from the client's actual website. Use this to:
+- Understand the EXACT product/service being offered (not generic niche guessing)
+- Extract the real value proposition, features, and target audience from the website
+- Focus your market research around the actual product category and competitors
+- Ensure opportunity niches align with what the business actually does
 
 You will receive REAL live data from these sources:
 - Google Trends (via SerpAPI) — real search interest scores, rising queries, timeline data
@@ -60,6 +67,17 @@ export class ServiceResearchAgent extends BaseAgent {
     const focus = inputs.config?.focus || 'B2B services';
     const region = inputs.config?.region || 'US';
 
+    // Step 0: Scrape project URL for product context
+    const projectUrl = inputs.config?.projectUrl || inputs.config?.url || '';
+    let productContext: ProductContext | null = null;
+    if (projectUrl) {
+      await this.log('scraping_url', { url: projectUrl });
+      productContext = await scrapeProductContext(projectUrl);
+      if (productContext) {
+        await this.log('url_scraped', { title: productContext.title, headingsCount: productContext.headings.length });
+      }
+    }
+
     // Step 1: Fetch REAL data from all sources
     await this.log('fetching_real_data', { focus, region, phase: 'Fetching live data from Reddit, Google Trends (SerpAPI), LinkedIn, Upwork' });
 
@@ -87,6 +105,14 @@ export class ServiceResearchAgent extends BaseAgent {
       const userMessage = JSON.stringify({
         focus,
         region,
+        productContext: productContext ? {
+          websiteTitle: productContext.title,
+          websiteDescription: productContext.description,
+          websiteKeywords: productContext.keywords,
+          mainHeadings: productContext.headings,
+          pageContent: productContext.bodySnippet,
+          sourceUrl: productContext.url,
+        } : undefined,
         realData: {
           opportunities: realData.opportunities.map(opp => ({
             niche: opp.niche,

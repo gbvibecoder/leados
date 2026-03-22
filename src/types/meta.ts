@@ -14,6 +14,27 @@ export type CallToAction =
   | 'CONTACT_US'
   | 'GET_QUOTE';
 
+export type Gender = 0 | 1 | 2; // 0 = All, 1 = Male, 2 = Female
+
+export type Placement =
+  | 'facebook_feed'
+  | 'facebook_stories'
+  | 'facebook_reels'
+  | 'instagram_feed'
+  | 'instagram_stories'
+  | 'instagram_reels'
+  | 'instagram_explore'
+  | 'audience_network'
+  | 'messenger_inbox';
+
+export type BillingEvent = 'IMPRESSIONS' | 'LINK_CLICKS';
+
+export interface CityTarget {
+  key: string; // Meta city key (e.g., "2420605")
+  name: string; // Display name (e.g., "Mumbai")
+  radius: number; // Radius in km
+}
+
 export type OptimizationGoal =
   | 'LEAD_GENERATION'
   | 'LINK_CLICKS'
@@ -99,8 +120,15 @@ export interface CampaignFormData {
   objective: CampaignObjective;
   dailyBudget: number; // in paise
   country: string;
+  cities: CityTarget[];
   ageMin: number;
   ageMax: number;
+  gender: Gender;
+  placements: Placement[];
+  interests: string; // comma-separated interest keywords
+  billingEvent: BillingEvent;
+  scheduleStart: string; // ISO date string
+  scheduleEnd: string; // ISO date string, empty = no end date
   adHeadline: string;
   adBody: string;
   destinationUrl: string;

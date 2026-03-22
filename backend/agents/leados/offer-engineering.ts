@@ -1,12 +1,21 @@
 import { BaseAgent, AgentInput, AgentOutput } from '../base-agent';
+import { scrapeProductContext, type ProductContext } from '../scrape-url';
 import { fetchRealTrends } from '../../../src/lib/real-trends';
 
 const SYSTEM_PROMPT = `You are the Offer Engineering Agent for LeadOS — the Service Acquisition Machine.
 
 Your PURPOSE: Take a raw service idea and turn it into a compelling, specific offer that clearly communicates value and price to the right customer. A service idea is NOT enough — you package it into a REAL offer that makes a potential customer think: "This is exactly what I need."
 
+PRODUCT CONTEXT RULE: If "productContext" is provided, it contains data scraped from the client's actual website. You MUST use this to:
+- Understand the EXACT product/service being offered — its features, benefits, pricing, and target market
+- Build the offer around the REAL product, not a hypothetical service
+- Use the actual product name and terminology from the website
+- Extract the real value proposition and positioning from the website content
+- Ensure ICP, pricing, and guarantee align with what the business actually offers
+
 You receive JSON input containing:
 - Service research data from Agent 1 (niche, demand/competition/monetization scores, market size, rising queries, target audience)
+- Product context scraped from the client's website (if available)
 - Google Trends data (search interest, rising queries, regional interest)
 - Target focus area and region
 
@@ -104,6 +113,17 @@ export class OfferEngineeringAgent extends BaseAgent {
     const focus = inputs.config?.focus || 'B2B services';
     const region = inputs.config?.region || 'US';
 
+    // Step 0: Scrape project URL for product context
+    const projectUrl = inputs.config?.projectUrl || inputs.config?.url || '';
+    let productContext: ProductContext | null = null;
+    if (projectUrl) {
+      await this.log('scraping_url', { url: projectUrl });
+      productContext = await scrapeProductContext(projectUrl);
+      if (productContext) {
+        await this.log('url_scraped', { title: productContext.title, headingsCount: productContext.headings.length });
+      }
+    }
+
     // Step 1: Extract service research data from Agent 1
     const serviceResearchOutput = inputs.previousOutputs?.['service-research'];
     let topOpportunity: any = null;
@@ -160,6 +180,14 @@ export class OfferEngineeringAgent extends BaseAgent {
       task: 'Engineer a compelling service offer based on the market research data below',
       focusArea: focus,
       region,
+      productContext: productContext ? {
+        websiteTitle: productContext.title,
+        websiteDescription: productContext.description,
+        websiteKeywords: productContext.keywords,
+        mainHeadings: productContext.headings,
+        pageContent: productContext.bodySnippet,
+        sourceUrl: productContext.url,
+      } : undefined,
       topOpportunity: topOpportunity ? {
         niche: topOpportunity.niche,
         demandScore: topOpportunity.demandScore,

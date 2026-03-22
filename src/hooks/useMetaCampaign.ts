@@ -14,6 +14,7 @@ interface UseCampaignState {
   error: string | null;
   isLoading: boolean;
   insights: CampaignInsights[] | null;
+  formData: CampaignFormData | null;
 }
 
 export function useMetaCampaign() {
@@ -23,6 +24,7 @@ export function useMetaCampaign() {
     error: null,
     isLoading: false,
     insights: null,
+    formData: null,
   });
 
   const setStep = (step: CampaignStep, extra?: Partial<UseCampaignState>) => {
@@ -50,7 +52,8 @@ export function useMetaCampaign() {
 
     try {
       // Step 1: Validate token
-      setStep('validating');
+      setStep('validating', { formData: form });
+
       await apiCall('/api/meta/validate');
 
       // Step 2: Create campaign
@@ -68,7 +71,7 @@ export function useMetaCampaign() {
       );
       ids.campaign_id = campaignRes.campaign_id;
 
-      // Step 3: Create ad set
+      // Step 3: Create ad set with all targeting fields
       setStep('creating_adset', { ids });
       const adsetRes = await apiCall<{ adset_id: string }>(
         '/api/meta/adset',
@@ -82,6 +85,13 @@ export function useMetaCampaign() {
             age_max: form.ageMax,
             country: form.country,
             objective: form.objective,
+            gender: form.gender,
+            placements: form.placements,
+            interests: form.interests,
+            billing_event: form.billingEvent,
+            schedule_start: form.scheduleStart,
+            schedule_end: form.scheduleEnd,
+            cities: form.cities,
           }),
         }
       );
@@ -115,7 +125,7 @@ export function useMetaCampaign() {
       });
       ids.ad_id = adRes.ad_id;
 
-      // Step 6: Ready for review — wait for user confirmation
+      // Step 6: Ready for review
       setStep('ready_to_activate', { ids, error: null });
     } catch (err: any) {
       fail(err.message || 'Campaign creation failed');
@@ -156,9 +166,46 @@ export function useMetaCampaign() {
       );
       setState((prev) => ({ ...prev, insights: data.insights || [] }));
     } catch {
-      // Insights may not be available yet — silently fail
+      // Insights may not be available yet
     }
   }, [state.ids.campaign_id]);
+
+  const updateAdSet = useCallback(async (updates: Record<string, any>) => {
+    if (!state.ids.adset_id) return;
+    try {
+      await apiCall('/api/meta/adset/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adset_id: state.ids.adset_id, ...updates }),
+      });
+      // Update local formData with the changes
+      setState((prev) => ({
+        ...prev,
+        formData: prev.formData ? { ...prev.formData, ...updates } : prev.formData,
+      }));
+      return true;
+    } catch (err: any) {
+      return err.message || 'Update failed';
+    }
+  }, [state.ids.adset_id]);
+
+  const pauseCampaign = useCallback(async () => {
+    if (!state.ids.campaign_id) return;
+    try {
+      await apiCall('/api/meta/pause', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          campaign_id: state.ids.campaign_id,
+          adset_id: state.ids.adset_id,
+          ad_id: state.ids.ad_id,
+        }),
+      });
+      return true;
+    } catch (err: any) {
+      return err.message || 'Pause failed';
+    }
+  }, [state.ids]);
 
   const reset = useCallback(() => {
     setState({
@@ -167,6 +214,7 @@ export function useMetaCampaign() {
       error: null,
       isLoading: false,
       insights: null,
+      formData: null,
     });
   }, []);
 
@@ -175,6 +223,8 @@ export function useMetaCampaign() {
     startCampaign,
     activateCampaign: activateCampaignAction,
     fetchInsights,
+    updateAdSet,
+    pauseCampaign,
     reset,
   };
 }

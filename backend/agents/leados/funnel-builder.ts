@@ -1,4 +1,5 @@
 import { BaseAgent, AgentInput, AgentOutput } from '../base-agent';
+import { scrapeProductContext, type ProductContext } from '../scrape-url';
 import * as webflow from '../../integrations/webflow';
 
 // Slimmed prompt — LLM only generates landing page copy + sections.
@@ -6,7 +7,7 @@ import * as webflow from '../../integrations/webflow';
 // deterministic defaults + real API data — no LLM needed for those.
 const SYSTEM_PROMPT = `You are the Funnel Builder Agent for LeadOS. Generate landing page copy ONLY.
 
-You receive JSON with the validated offer (ICP, pricing, guarantee, positioning).
+You receive JSON with the validated offer (ICP, pricing, guarantee, positioning) and optionally "productContext" scraped from the client's website. If productContext is provided, use the real product name, features, and value propositions to create landing page copy that accurately represents the actual product/service.
 
 ## Proven Landing Page Structure (SOP)
 
@@ -240,6 +241,17 @@ export class FunnelBuilderAgent extends BaseAgent {
       };
     }
 
+    // Scrape project URL for product context
+    const projectUrl = inputs.config?.projectUrl || inputs.config?.url || '';
+    let productContext: ProductContext | null = null;
+    if (projectUrl) {
+      await this.log('scraping_url', { url: projectUrl });
+      productContext = await scrapeProductContext(projectUrl);
+      if (productContext) {
+        await this.log('url_scraped', { title: productContext.title, headingsCount: productContext.headings.length });
+      }
+    }
+
     const niche = inputs.config?.niche || inputs.config?.serviceNiche || offerData.serviceName || 'B2B Lead Generation';
     const meetingName = offerData.serviceName
       ? `${offerData.serviceName} — Strategy Call`
@@ -274,6 +286,13 @@ export class FunnelBuilderAgent extends BaseAgent {
           positioning: offerData.positioning,
           uniqueMechanism: offerData.uniqueMechanism,
         },
+        productContext: productContext ? {
+          websiteTitle: productContext.title,
+          websiteDescription: productContext.description,
+          mainHeadings: productContext.headings,
+          pageContent: productContext.bodySnippet,
+          sourceUrl: productContext.url,
+        } : undefined,
         niche,
       });
 

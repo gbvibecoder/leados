@@ -1,10 +1,24 @@
 import { BaseAgent, AgentInput, AgentOutput } from '../base-agent';
+import { scrapeProductContext, type ProductContext } from '../scrape-url';
 
-const SYSTEM_PROMPT = `You are the Content & Creative Agent for LeadOS. Produce ALL marketing materials for multi-channel campaigns.
+const SYSTEM_PROMPT = `You are a Content & Creative Agent. You create marketing materials for the CLIENT'S product/service — NOT for LeadOS or any AI agent platform.
 
-You receive JSON with the offer (ICP, pain points, pricing, positioning), funnel data, and market context.
+CRITICAL — YOU ARE CREATING ADS FOR THE CLIENT'S PRODUCT:
+- You are NOT advertising LeadOS, AI agents, or any lead generation platform
+- You ARE advertising the client's actual product/service described in the input
+- NEVER mention "13 agents", "AI engine", "LeadOS", "autonomous pipeline", or lead generation automation
+- ALL content must be about the CLIENT'S product features, benefits, and value propositions
 
-Adapt ALL content to the specific niche, ICP, and offer — not generic. Use rising keywords from Google Trends in ad copies.
+You receive JSON with the offer (ICP, pain points, pricing, positioning), funnel data, market context, and PRODUCT CONTEXT scraped from the client's actual website.
+
+PRODUCT CONTEXT RULE: If "productContext" is provided, it contains data scraped from the client's website. You MUST:
+1. Study the website title, description, headings, and content to understand EXACTLY what the product/service does
+2. Use the actual product name, feature names, and value propositions from the website
+3. Write ads that a potential CUSTOMER of this product would find compelling
+4. Reference real features and benefits from the website — NOT generic marketing language
+5. Match the tone and industry terminology of the website
+
+Adapt ALL content to the specific product, ICP, and offer. Use rising keywords from Google Trends in ad copies.
 
 ## UGC Script Template Patterns
 
@@ -165,6 +179,23 @@ export class ContentCreativeAgent extends BaseAgent {
       || topOpportunity.trendData?.googleTrends?.risingQueries?.map((q: any) => q.query)
       || [];
 
+    // Scrape the project URL for real product context
+    const projectUrl = inputs.config?.projectUrl || inputs.config?.url || '';
+    let productContext: ProductContext | null = null;
+    if (projectUrl) {
+      await this.log('scraping_url', { url: projectUrl });
+      productContext = await scrapeProductContext(projectUrl);
+      if (productContext) {
+        await this.log('url_scraped', {
+          title: productContext.title,
+          headingsCount: productContext.headings.length,
+          descriptionLength: productContext.description.length,
+        });
+      } else {
+        await this.log('url_scrape_failed', { url: projectUrl });
+      }
+    }
+
     try {
       await this.log('generating_content', { phase: 'Generating creative assets' });
 
@@ -179,6 +210,15 @@ export class ContentCreativeAgent extends BaseAgent {
           positioning: offerData.positioning,
           uniqueMechanism: offerData.uniqueMechanism,
         },
+        // Real product/service data from the client's website
+        productContext: productContext ? {
+          websiteTitle: productContext.title,
+          websiteDescription: productContext.description,
+          websiteKeywords: productContext.keywords,
+          mainHeadings: productContext.headings,
+          pageContent: productContext.bodySnippet,
+          sourceUrl: productContext.url,
+        } : undefined,
         funnel: {
           landingPageUrl: funnelData.landingPage?.url,
           headline: funnelData.landingPage?.headline,
@@ -199,8 +239,8 @@ export class ContentCreativeAgent extends BaseAgent {
         parsed = this.safeParseLLMJson<any>(response, ['adCopies', 'hooks', 'coldEmailSequence']);
       } catch (err: any) {
         await this.log('llm_failed', { error: err.message });
-        // Build complete fallback from upstream data
-        parsed = this.buildFallbackContent(niche, offerData, funnelData);
+        // Build complete fallback from upstream + product context
+        parsed = this.buildFallbackContent(niche, offerData, funnelData, productContext);
       }
 
       // Force-zero any LLM-fabricated performance metrics
@@ -235,259 +275,153 @@ export class ContentCreativeAgent extends BaseAgent {
   /**
    * Build complete creative assets from upstream data when LLM is unavailable.
    */
-  private buildFallbackContent(niche: string, offerData: any, funnelData: any): any {
-    const serviceName = offerData.serviceName || niche;
+  private buildFallbackContent(niche: string, offerData: any, funnelData: any, productCtx?: ProductContext | null): any {
+    // Use product context to build accurate content about the CLIENT'S product
+    // Extract clean product name from title — split on common separators (|, —, –, -)
+    const rawTitle = productCtx?.title || '';
+    const productName = rawTitle
+      ? rawTitle.split(/[|—–\-]/).map(s => s.trim()).filter(s => s.length > 1)[0] || rawTitle.trim()
+      : offerData.serviceName || niche;
+    const productDesc = productCtx?.description || offerData.transformationPromise || `${productName} — professional ${niche.toLowerCase()} solutions`;
+    const features = productCtx?.headings?.slice(0, 5) || [];
     const painPoints = offerData.painPoints || [];
     const getPain = (i: number): string => {
       const p = painPoints[i];
-      if (!p) return 'growing their business';
-      return typeof p === 'string' ? p : p.pain || p.description || 'growing their business';
+      if (!p) return `challenges in ${niche.toLowerCase()}`;
+      return typeof p === 'string' ? p : p.pain || p.description || `challenges in ${niche.toLowerCase()}`;
     };
+    const getFeature = (i: number): string => features[i] || productName;
     const guarantee = typeof offerData.guarantee === 'string'
       ? offerData.guarantee
       : offerData.guarantee?.description || '';
-    const transformationPromise = offerData.transformationPromise || `Get More Qualified Leads for ${niche}`;
-    const cta = funnelData.landingPage?.cta || 'Book Your Free Strategy Call';
-    const bookingUrl = funnelData.bookingCalendar?.url || 'https://calendly.com/leados/strategy-call';
-    const icpDesc = offerData.icp?.description || offerData.icp?.companySize || `${niche} companies`;
+    const cta = funnelData.landingPage?.cta || `Learn More About ${productName}`;
+    const bookingUrl = funnelData.bookingCalendar?.url || productCtx?.url || '#';
+    const websiteUrl = productCtx?.url || '';
+    const icpDesc = offerData.icp?.description || offerData.icp?.companySize || `${niche} professionals`;
+
+    // No truncation — show full text in the UI. Google Ads API enforces limits at submission time.
+    const h = (text: string): string => text;
+    const d = (text: string): string => text;
+
+    // Extract a short tagline from the description
+    const shortDesc = productDesc.split('.')[0] || productDesc;
 
     return {
       adCopies: {
         google: [
-          { headline: `${niche} Leads on Autopilot`.substring(0, 30), description: `Stop chasing leads. Our AI engine delivers qualified ${niche.toLowerCase()} prospects straight to your calendar.`.substring(0, 90), targetKeyword: `${niche.toLowerCase()} lead generation` },
-          { headline: `AI-Powered ${niche} Growth`.substring(0, 30), description: `${transformationPromise}. No manual outreach needed. Results in 14 days or less.`.substring(0, 90), targetKeyword: `${niche.toLowerCase()} marketing` },
-          { headline: `Tired of Bad Leads?`.substring(0, 30), description: `${serviceName} uses 13 AI agents to find, qualify, and book ${niche.toLowerCase()} leads automatically.`.substring(0, 90), targetKeyword: `qualified ${niche.toLowerCase()} leads` },
-          { headline: `${niche} Pipeline Fix`.substring(0, 30), description: `Feast-or-famine pipeline? Our AI builds predictable ${niche.toLowerCase()} deal flow — fully autonomous.`.substring(0, 90), targetKeyword: `${niche.toLowerCase()} pipeline` },
-          { headline: `10+ Calls/Week — AI`.substring(0, 30), description: `Book 10+ qualified ${niche.toLowerCase()} calls per week. AI handles prospecting, outreach, and qualification.`.substring(0, 90), targetKeyword: `${niche.toLowerCase()} sales calls` },
-          { headline: `Stop Wasting Ad Spend`.substring(0, 30), description: `Cut your CPL in half. ${serviceName} targets only decision-makers ready to buy in ${niche.toLowerCase()}.`.substring(0, 90), targetKeyword: `${niche.toLowerCase()} advertising` },
-          { headline: `${niche} Growth Engine`.substring(0, 30), description: `Autonomous lead gen for ${niche.toLowerCase()}. From cold outreach to booked meeting — zero manual work.`.substring(0, 90), targetKeyword: `${niche.toLowerCase()} growth` },
-          { headline: `Qualified Leads Only`.substring(0, 30), description: `No tire-kickers. ${serviceName} AI-qualifies every lead before they hit your calendar.`.substring(0, 90), targetKeyword: `qualified ${niche.toLowerCase()} leads` },
-          { headline: `Scale ${niche} Fast`.substring(0, 30), description: `${guarantee || 'Results in 14 days'}. Our 13-agent AI engine handles your entire go-to-market.`.substring(0, 90), targetKeyword: `scale ${niche.toLowerCase()}` },
-          { headline: `${niche} on Autopilot`.substring(0, 30), description: `Why hire 5 people when 13 AI agents can run your ${niche.toLowerCase()} pipeline 24/7?`.substring(0, 90), targetKeyword: `${niche.toLowerCase()} automation` },
+          { headline: h(productName), description: d(`${shortDesc}. Try ${productName} today and see the difference.`), targetKeyword: `${niche.toLowerCase()}` },
+          { headline: h(`Try ${productName} Today`), description: d(`${shortDesc}. Trusted by ${niche.toLowerCase()} professionals worldwide.`), targetKeyword: `${niche.toLowerCase()} software` },
+          { headline: h(`${productName} for ${niche}`), description: d(`${getFeature(0)}. ${getFeature(1)}. See why teams choose ${productName}.`), targetKeyword: `${niche.toLowerCase()} tools` },
+          { headline: h(`Best ${niche} Solution`), description: d(`${productName} solves ${getPain(0).toLowerCase()}. Start free today.`), targetKeyword: `best ${niche.toLowerCase()}` },
+          { headline: h(`${niche} Made Simple`), description: d(`${productName} simplifies your entire ${niche.toLowerCase()} workflow. ${guarantee || 'Get started in minutes.'}`), targetKeyword: `${niche.toLowerCase()} solution` },
+          { headline: h(`Why ${productName}?`), description: d(`${getFeature(0)}. Purpose-built for ${icpDesc.toLowerCase()}.`), targetKeyword: `${productName.toLowerCase()}` },
+          { headline: h(`${productName} for Teams`), description: d(`Empower your team with ${productName}. Faster workflows, better results for ${niche.toLowerCase()}.`), targetKeyword: `${niche.toLowerCase()} for teams` },
+          { headline: h(`${niche} Simplified`), description: d(`No more ${getPain(0).toLowerCase()}. ${productName} gives you everything you need in one place.`), targetKeyword: `${niche.toLowerCase()} platform` },
+          { headline: h(`Get ${productName} Free`), description: d(`Start your free trial of ${productName}. Join ${niche.toLowerCase()} teams already seeing results.`), targetKeyword: `${niche.toLowerCase()} free trial` },
+          { headline: h(`Top ${niche} Tool`), description: d(`${productName} — ${shortDesc}. Discover a smarter way to work.`), targetKeyword: `top ${niche.toLowerCase()} tool` },
         ],
         meta: [
-          { primaryText: `Most ${niche.toLowerCase()} companies waste 60% of their marketing budget on unqualified leads. ${serviceName} fixes that with AI-powered prospecting that only books calls with decision-makers who are ready to buy.`, headline: transformationPromise.substring(0, 40), description: cta, targetAudience: `Cold — ${icpDesc}` },
-          { primaryText: `"We went from 2 booked calls a week to 15 — in under 30 days." That's the power of ${serviceName}. Our AI engine handles everything from prospecting to qualification.`, headline: `Stop Chasing. Start Closing.`, description: `${guarantee || 'Results guaranteed'}`, targetAudience: `Cold — ${icpDesc}` },
-          { primaryText: `Still doing outreach manually? ${serviceName} deploys 13 AI agents to run your entire lead gen pipeline — cold email, LinkedIn, ads, qualification, and booking — 24/7.`, headline: `Your Sales Team on Autopilot`, description: `See how it works — free strategy call`, targetAudience: `Cold — ${icpDesc}` },
-          { primaryText: `${getPain(0)}? You're not alone. But the top ${niche.toLowerCase()} companies solved this months ago with AI-powered lead gen. Here's how they did it.`, headline: `How Top Companies Solved It`, description: cta, targetAudience: `Cold — problem aware` },
-          { primaryText: `Your competitors are booking 3x more qualified calls using AI. ${serviceName} automates prospecting, outreach, and qualification — so your team only talks to ready buyers.`, headline: `Don't Fall Behind`, description: `Free strategy call`, targetAudience: `Cold — competitor aware` },
-          { primaryText: `You visited our page but didn't book a call. Here's what you missed: ${transformationPromise.toLowerCase()}. ${guarantee || 'No risk.'}`, headline: `Still Thinking About It?`, description: `Book your free call now`, targetAudience: `Hot — retargeting visitors` },
-          { primaryText: `You started the form but didn't finish. We get it — big decisions take time. But ${getPain(0).toLowerCase()} won't fix itself. Let's talk for 15 minutes.`, headline: `Pick Up Where You Left Off`, description: cta, targetAudience: `Hot — retargeting form abandoners` },
-          { primaryText: `Join 500+ ${niche.toLowerCase()} companies using ${serviceName} to build a predictable pipeline. Average client sees first qualified leads within 14 days.`, headline: `500+ Companies Can't Be Wrong`, description: `${guarantee || 'See it in action'}`, targetAudience: `Warm — engaged audience` },
-          { primaryText: `Imagine waking up to 3 qualified meetings on your calendar — every single day. That's what ${serviceName} delivers for ${niche.toLowerCase()} companies.`, headline: `3 Meetings/Day on Autopilot`, description: cta, targetAudience: `Warm — lookalike` },
-          { primaryText: `Last month, our ${niche.toLowerCase()} clients generated an average of 47 qualified leads. Zero manual outreach. Zero cold calling. Just AI doing what AI does best.`, headline: `47 Leads. Zero Effort.`, description: `See how — free call`, targetAudience: `Cold — results focused` },
+          { primaryText: `${getPain(0)}? ${productName} was built to solve exactly that. ${productDesc}. See how it works.`, headline: h(productName), description: cta, targetAudience: `Cold — ${icpDesc}` },
+          { primaryText: `Discover ${productName}: ${getFeature(0)}. ${getFeature(1)}. Built for ${icpDesc.toLowerCase()} who demand the best in ${niche.toLowerCase()}.`, headline: h(`Why Teams Choose ${productName}`), description: cta, targetAudience: `Cold — ${icpDesc}` },
+          { primaryText: `Tired of ${getPain(0).toLowerCase()}? ${productName} offers a better way. ${shortDesc}. Try it today.`, headline: h(`A Better Way`), description: cta, targetAudience: `Cold — problem aware` },
+          { primaryText: `Leading ${niche.toLowerCase()} teams are switching to ${productName}. ${getFeature(0)}. ${getFeature(1)}. See why.`, headline: h(`Join Leading Teams`), description: cta, targetAudience: `Cold — competitor aware` },
+          { primaryText: `You checked out ${productName} but haven't signed up yet. Here's what you're missing: ${getFeature(0)}. ${getFeature(1)}.`, headline: h(`Still Thinking About It?`), description: `Try ${productName} now`, targetAudience: `Hot — retargeting visitors` },
+          { primaryText: `"${productName} transformed how we handle ${niche.toLowerCase()}." Hear what our users have to say about their experience.`, headline: h(`Hear From Our Users`), description: cta, targetAudience: `Warm — engaged audience` },
+          { primaryText: `${productName} — ${productDesc}. Join thousands of ${niche.toLowerCase()} professionals who already made the switch.`, headline: h(productName), description: `Get started today`, targetAudience: `Cold — broad` },
+          { primaryText: `Looking for the right ${niche.toLowerCase()} solution? ${productName} delivers ${getFeature(0).toLowerCase()} and ${(getFeature(2) || 'powerful features').toLowerCase()}.`, headline: h(`The ${niche} Solution`), description: cta, targetAudience: `Cold — solution seeking` },
+          { primaryText: `${productName} makes ${niche.toLowerCase()} effortless. ${guarantee || 'Try it risk-free and see for yourself.'}`, headline: h(`Effortless ${niche}`), description: cta, targetAudience: `Warm — lookalike` },
+          { primaryText: `Stop wasting time on ${getPain(0).toLowerCase()}. ${productName} handles the hard parts so your team can focus on what matters most.`, headline: h(`Focus on What Matters`), description: cta, targetAudience: `Cold — results focused` },
         ],
       },
       hooks: [
-        { angle: 'pain', hook: `${getPain(0)} — and you're still doing outreach manually?`, useCase: 'Email subject line, ad opening' },
-        { angle: 'curiosity', hook: `This AI system books 10+ qualified calls/week for ${niche.toLowerCase()} companies. Here's how.`, useCase: 'LinkedIn post, video hook' },
-        { angle: 'social_proof', hook: `500+ ${niche.toLowerCase()} companies switched to AI-powered lead gen last quarter. The ones who didn't are falling behind.`, useCase: 'Meta ad, landing page' },
-        { angle: 'urgency', hook: `We're onboarding 10 ${niche.toLowerCase()} companies this month. After that, the waitlist opens.`, useCase: 'Email CTA, retargeting ad' },
-        { angle: 'contrarian', hook: `Cold calling is dead. SEO takes 6 months. Here's what actually works for ${niche.toLowerCase()} in 2026.`, useCase: 'Blog title, YouTube hook' },
+        { angle: 'pain', hook: `${getPain(0)}? There's a better way — it's called ${productName}.`, useCase: 'Email subject line, ad opening' },
+        { angle: 'curiosity', hook: `${niche} professionals are switching to ${productName}. Here's what they know that you don't.`, useCase: 'LinkedIn post, video hook' },
+        { angle: 'social_proof', hook: `See why leading ${niche.toLowerCase()} teams trust ${productName} for ${getFeature(0).toLowerCase()}.`, useCase: 'Meta ad, landing page' },
+        { angle: 'urgency', hook: `${productName} is offering early access to their latest ${niche.toLowerCase()} features. Limited spots.`, useCase: 'Email CTA, retargeting ad' },
+        { angle: 'contrarian', hook: `Most ${niche.toLowerCase()} tools overcomplicate things. ${productName} takes the opposite approach.`, useCase: 'Blog title, YouTube hook' },
       ],
       coldEmailSequence: [
-        { step: 1, delay: 'Day 1', subject: `Quick question about ${niche.toLowerCase()}`, body: `Hi {firstName},\n\nI noticed {company} is in the ${niche.toLowerCase()} space — specifically around ${getPain(0).toLowerCase()}. Thought this might resonate.\n\nWe help companies like yours solve ${getPain(0)} — without the usual headaches.\n\nWould it make sense to chat for 15 minutes this week?\n\nBest,\n{senderName}`, purpose: 'Personalised opener + problem statement + soft CTA', sopRole: 'personalised_opener' },
-        { step: 2, delay: 'Day 3', subject: `How a ${niche.toLowerCase()} company solved ${getPain(0)}`, body: `Hi {firstName},\n\nNo pitch today — just a quick case study I thought you'd find useful.\n\nOne of our clients in ${niche.toLowerCase()} was struggling with ${getPain(0)}. Within 30 days of using ${serviceName}, they saw measurable improvement across their pipeline.\n\nHappy to share the full breakdown if helpful.\n\nBest,\n{senderName}`, purpose: 'Value drop — case study or result, no pitch', sopRole: 'value_drop' },
-        { step: 3, delay: 'Day 5', subject: `Re: Quick question about ${niche.toLowerCase()}`, body: `Hi {firstName},\n\nCircling back on my first note. Totally understand if the timing wasn't right.\n\nIs this something worth revisiting now, or is there a better time this quarter?${guarantee ? `\n\nWorth noting: ${guarantee}.` : ''}\n\nBest,\n{senderName}`, purpose: 'Nudge — reference email 1, ask if timing is better', sopRole: 'nudge' },
-        { step: 4, delay: 'Day 8', subject: `Last one from me`, body: `Hi {firstName},\n\nThis is my last email — I don't want to clog your inbox.\n\nIf ${getPain(0).toLowerCase()} becomes a priority for {company}, feel free to reply anytime or grab a time here: ${bookingUrl}\n\nWishing you the best.\n\n{senderName}`, purpose: 'Breakup — "last one from me" energy, creates urgency', sopRole: 'breakup' },
+        { step: 1, delay: 'Day 1', subject: `Quick question about ${niche.toLowerCase()} at {company}`, body: `Hi {firstName},\n\nI noticed {company} works in ${niche.toLowerCase()}. Many teams in your space struggle with ${getPain(0).toLowerCase()}.\n\n${productName} was built to solve exactly that — ${productDesc.toLowerCase()}.\n\nWould a 15-minute walkthrough be worth your time this week?\n\nBest,\n{senderName}`, purpose: 'Personalised opener + problem statement + soft CTA', sopRole: 'personalised_opener' },
+        { step: 2, delay: 'Day 3', subject: `How teams are solving ${getPain(0).toLowerCase()}`, body: `Hi {firstName},\n\nNo pitch — just thought you'd find this useful.\n\nTeams using ${productName} have seen real improvements in how they handle ${niche.toLowerCase()}. Key benefits: ${getFeature(0)}, ${getFeature(1) || 'and more'}.\n\nHappy to share more details if helpful.\n\nBest,\n{senderName}`, purpose: 'Value drop — no pitch', sopRole: 'value_drop' },
+        { step: 3, delay: 'Day 5', subject: `Re: ${niche.toLowerCase()} at {company}`, body: `Hi {firstName},\n\nCircling back. Totally understand if the timing wasn't right.\n\nIs ${getPain(0).toLowerCase()} something {company} is actively working on? If so, ${productName} might be worth a look.${guarantee ? `\n\n${guarantee}.` : ''}\n\nBest,\n{senderName}`, purpose: 'Nudge — ask if timing is better', sopRole: 'nudge' },
+        { step: 4, delay: 'Day 8', subject: `Last note from me`, body: `Hi {firstName},\n\nThis is my last email — I respect your time.\n\nIf ${niche.toLowerCase()} challenges come up for {company}, ${productName} is here: ${websiteUrl || bookingUrl}\n\nAll the best.\n\n{senderName}`, purpose: 'Breakup email', sopRole: 'breakup' },
       ],
       linkedInDMSequence: {
-        message1: { text: `Hi {firstName}, thanks for connecting! I came across your work at {company} — really impressed by {specificProfileDetail}. Great to be in your network.`.substring(0, 300), timing: 'on connect', sopRole: 'thank_and_mention' },
-        message2: { text: `Hi {firstName}, saw this case study on how a ${niche.toLowerCase()} company solved ${getPain(0).toLowerCase()} — thought it might be relevant given what {company} is doing. Happy to share if you're interested.`, timing: 'day 2-3', sopRole: 'share_value' },
-        message3: { text: `Hi {firstName}, curious — is ${getPain(0).toLowerCase()} something {company} is actively working on? If so, happy to share what's working for other ${niche.toLowerCase()} companies on a quick 15-min call. No pressure either way. ${bookingUrl}`, timing: 'day 5-7', sopRole: 'soft_cta' },
+        message1: { text: `Hi {firstName}, thanks for connecting! Noticed your work at {company} in ${niche.toLowerCase()} — impressive. Great to be in your network.`.substring(0, 300), timing: 'on connect', sopRole: 'thank_and_mention' },
+        message2: { text: `Hi {firstName}, thought you might find this useful — ${productName} has been helping ${niche.toLowerCase()} teams with ${getFeature(0).toLowerCase()}. Happy to share details if relevant to {company}.`, timing: 'day 2-3', sopRole: 'share_value' },
+        message3: { text: `Hi {firstName}, curious — is ${getPain(0).toLowerCase()} something {company} is tackling? If so, happy to show you how ${productName} helps on a quick 15-min call. No pressure. ${websiteUrl || bookingUrl}`, timing: 'day 5-7', sopRole: 'soft_cta' },
       },
       videoAdScripts: [
         {
-          duration: '30-60s',
-          format: 'Customer testimonial',
-          videoType: 'customer_testimonial',
-          priority: 1,
-          hook: `This tool booked us 47 qualified calls in 30 days. (0-3s)`,
-          problem: `We were spending thousands on ads and cold outreach but only getting tire-kickers. Our pipeline was empty more often than not. (3-10s)`,
-          solution: `Then we found ${serviceName} — an AI engine with 13 agents that finds, qualifies, and books real decision-makers on our calendar automatically. (10-25s)`,
-          proof: `In the first month, we went from 2 calls a week to 47 qualified meetings. No new hires. No extra ad spend. Just AI doing the heavy lifting. (25-40s)`,
-          cta: `${cta} — link in bio. (last 3-5s)`,
+          duration: '30-60s', format: 'Customer testimonial', videoType: 'customer_testimonial', priority: 1,
+          hook: `${productName} changed how we do ${niche.toLowerCase()}. (0-3s)`,
+          problem: `We were struggling with ${getPain(0).toLowerCase()}. Nothing we tried worked well enough. (3-10s)`,
+          solution: `Then we found ${productName}. ${productDesc} (10-25s)`,
+          proof: `Since switching, our team has been more productive and the results speak for themselves. (25-40s)`,
+          cta: `Try ${productName} — ${websiteUrl || cta}. (last 3-5s)`,
         },
         {
-          duration: '30-45s',
-          format: 'Before/after walkthrough',
-          videoType: 'before_after_walkthrough',
-          priority: 2,
-          hook: `This is what our pipeline looked like 30 days ago. (0-3s)`,
-          problem: `Empty CRM. Maybe 2 calls a week. Manual outreach that went nowhere. Sound familiar? (3-10s)`,
-          solution: `We turned on ${serviceName} — 13 AI agents running outreach, qualification, and booking 24/7. No hiring, no offer changes. (10-25s)`,
-          proof: `Now look at this — pipeline full of qualified ${niche.toLowerCase()} leads. Every single one booked automatically. (25-40s)`,
-          cta: `Want the same results? ${cta}. (last 3-5s)`,
+          duration: '30-45s', format: 'Before/after walkthrough', videoType: 'before_after_walkthrough', priority: 2,
+          hook: `Here's our ${niche.toLowerCase()} workflow before and after ${productName}. (0-3s)`,
+          problem: `Before: manual processes, missed deadlines, frustrated team. (3-10s)`,
+          solution: `After: ${productName} handles ${getFeature(0).toLowerCase()}. Everything is streamlined. (10-25s)`,
+          proof: `The difference is night and day. Our team saves hours every week. (25-40s)`,
+          cta: `See it yourself — ${cta}. (last 3-5s)`,
         },
         {
-          duration: '45-60s',
-          format: 'Founder talking head',
-          videoType: 'founder_talking_head',
-          priority: 3,
-          hook: `I built an AI that replaces a 5-person sales team. (0-3s)`,
-          problem: `${niche.toLowerCase()} companies are still doing outreach manually. Spreadsheets, cold calls, LinkedIn spam. It doesn't scale and it burns people out. (3-10s)`,
-          solution: `So we built ${serviceName} — 13 specialized AI agents that handle everything from finding prospects to qualifying them on a real phone call to booking the meeting on your calendar. (10-25s)`,
-          proof: `Our clients typically see 10+ qualified calls per week within 30 days. It works while you sleep. And it costs less than one SDR. (25-40s)`,
-          cta: `See it in action — ${cta}. (last 3-5s)`,
+          duration: '45-60s', format: 'Founder talking head', videoType: 'founder_talking_head', priority: 3,
+          hook: `We built ${productName} because ${niche.toLowerCase()} deserved better tools. (0-3s)`,
+          problem: `${niche} professionals were stuck with ${getPain(0).toLowerCase()}. The existing solutions weren't cutting it. (3-10s)`,
+          solution: `${productName} — ${productDesc}. ${getFeature(0)}. (10-25s)`,
+          proof: `Today, teams across the industry rely on ${productName} to get better results. (25-40s)`,
+          cta: `Join them — ${cta}. (last 3-5s)`,
         },
         {
-          duration: '30-45s',
-          format: 'Screen recording + voiceover',
-          videoType: 'screen_recording_voiceover',
-          priority: 4,
-          hook: `Watch this AI book a qualified meeting in real time. (0-3s)`,
-          problem: `Most ${niche.toLowerCase()} teams spend hours prospecting manually and still end up with unqualified leads. (3-10s)`,
-          solution: `${serviceName} runs the entire pipeline — from identifying prospects to AI-qualifying them over the phone to dropping a meeting on your calendar. Let me show you. (10-25s)`,
-          proof: `This client's dashboard shows 47 leads found, 23 qualified, 15 meetings booked — all in the last 7 days. Zero manual work. (25-40s)`,
-          cta: `${cta} — link below. (last 3-5s)`,
+          duration: '30-45s', format: 'Screen recording + voiceover', videoType: 'screen_recording_voiceover', priority: 4,
+          hook: `Let me show you ${productName} in action. (0-3s)`,
+          problem: `${niche} teams waste time on ${getPain(0).toLowerCase()}. (3-10s)`,
+          solution: `With ${productName}, you get ${getFeature(0)}. Watch how easy it is. (10-25s)`,
+          proof: `That's it. What used to take hours now takes minutes. (25-40s)`,
+          cta: `Try it free — ${websiteUrl || cta}. (last 3-5s)`,
         },
         {
-          duration: '30-45s',
-          format: 'Process reveal',
-          videoType: 'process_reveal',
-          priority: 5,
-          hook: `Here's what happens behind the scenes when you turn on ${serviceName}. (0-3s)`,
-          problem: `Most lead gen tools handle one piece of the puzzle. You still need 5 tools and 3 people to make it work. (3-10s)`,
-          solution: `${serviceName} chains 13 AI agents together — research, outreach, qualification, booking — all running autonomously. (10-25s)`,
-          proof: `This pipeline was built in under a week. Since then: 200+ prospects contacted, 50+ qualified, 30+ meetings booked. No human touched it. (25-40s)`,
-          cta: `See how it works for ${niche.toLowerCase()} — ${cta}. (last 3-5s)`,
+          duration: '30-45s', format: 'Process reveal', videoType: 'process_reveal', priority: 5,
+          hook: `Here's how ${productName} works behind the scenes. (0-3s)`,
+          problem: `Most ${niche.toLowerCase()} tools are complex and clunky. (3-10s)`,
+          solution: `${productName} takes a different approach — ${getFeature(0).toLowerCase()}, ${getFeature(1)?.toLowerCase() || 'simplicity first'}. (10-25s)`,
+          proof: `The result? Teams adopt it in days, not months. (25-40s)`,
+          cta: `See how it works — ${cta}. (last 3-5s)`,
         },
       ],
       ugcScripts: {
-        patternA_roleSpecific: [
-          {
-            role: 'Finance',
-            hook: `Your cost-per-lead is 3x what it should be. Here's why.`,
-            credibilitySetup: `We've helped 500+ companies cut their customer acquisition cost in half.`,
-            productIntro: `${serviceName} is an AI engine with 13 agents that automates your entire lead gen pipeline.`,
-            keyBenefit: `Cut your CPL by 50% while tripling qualified pipeline volume.`,
-            businessCase: `One SDR costs $60K+/year. ${serviceName} delivers 3x the output at a fraction of the cost — with zero ramp time.`,
-            cta: `Ask your marketing team to book a 15-minute ROI walkthrough. ${bookingUrl}`,
-            duration: '30-60s',
-          },
-          {
-            role: 'CEO',
-            hook: `Your sales team is the bottleneck. And hiring more reps won't fix it.`,
-            credibilitySetup: `We built the AI engine that 500+ companies use to scale pipeline without scaling headcount.`,
-            productIntro: `${serviceName} replaces manual prospecting, outreach, and qualification with 13 specialized AI agents.`,
-            keyBenefit: `Predictable pipeline growth without the overhead of a growing sales org.`,
-            businessCase: `Scale from 10 to 100 qualified meetings per month without a single new hire. Faster time-to-revenue, lower burn.`,
-            cta: `See the 15-minute executive demo. ${bookingUrl}`,
-            duration: '30-60s',
-          },
-          {
-            role: 'HR',
-            hook: `Hiring SDRs takes 3 months. Training them takes 3 more. What if you didn't have to?`,
-            credibilitySetup: `Companies using ${serviceName} have eliminated 80% of entry-level sales hiring needs.`,
-            productIntro: `${serviceName} automates prospecting, outreach, and lead qualification — the work your SDRs do today.`,
-            keyBenefit: `Reduce hiring pressure on your sales recruiting pipeline.`,
-            businessCase: `No more cycling through SDRs every 9 months. ${serviceName} runs 24/7, never needs onboarding, and scales instantly.`,
-            cta: `Share this with your VP of Sales — they'll want to see the demo. ${bookingUrl}`,
-            duration: '30-60s',
-          },
-          {
-            role: 'Operations',
-            hook: `Your lead gen stack has 7 tools, 3 integrations, and zero consistency.`,
-            credibilitySetup: `We've replaced fragmented sales tooling for 500+ companies with a single autonomous platform.`,
-            productIntro: `${serviceName} consolidates prospecting, outreach, qualification, and booking into one AI-powered system.`,
-            keyBenefit: `One platform, one dashboard, zero manual handoffs between tools.`,
-            businessCase: `Eliminate tool sprawl and reduce operational overhead. Fewer vendors, fewer integrations, fewer things that break.`,
-            cta: `Book a technical walkthrough to see how it fits your stack. ${bookingUrl}`,
-            duration: '30-60s',
-          },
-        ],
+        patternA_roleSpecific: ['Finance', 'CEO', 'HR', 'Operations'].map(role => ({
+          role,
+          hook: `If you're in ${role} and dealing with ${niche.toLowerCase()}, watch this.`,
+          credibilitySetup: `We've seen how ${productName} helps ${niche.toLowerCase()} teams operate more effectively.`,
+          productIntro: `${productName} — ${productDesc}`,
+          keyBenefit: `${getFeature(0)}`,
+          businessCase: `Teams using ${productName} report better efficiency and fewer headaches with ${niche.toLowerCase()}.`,
+          cta: `Check out ${productName} — ${websiteUrl || cta}`,
+          duration: '30-60s',
+        })),
         patternB_hookVariations: [
-          {
-            variationType: 'personal_experience',
-            hook: `I used to spend 4 hours a day on cold outreach. Now I spend zero. (0-3s)`,
-            problem: `Manual prospecting is a grind — you burn hours on LinkedIn and email for maybe 1-2 responses. It's not scalable. (3-10s)`,
-            solution: `${serviceName} runs 13 AI agents that handle everything from finding prospects to booking qualified meetings on your calendar. (10-25s)`,
-            proof: `In my first month, I went from 3 calls a week to 15 — without sending a single manual email. (25-40s)`,
-            cta: `Try it yourself — ${cta}. (last 3-5s)`,
-            duration: '30-60s',
-          },
-          {
-            variationType: 'pain_point',
-            hook: `If you're still doing outreach manually, you're leaving money on the table. (0-3s)`,
-            problem: `Most ${niche.toLowerCase()} companies waste 60% of their marketing budget on leads that never convert. The pipeline is inconsistent, the team is burned out, and you can't scale. (3-10s)`,
-            solution: `${serviceName} fixes this with AI-powered prospecting that only books calls with decision-makers who are ready to buy. (10-25s)`,
-            proof: `Our average client sees their first qualified leads within 14 days — and 3x pipeline growth within 60. (25-40s)`,
-            cta: `Stop guessing. ${cta}. (last 3-5s)`,
-            duration: '30-60s',
-          },
-          {
-            variationType: 'bold_statement',
-            hook: `Cold calling is dead. SEO takes 6 months. Here's what actually works. (0-3s)`,
-            problem: `The old playbook — hire SDRs, buy lists, blast emails — doesn't scale anymore. Response rates are at all-time lows. (3-10s)`,
-            solution: `${serviceName} uses 13 AI agents to run your entire go-to-market: research, outreach, qualification, and booking — autonomously. (10-25s)`,
-            proof: `Companies using ${serviceName} book 10+ qualified calls per week within 30 days. No SDRs. No manual work. (25-40s)`,
-            cta: `See why 500+ companies switched — ${cta}. (last 3-5s)`,
-            duration: '30-60s',
-          },
-          {
-            variationType: 'social_proof',
-            hook: `500+ companies switched to AI-powered lead gen last quarter. Here's what happened. (0-3s)`,
-            problem: `They were all stuck in the same place: inconsistent pipeline, high CPL, teams stretched thin on manual outreach. (3-10s)`,
-            solution: `They turned on ${serviceName} — 13 AI agents that handle prospecting, outreach, qualification, and booking automatically. (10-25s)`,
-            proof: `Average results: 3x pipeline growth, 50% lower cost-per-lead, first qualified meetings within 14 days. (25-40s)`,
-            cta: `Join them — ${cta}. (last 3-5s)`,
-            duration: '30-60s',
-          },
+          { variationType: 'personal_experience', hook: `I tried every ${niche.toLowerCase()} tool out there. ${productName} is the one that stuck. (0-3s)`, problem: `${getPain(0)} — sound familiar? (3-10s)`, solution: `${productName} — ${productDesc} (10-25s)`, proof: `It's been a game-changer for our team. (25-40s)`, cta: `Try ${productName} — ${cta}. (last 3-5s)`, duration: '30-60s' },
+          { variationType: 'pain_point', hook: `Still struggling with ${getPain(0).toLowerCase()}? (0-3s)`, problem: `Most ${niche.toLowerCase()} teams waste time on processes that should be simple. (3-10s)`, solution: `${productName} fixes that — ${getFeature(0).toLowerCase()}. (10-25s)`, proof: `Teams are seeing real results within weeks. (25-40s)`, cta: `See for yourself — ${cta}. (last 3-5s)`, duration: '30-60s' },
+          { variationType: 'bold_statement', hook: `Most ${niche.toLowerCase()} tools are stuck in the past. (0-3s)`, problem: `They're complex, slow, and don't deliver what they promise. (3-10s)`, solution: `${productName} was built differently — ${productDesc.toLowerCase()}. (10-25s)`, proof: `That's why professionals are switching. (25-40s)`, cta: `Join them — ${cta}. (last 3-5s)`, duration: '30-60s' },
+          { variationType: 'social_proof', hook: `${niche} teams are switching to ${productName}. Here's why. (0-3s)`, problem: `They were tired of ${getPain(0).toLowerCase()}. (3-10s)`, solution: `${productName} gives them ${getFeature(0).toLowerCase()} and ${getFeature(1)?.toLowerCase() || 'more'}. (10-25s)`, proof: `The results speak for themselves. (25-40s)`, cta: `Try ${productName} today — ${cta}. (last 3-5s)`, duration: '30-60s' },
         ],
       },
       ugcBriefs: [
-        {
-          type: 'testimonial',
-          description: `Founder/CEO of a ${niche.toLowerCase()} company shares their experience going from manual outreach to AI-powered lead gen with ${serviceName}.`,
-          talkingPoints: [
-            `What lead gen looked like before (manual, inconsistent, expensive)`,
-            `The moment they decided to try ${serviceName}`,
-            `Specific results: meetings booked, pipeline growth`,
-            `"I wish I had done this sooner"`,
-          ],
-        },
-        {
-          type: 'before_after',
-          description: `Screen recording showing the ${serviceName} dashboard — before (empty pipeline) vs after (qualified leads flowing in).`,
-          talkingPoints: [
-            `Show empty CRM / calendar before`,
-            `Walk through ${serviceName} setup (60 seconds)`,
-            `Show results: leads, calls booked, pipeline value`,
-            `End with CTA: "Want the same results?"`,
-          ],
-        },
-        {
-          type: 'process_reveal',
-          description: `Behind-the-scenes look at how ${serviceName}'s 13 AI agents work together to fill a ${niche.toLowerCase()} company's pipeline.`,
-          talkingPoints: [
-            `Show the dashboard with all 13 agents`,
-            `Walk through the pipeline: research → outreach → qualification → booking`,
-            `Highlight real data: prospects found, calls made, meetings booked`,
-            `End with: "This runs 24/7 without a single human touch"`,
-          ],
-        },
+        { type: 'testimonial', description: `A ${niche.toLowerCase()} professional shares how ${productName} helped them solve ${getPain(0).toLowerCase()}.`, talkingPoints: [`What ${niche.toLowerCase()} was like before ${productName}`, `The switch to ${productName}`, `Key results and benefits`, `Would you recommend it?`] },
+        { type: 'before_after', description: `Screen recording showing ${niche.toLowerCase()} workflow before and after adopting ${productName}.`, talkingPoints: [`Show the old way (manual, slow)`, `Show ${productName} in action`, `Highlight time saved and results`, `End with CTA`] },
+        { type: 'process_reveal', description: `Behind the scenes: how ${productName} handles ${getFeature(0).toLowerCase()}.`, talkingPoints: [`Open ${productName} dashboard`, `Walk through key features`, `Show real results`, `End with: "This is how ${niche.toLowerCase()} should work"`] },
       ],
       visualCreativeBriefs: [
-        {
-          concept: 'Pipeline Transformation',
-          layout: 'Split-screen: left shows chaotic manual outreach (spreadsheets, cold calls), right shows clean AI dashboard with qualified leads',
-          imagery: 'Dark background with cyan/purple accent glow, dashboard mockup, pipeline visualization',
-          textOverlay: `"${transformationPromise}" — ${cta}`,
-        },
-        {
-          concept: 'Social Proof Grid',
-          layout: 'Grid of client logos/testimonials with key metrics highlighted, CTA button at bottom',
-          imagery: 'Professional dark theme, trust badges, green accent for metrics',
-          textOverlay: `"500+ ${niche} companies trust ${serviceName}" — ${guarantee || 'See results in 14 days'}`,
-        },
-        {
-          concept: '13-Agent Infographic',
-          layout: 'Vertical flow showing 13 agents as connected nodes, each with icon + one-line description, pipeline arrow connecting them',
-          imagery: 'Dark space theme, glowing cyan connections, each agent as a small planet/node',
-          textOverlay: `"13 AI Agents. 1 Pipeline. Zero Manual Work." — ${cta}`,
-        },
+        { concept: 'Product Showcase', layout: `Clean product screenshot/mockup of ${productName} with key feature callouts`, imagery: `Professional, modern design showcasing ${productName}'s interface`, textOverlay: `"${productName} — ${productDesc.substring(0, 60)}" — ${cta}` },
+        { concept: 'Problem → Solution', layout: `Split-screen: left shows the pain (${getPain(0).toLowerCase()}), right shows ${productName} solving it`, imagery: `Contrasting visuals — frustration vs. clarity and ease`, textOverlay: `"Stop struggling with ${niche.toLowerCase()}. Start using ${productName}."` },
+        { concept: 'Social Proof', layout: `Customer quotes and key metrics from ${productName} users`, imagery: `Trust badges, professional headshots, metric highlights`, textOverlay: `"Trusted by ${niche} professionals" — ${cta}` },
       ],
-      reasoning: `Full SOP-aligned creative asset package generated for ${niche} using upstream offer and funnel data. Includes 10 Google Ads, 10 Meta Ads, 5 hooks, 4 cold emails (SOP: opener→value drop→nudge→breakup), 3 LinkedIn DMs (SOP: thank+mention→share value→soft CTA), 5 video scripts (priority: testimonial→before/after→founder→screen recording→process reveal, each with Hook→Problem→Solution→Proof→CTA structure), UGC scripts Pattern A (4 role-specific: Finance/CEO/HR/Operations) and Pattern B (4 hook variations: personal experience/pain point/bold statement/social proof), 3 UGC briefs, and 3 visual creative briefs. Content tailored to ICP: ${icpDesc}.`,
+      reasoning: `Creative asset package generated for ${productName} (${niche}). All content is about the client's product, not LeadOS. Used product context from ${websiteUrl || 'upstream data'} to build accurate, product-specific ads, emails, scripts, and briefs.`,
       confidence: 75,
     };
   }

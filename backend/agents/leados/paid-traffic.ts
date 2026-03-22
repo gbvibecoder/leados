@@ -1,4 +1,5 @@
 import { BaseAgent, AgentInput, AgentOutput } from '../base-agent';
+import { scrapeProductContext, type ProductContext } from '../scrape-url';
 import * as googleAds from '../../integrations/google-ads';
 import * as metaAds from '../../integrations/meta-ads';
 
@@ -50,6 +51,10 @@ BIDDING STRATEGY:
 
 CRITICAL: Adapt everything to the specific niche, ICP, and offer. Use real keyword data and trend insights provided in the input.
 
+PRODUCT CONTEXT RULE: If "productContext" is provided in the input, it contains data scraped from the actual product/service website. Use this to generate keywords that ACCURATELY represent the product/service. Keywords must match what potential customers would search for to find THIS specific product — not generic niche terms. Study the website headings, description, and content to understand what the product does, then build keywords around those features and benefits.
+
+LOCALIZATION RULE: If "localization" is provided, follow its "instruction" for language. When the target country is non-English, generate keywords in BOTH the local language AND English (if the product uses English terms). Ad copy must be in the language users of that country expect to see.
+
 CRITICAL DATA INTEGRITY RULE: Do NOT generate projected, estimated, or fabricated metrics. Campaign structure, keyword lists, audience targeting, ad copies, and bidding strategies are strategic outputs and are expected. However, for the "projections" object: set estimatedCPL, estimatedLeadsPerMonth, estimatedCPA, and estimatedROAS ALL to 0. These are unmeasured — real metrics will come from live campaign data after execution. For keyword estimatedCPC and monthlySearchVolume: only include values from real SerpAPI/keyword research data provided in the input. If no real keyword data exists, set these to 0. For audience estimatedSize: set to 0 unless real Meta Ads data is provided. Never invent numbers that look like measured data.
 
 Return ONLY valid JSON (no markdown, no explanation outside JSON) with this structure:
@@ -91,7 +96,7 @@ interface KeywordData {
  * Fetches real keyword data from SerpAPI Google search autocomplete
  * to build keyword lists for Google Ads campaigns
  */
-async function fetchKeywordData(keywords: string[]): Promise<KeywordData[]> {
+async function fetchKeywordData(keywords: string[], country?: string, language?: string): Promise<KeywordData[]> {
   const apiKey = process.env.SERPAPI_KEY;
   const results: KeywordData[] = [];
 
@@ -111,6 +116,9 @@ async function fetchKeywordData(keywords: string[]): Promise<KeywordData[]> {
       searchUrl.searchParams.set('q', keyword);
       searchUrl.searchParams.set('num', '10');
       searchUrl.searchParams.set('api_key', apiKey);
+      // Set country and language for localized results
+      if (country) searchUrl.searchParams.set('gl', country.toLowerCase());
+      if (language) searchUrl.searchParams.set('hl', language);
 
       const serpController = new AbortController();
       const serpTimeout = setTimeout(() => serpController.abort(), 15_000);
@@ -209,13 +217,64 @@ export class PaidTrafficAgent extends BaseAgent {
       || topOpportunity.trendData?.googleTrends?.risingQueries?.map((q: any) => q.query)
       || [];
 
-    // Step 1: Fetch real keyword data via SerpAPI
-    const keywordSeeds = [
-      niche.toLowerCase(),
-      ...risingQueries.slice(0, 2),
-      `${niche.toLowerCase()} agency`,
-      `${niche.toLowerCase()} service`,
-    ].slice(0, 3);
+    // Country/language context for localized keywords
+    const targetCountry = inputs.config?.country || inputs.config?.targetCountry || '';
+    const COUNTRY_LANG: Record<string, string> = {
+      DE: 'de', FR: 'fr', BR: 'pt', ES: 'es', IT: 'it', NL: 'nl',
+      JP: 'ja', KR: 'ko', CN: 'zh', IN: 'hi', AE: 'ar', RU: 'ru',
+    };
+    const targetLanguage = COUNTRY_LANG[targetCountry.toUpperCase()] || 'en';
+
+    // Step 0: Scrape project URL for product context
+    const projectUrl = inputs.config?.projectUrl || inputs.config?.url || offerData.landingPageUrl || '';
+    let productContext: ProductContext | null = null;
+    if (projectUrl) {
+      await this.log('scraping_url', { url: projectUrl });
+      productContext = await scrapeProductContext(projectUrl);
+      if (productContext) {
+        await this.log('url_scraped', {
+          title: productContext.title,
+          headingsCount: productContext.headings.length,
+          keywordsCount: productContext.keywords.length,
+        });
+      }
+    }
+
+    // Step 1: Build keyword seeds from REAL product data
+    const keywordSeeds: string[] = [];
+
+    // Priority 1: Meta keywords and headings from the actual website
+    if (productContext) {
+      // Use meta keywords from the site
+      for (const kw of productContext.keywords.slice(0, 2)) {
+        if (kw.length > 2 && kw.length < 60) keywordSeeds.push(kw.toLowerCase());
+      }
+      // Use h1/h2 headings as keyword seeds (they describe the product)
+      for (const h of productContext.headings.slice(0, 2)) {
+        if (h.length > 3 && h.length < 50) keywordSeeds.push(h.toLowerCase());
+      }
+    }
+
+    // Priority 2: Rising queries from Google Trends (actual search data)
+    for (const q of risingQueries.slice(0, 2)) {
+      if (!keywordSeeds.includes(q.toLowerCase())) keywordSeeds.push(q.toLowerCase());
+    }
+
+    // Priority 3: Service name from offer engineering
+    const serviceName = offerData.serviceName || offerData.name || '';
+    if (serviceName && !keywordSeeds.includes(serviceName.toLowerCase())) {
+      keywordSeeds.push(serviceName.toLowerCase());
+    }
+
+    // Fallback: niche name only if nothing else
+    if (keywordSeeds.length === 0) {
+      keywordSeeds.push(niche.toLowerCase());
+      keywordSeeds.push(`${niche.toLowerCase()} service`);
+    }
+
+    // Limit to 3 to conserve SerpAPI quota
+    const finalSeeds = keywordSeeds.slice(0, 3);
+    await this.log('keyword_seeds', { seeds: finalSeeds, source: productContext ? 'url_scraped' : 'niche_fallback' });
 
     // Steps 1 & 2: Fetch keyword data + ad platform metrics IN PARALLEL
     await this.log('data_fetch', { phase: 'Fetching keyword data + ad platform metrics in parallel' });
@@ -224,7 +283,7 @@ export class PaidTrafficAgent extends BaseAgent {
     let realMetaInsights: any[] = [];
 
     const [kwResult, googleResult, metaResult] = await Promise.allSettled([
-      fetchKeywordData(keywordSeeds),
+      fetchKeywordData(finalSeeds, targetCountry, targetLanguage),
       googleAds.isGoogleAdsAvailable() ? googleAds.getCampaignMetrics() : Promise.resolve([]),
       metaAds.isMetaAdsAvailable() ? metaAds.getCampaignInsights() : Promise.resolve([]),
     ]);
@@ -264,6 +323,15 @@ export class PaidTrafficAgent extends BaseAgent {
           positioning: offerData.positioning,
           pricingTiers: offerData.pricingTiers,
         },
+        // Product context from the actual website URL
+        productContext: productContext ? {
+          websiteTitle: productContext.title,
+          websiteDescription: productContext.description,
+          websiteKeywords: productContext.keywords,
+          mainHeadings: productContext.headings,
+          pageContent: productContext.bodySnippet,
+          sourceUrl: projectUrl,
+        } : undefined,
         funnel: {
           landingPageUrl: funnelData.landingPage?.url,
           bookingUrl: funnelData.bookingCalendar?.url,
@@ -282,6 +350,14 @@ export class PaidTrafficAgent extends BaseAgent {
           demandScore: topOpportunity.demandScore,
           competitionScore: topOpportunity.competitionScore,
           estimatedMarketSize: topOpportunity.estimatedMarketSize,
+        },
+        // Language and country context
+        localization: {
+          targetCountry: targetCountry || 'US',
+          targetLanguage,
+          instruction: targetLanguage !== 'en'
+            ? `IMPORTANT: Generate keywords, ad copy headlines, and ad copy descriptions in the target language (${targetLanguage}) appropriate for ${targetCountry}. Users in this country search in their local language. Include both local language keywords AND English keywords if the product/service commonly uses English terms.`
+            : 'Generate keywords and ad copy in English.',
         },
         config: {
           monthlyBudget: inputs.config?.monthlyBudget || 5000,

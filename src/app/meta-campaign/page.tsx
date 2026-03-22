@@ -14,9 +14,12 @@ export default function MetaCampaignPage() {
     error,
     isLoading,
     insights,
+    formData,
     startCampaign,
     activateCampaign,
     fetchInsights,
+    updateAdSet,
+    pauseCampaign,
     reset,
   } = useMetaCampaign();
 
@@ -56,7 +59,10 @@ export default function MetaCampaignPage() {
             <CampaignSummary
               ids={ids}
               insights={insights}
+              formData={formData}
               onFetchInsights={fetchInsights}
+              onUpdateAdSet={updateAdSet}
+              onPauseCampaign={pauseCampaign}
               onReset={reset}
             />
           )}
