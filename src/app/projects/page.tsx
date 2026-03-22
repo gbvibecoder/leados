@@ -149,9 +149,11 @@ export default function ProjectsPage() {
       {/* ══════ CREATE FORM ══════ */}
       <AnimatePresence>
       {showCreate && (
-        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-          transition={{ duration: 0.3 }} className="mb-8 overflow-hidden">
-          <div className="relative rounded-2xl p-6 overflow-hidden"
+        <motion.div initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+          animate={{ opacity: 1, height: 'auto', overflow: 'visible', transitionEnd: { overflow: 'visible' } }}
+          exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+          transition={{ duration: 0.3 }} className="mb-8">
+          <div className="relative rounded-2xl p-6"
             style={{ background: 'rgba(2,2,5,0.7)', border: '1px solid rgba(0,242,255,0.08)', backdropFilter: 'blur(20px)' }}>
             {/* Decorative wave */}
             <svg className="absolute bottom-0 left-0 right-0 h-20 pointer-events-none opacity-10" preserveAspectRatio="none" viewBox="0 0 100 40">
