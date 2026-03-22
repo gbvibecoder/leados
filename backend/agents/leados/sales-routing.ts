@@ -204,8 +204,12 @@ export class SalesRoutingAgent extends BaseAgent {
             ],
           };
         }
+        // Filter by projectId when running within a project pipeline
+        const projectId = inputs.config?.projectId;
+        const projectCondition = projectId ? { projectId } : {};
+
         const userDbLeads = await prisma.lead.findMany({
-          where: ownershipCondition,
+          where: { AND: [ownershipCondition, projectCondition] },
           select: { email: true, name: true },
         });
         for (const l of userDbLeads) {

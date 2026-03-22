@@ -71,13 +71,14 @@ async function runPipelineFromIndex(
   agentsToRun: string[],
   startIndex: number,
   previousOutputs: Record<string, any>,
-  projectData?: { name: string; url?: string; type: string; description?: string; config?: any },
+  projectData?: { id?: string; name: string; url?: string; type: string; description?: string; config?: any },
   pipelineUserId?: string | null
 ) {
   const agents = getAgents();
 
   const projectConfig: Record<string, any> = {};
   if (projectData) {
+    if (projectData.id) projectConfig.projectId = projectData.id;
     projectConfig.projectName = projectData.name;
     projectConfig.projectType = projectData.type;
     if (projectData.url) projectConfig.projectUrl = projectData.url;
@@ -227,12 +228,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   // Determine which agents to run (same logic as start)
   let isInternal = false;
   let enabledAgentIds: string[] | null = null;
-  let projectData: { name: string; url?: string; type: string; description?: string; config?: any } | undefined;
+  let projectData: { id?: string; name: string; url?: string; type: string; description?: string; config?: any } | undefined;
 
   if (pipeline.project) {
     const proj = pipeline.project;
     if (proj.type === 'internal') isInternal = true;
     projectData = {
+      id: proj.id,
       name: proj.name,
       type: proj.type,
       description: proj.description || undefined,

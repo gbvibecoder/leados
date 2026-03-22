@@ -55,6 +55,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         isInternal = true;
       }
 
+      projectConfig.projectId = proj.id;
       projectConfig.projectName = proj.name;
       projectConfig.projectType = proj.type;
       if (proj.description) projectConfig.projectDescription = proj.description;

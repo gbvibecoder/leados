@@ -165,10 +165,15 @@ export class AIQualificationAgent extends BaseAgent {
             };
           }
 
+          // Filter by projectId when running within a project pipeline
+          const projectId = inputs.config?.projectId;
+          const projectCondition = projectId ? { projectId } : {};
+
           const dbLeads = await prisma.lead.findMany({
             where: {
               AND: [
                 ownershipCondition,
+                projectCondition,
                 { stage: 'new' }, // only call leads that haven't been processed yet
                 { qualificationOutcome: null }, // not yet qualified
                 { score: { gte: 30 } }, // minimum score threshold for qualification

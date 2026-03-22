@@ -187,10 +187,15 @@ export class InboundCaptureAgent extends BaseAgent {
           };
         }
 
+        // Filter by projectId when running within a project pipeline
+        const projectId = inputs.config?.projectId;
+        const projectCondition = projectId ? { projectId } : {};
+
         dbLeads = await prisma.lead.findMany({
           where: {
             AND: [
               ownershipCondition,
+              projectCondition,
               { stage: 'new' }, // only process leads that haven't been handled yet
             ],
           },
