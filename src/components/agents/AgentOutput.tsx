@@ -19,33 +19,37 @@ import { PerformanceOptimizationOutput } from './outputs/PerformanceOptimization
 import { CRMHygieneOutput } from './outputs/CRMHygieneOutput';
 import { GenericAgentOutput } from './outputs/GenericAgentOutput';
 
-// ── Module-level translation cache — persists across popup open/close ──
-const translationCache = new Map<string, any>();
+// ── Module-level translation state — shared between preTranslateAgent & component ──
+const translationCache = new Map<string, any>();          // cacheKey → translated data
+const inflightPromises = new Map<string, Promise<any>>(); // cacheKey → pending promise
+let cachedLanguage = '';
+
+/** Clear all caches when project language changes */
+function ensureCacheLanguage(language: string) {
+  if (cachedLanguage && cachedLanguage !== language) {
+    translationCache.clear();
+    inflightPromises.clear();
+  }
+  cachedLanguage = language;
+}
 
 function buildCacheKey(agentId: string, language: string, data: any): string {
   const dataStr = JSON.stringify(data);
   return `${agentId}:${language}:${dataStr.slice(0, 300)}:${dataStr.length}`;
 }
 
-/**
- * Split a data object into small chunks for parallel translation.
- * Each top-level key becomes a separate chunk so the LLM can handle it.
- */
 function splitIntoChunks(data: any): { key: string; value: any }[] {
   if (!data || typeof data !== 'object') return [];
   const chunks: { key: string; value: any }[] = [];
   for (const [key, value] of Object.entries(data)) {
-    // Skip non-translatable fields
     if (value === null || value === undefined) continue;
     if (typeof value === 'number' || typeof value === 'boolean') continue;
-    // Skip very short strings (likely IDs, codes) and non-text keys
     if (typeof value === 'string' && (value.length < 10 || /^https?:\/\//.test(value))) continue;
     chunks.push({ key, value });
   }
   return chunks;
 }
 
-/** Translate a single chunk via the API */
 async function translateChunk(chunkData: any, language: string): Promise<any> {
   const res = await apiFetch('/api/translate', {
     method: 'POST',
@@ -54,6 +58,73 @@ async function translateChunk(chunkData: any, language: string): Promise<any> {
   });
   const result = await res.json();
   return result.translated ?? chunkData;
+}
+
+/**
+ * Core translation function — used by both preTranslateAgent and the component.
+ * Returns a promise that resolves to the translated data. If a translation for
+ * the same cacheKey is already in-flight, returns the existing promise (dedup).
+ */
+function translateData(cacheKey: string, dataPayload: any, language: string): Promise<any> {
+  // Already fully cached
+  const cached = translationCache.get(cacheKey);
+  if (cached) return Promise.resolve(cached);
+
+  // Already in-flight — reuse the same promise
+  const inflight = inflightPromises.get(cacheKey);
+  if (inflight) return inflight;
+
+  // Start new translation
+  const promise = (async () => {
+    const chunks = splitIntoChunks(dataPayload);
+    const results: Record<string, any> = {};
+
+    // Copy non-translatable fields
+    for (const [key, value] of Object.entries(dataPayload)) {
+      if (!chunks.find(c => c.key === key)) {
+        results[key] = value;
+      }
+    }
+
+    if (chunks.length === 0) {
+      translationCache.set(cacheKey, results);
+      return results;
+    }
+
+    // Translate all chunks in parallel
+    await Promise.all(
+      chunks.map(async ({ key, value }) => {
+        try {
+          results[key] = await translateChunk(value, language);
+        } catch {
+          results[key] = value;
+        }
+      })
+    );
+
+    translationCache.set(cacheKey, results);
+    inflightPromises.delete(cacheKey);
+    return results;
+  })();
+
+  inflightPromises.set(cacheKey, promise);
+  return promise;
+}
+
+/**
+ * Pre-translate agent output in the background (call right after agent completes).
+ * Populates the cache so AgentOutput renders instantly when opened.
+ */
+export async function preTranslateAgent(agentId: string, language: string, rawOutput: any): Promise<void> {
+  if (!language || language === 'en' || !rawOutput) return;
+
+  ensureCacheLanguage(language);
+
+  const dataPayload = rawOutput?.data || rawOutput;
+  if (!dataPayload || typeof dataPayload !== 'object') return;
+
+  const cacheKey = buildCacheKey(agentId, language, dataPayload);
+  await translateData(cacheKey, dataPayload, language);
 }
 
 interface AgentOutputProps {
@@ -70,13 +141,11 @@ interface AgentOutputProps {
  * Auto-translates output data when the project language is not English.
  */
 export function AgentOutput({ agentId, agentName, data, isLive = false, agentRunId, onResolved }: AgentOutputProps) {
-  // Normalize: if data is a string (double-serialized), parse it
   let normalizedData = data;
   if (typeof normalizedData === 'string') {
     try { normalizedData = JSON.parse(normalizedData); } catch { /* keep as-is */ }
   }
 
-  // ── Translation logic ──
   const selectedProjectId = useAppStore((s) => s.selectedProjectId);
   const projects = useAppStore((s) => s.projects);
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
@@ -84,18 +153,25 @@ export function AgentOutput({ agentId, agentName, data, isLive = false, agentRun
   const langLabel = SUPPORTED_LANGUAGES.find((l) => l.code === projectLanguage)?.label || projectLanguage;
   const needsTranslation = projectLanguage !== 'en';
 
-  // Extract the actual data payload for translation (unwrap success/data wrapper)
-  const dataPayload = normalizedData?.data || normalizedData;
+  if (needsTranslation) ensureCacheLanguage(projectLanguage);
 
+  const dataPayload = normalizedData?.data || normalizedData;
   const cacheKey = needsTranslation && dataPayload ? buildCacheKey(agentId, projectLanguage, dataPayload) : '';
 
+  // Initialize from cache immediately (background translation may have finished)
   const [translatedData, setTranslatedData] = useState<any>(() => {
-    if (!needsTranslation) return null;
+    if (!needsTranslation || !cacheKey) return null;
     return translationCache.get(cacheKey) || null;
   });
   const [isTranslating, setIsTranslating] = useState(false);
-  const [progress, setProgress] = useState({ done: 0, total: 0 });
   const translationRef = useRef<string>('');
+
+  // Reset when language changes
+  const prevLangRef = useRef(projectLanguage);
+  if (prevLangRef.current !== projectLanguage) {
+    prevLangRef.current = projectLanguage;
+    translationRef.current = '';
+  }
 
   useEffect(() => {
     if (!needsTranslation || !dataPayload || typeof dataPayload !== 'object') {
@@ -103,63 +179,51 @@ export function AgentOutput({ agentId, agentName, data, isLive = false, agentRun
       return;
     }
 
-    // Already have cached translation
+    // Check cache (background translation may have completed)
     const cached = translationCache.get(cacheKey);
     if (cached) {
-      if (translationRef.current !== cacheKey) {
-        translationRef.current = cacheKey;
-        setTranslatedData(cached);
-      }
+      translationRef.current = cacheKey;
+      setTranslatedData(cached);
       return;
     }
 
-    // Already translating this exact data
+    // Don't start duplicate work for the same key
     if (translationRef.current === cacheKey) return;
     translationRef.current = cacheKey;
-    setTranslatedData(null);
     setIsTranslating(true);
 
-    // Split data into chunks and translate in parallel
-    const chunks = splitIntoChunks(dataPayload);
-    if (chunks.length === 0) {
-      setIsTranslating(false);
-      return;
-    }
-
-    setProgress({ done: 0, total: chunks.length });
-    const results: Record<string, any> = {};
-    let completed = 0;
-
-    // Copy non-translatable fields directly
-    for (const [key, value] of Object.entries(dataPayload)) {
-      if (!chunks.find(c => c.key === key)) {
-        results[key] = value;
-      }
-    }
-
-    chunks.forEach(({ key, value }) => {
-      translateChunk(value, projectLanguage)
-        .then((translated) => {
-          results[key] = translated;
-        })
-        .catch(() => {
-          results[key] = value; // Keep original on failure
-        })
-        .finally(() => {
-          completed++;
-          setProgress({ done: completed, total: chunks.length });
-
-          if (completed >= chunks.length) {
-            // All chunks done — save to cache and update state
-            translationCache.set(cacheKey, results);
-            setTranslatedData(results);
-            setIsTranslating(false);
-          }
-        });
-    });
+    // Use shared translateData — reuses in-flight promise if background already started
+    translateData(cacheKey, dataPayload, projectLanguage)
+      .then((result) => {
+        if (translationRef.current === cacheKey) {
+          setTranslatedData(result);
+          setIsTranslating(false);
+        }
+      })
+      .catch(() => {
+        if (translationRef.current === cacheKey) {
+          setIsTranslating(false);
+        }
+      });
   }, [needsTranslation, cacheKey, dataPayload, projectLanguage]);
 
-  // Build the final data to pass to output components
+  // Also poll for background completion (in case preTranslateAgent finishes while this component is mounted)
+  useEffect(() => {
+    if (!needsTranslation || !cacheKey || translatedData) return;
+
+    const interval = setInterval(() => {
+      const cached = translationCache.get(cacheKey);
+      if (cached) {
+        setTranslatedData(cached);
+        setIsTranslating(false);
+        clearInterval(interval);
+      }
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [needsTranslation, cacheKey, translatedData]);
+
+  // Build display data
   let displayData = normalizedData;
   if (translatedData) {
     if (normalizedData?.data) {
@@ -169,7 +233,7 @@ export function AgentOutput({ agentId, agentName, data, isLive = false, agentRun
     }
   }
 
-  // Check for error output — show error message instead of "no data yet" placeholder
+  // Error output
   const errorMsg = normalizedData?.error
     || normalizedData?.data?.error
     || (normalizedData?.success === false && normalizedData?.reasoning);
@@ -187,15 +251,13 @@ export function AgentOutput({ agentId, agentName, data, isLive = false, agentRun
     );
   }
 
-  // Translation status badge
+  // Translation badge
   const translationBadge = needsTranslation ? (
     <div className="flex items-center gap-1.5 mb-3">
       {isTranslating ? (
         <>
           <Loader2 className="w-3.5 h-3.5 text-amber-400 animate-spin" />
-          <span className="text-xs text-amber-400">
-            Translating to {langLabel}… {progress.done > 0 && `(${progress.done}/${progress.total})`}
-          </span>
+          <span className="text-xs text-amber-400">Translating to {langLabel}…</span>
         </>
       ) : translatedData ? (
         <>
@@ -206,7 +268,6 @@ export function AgentOutput({ agentId, agentName, data, isLive = false, agentRun
     </div>
   ) : null;
 
-  // Render the appropriate output component with translated data
   const outputComponent = (() => {
     switch (agentId) {
       case 'service-research':

@@ -7,6 +7,7 @@ import { AgentDetailPanel } from '@/components/agents/agent-detail-panel';
 import { useAppStore, DISCOVERY_AGENT_IDS, LEADOS_AGENTS, SUPPORTED_LANGUAGES } from '@/lib/store';
 import { pipelines as pipelinesApi, agents as agentsApi, apiFetch } from '@/lib/api';
 import { ErrorBoundary } from '@/components/layout/error-boundary';
+import { preTranslateAgent } from '@/components/agents/AgentOutput';
 import {
   Building2, Pause, Play, RotateCcw, ChevronDown, ChevronUp, ChevronRight,
   Bot, Check, Loader2, AlertCircle, ArrowDown, Settings2,
@@ -349,6 +350,11 @@ export default function LeadOSPage() {
           setAgentOutputs(prev => ({ ...prev, [agentId]: agentResult.output }));
           addActivity({ type: 'agent_completed', agentId, agentName, message: `${agentName} completed` });
 
+          // Pre-translate in background so it's ready when user opens the popup
+          if (selectedProject?.language && selectedProject.language !== 'en') {
+            preTranslateAgent(agentId, selectedProject.language, agentResult.output).catch(() => {});
+          }
+
         } catch (agentErr: any) {
           // If aborted due to pause, don't treat as error
           if (agentErr.name === 'AbortError') {
@@ -469,6 +475,11 @@ export default function LeadOSPage() {
                 agentName: LEADOS_AGENTS.find(a => a.id === agentId)?.name || agentId,
                 message: `${LEADOS_AGENTS.find(a => a.id === agentId)?.name || agentId} completed`,
               });
+
+              // Pre-translate in background
+              if (selectedProject?.language && selectedProject.language !== 'en') {
+                preTranslateAgent(agentId, selectedProject.language, output).catch(() => {});
+              }
               return;
             }
 
@@ -569,6 +580,11 @@ export default function LeadOSPage() {
         });
         setAgentOutputs(prev => ({ ...prev, [agentId]: result.output }));
         addActivity({ type: 'agent_completed', agentId, agentName, message: `${agentName} completed (re-run)` });
+
+        // Pre-translate in background
+        if (selectedProject?.language && selectedProject.language !== 'en') {
+          preTranslateAgent(agentId, selectedProject.language, result.output).catch(() => {});
+        }
       } catch (err: any) {
         stopAgentTimer(agentId);
         updateAgentStatus(agentId, { status: 'error', error: err.message || 'Re-run failed' });

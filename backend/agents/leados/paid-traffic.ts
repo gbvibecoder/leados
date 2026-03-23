@@ -3,84 +3,38 @@ import { scrapeProductContext, type ProductContext } from '../scrape-url';
 import * as googleAds from '../../integrations/google-ads';
 import * as metaAds from '../../integrations/meta-ads';
 
-const SYSTEM_PROMPT = `You are the Paid Traffic Agent for LeadOS — the Service Acquisition Machine. You manage all paid advertising campaigns across Google Ads and Meta Ads.
+const SYSTEM_PROMPT = `You are a Paid Traffic Agent. Build Google Ads + Meta Ads campaigns from the input data.
 
-You receive JSON input containing:
-- The offer (ICP, pain points, pricing, positioning, guarantee) from upstream agents
-- Ad copies and hooks from the Content & Creative Agent
-- Landing page URL and funnel structure from the Funnel Builder Agent
-- Google Trends data (rising queries, search interest) from the Service Research Agent
-- Budget allocation from config
+RULES:
+- Use productContext (scraped website data) for ALL ad copy — reference the ACTUAL product name, features, benefits
+- If "localization" is provided, write ad copy in the specified language. Include both local + English keywords if needed
+- Set ALL projection numbers to 0. Set estimatedCPC/monthlySearchVolume to 0 unless real SerpAPI data exists. Set estimatedSize to 0
+- Keep output concise: 10 keywords max, 2 ad groups, 3 audiences, 3 ad sets with 1 creative each
 
-You operate TWO sub-agents:
-
-SUB-AGENT 1: Google Ads Campaign Manager
-- Keyword research: Use the rising queries from Google Trends and niche keywords to build high-intent keyword lists
-- Campaign structure: Organize into 3 themed ad groups with tight keyword clustering
-- Match types: Exact + phrase match for control. Broad match only with Smart Bidding
-- Bidding: Start with Maximize Conversions, transition to Target CPA once 15+ conversions recorded
-- Ad extensions: Sitelinks, callouts, structured snippets
-- Negative keywords: Exclude irrelevant traffic (free, cheap, DIY, tutorial, jobs, hiring)
-- Conversion tracking: Google Ads tag via GTM for form_submit, calendly_booking, phone_call
-
-SUB-AGENT 2: Meta Ads Campaign Manager
-- Audience strategy by temperature tier:
-  - COLD audiences: Interest-based targeting + job titles matching ICP demographics and firmographics
-  - WARM audiences: Website visitors (pixel-based retargeting), video viewers (25%/50%/75% watched), page engagers (liked, commented, shared)
-  - HOT audiences: Lookalike audiences built from converters (1%-3% LAL), email list match (customer/lead list upload)
-- Campaign structure: CBO with 3 ad sets per temperature tier
-- Creative testing: Use hooks and ad copies from Content Agent — minimum 3 creatives per ad set
-- Pixel events: ViewContent, Lead, InitiateCheckout, Schedule — via CAPI for iOS resilience
-- Placements: Feed + Stories + Reels — EXCLUDE Audience Network placements (SOP requirement)
-
-A/B TESTING RULES (mandatory):
-- Set up A/B tests with minimum 3 creatives per ad set
-- Only test ONE variable at a time (headline OR image OR CTA — never multiple)
-- Require statistical significance threshold (95% confidence) before declaring a winner
-- Do not kill a test early — let it reach significance or budget threshold
-
-KILL RULES (automated enforcement):
-- PAUSE any ad with 0 conversions after 72 hours of active spend
-- KILL (disable) any ad set where CPL exceeds 2x target CPL after $50+ total spend
-- SCALE (increase budget 20-30%) any ad set where CPL is less than 50% of target CPL for 48+ consecutive hours
-
-BIDDING STRATEGY:
-- Launch all campaigns with "Maximize Conversions" bidding strategy
-- Switch to "Target CPA" bidding once the campaign has recorded 15+ conversions
-- Do NOT switch to Target CPA prematurely — insufficient conversion data will degrade performance
-
-CRITICAL: Adapt everything to the specific niche, ICP, and offer. Use real keyword data and trend insights provided in the input.
-
-PRODUCT CONTEXT RULE: If "productContext" is provided in the input, it contains data scraped from the actual product/service website. Use this to generate keywords that ACCURATELY represent the product/service. Keywords must match what potential customers would search for to find THIS specific product — not generic niche terms. Study the website headings, description, and content to understand what the product does, then build keywords around those features and benefits.
-
-LOCALIZATION RULE: If "localization" is provided, follow its "instruction" for language. When the target country is non-English, generate keywords in BOTH the local language AND English (if the product uses English terms). Ad copy must be in the language users of that country expect to see.
-
-CRITICAL DATA INTEGRITY RULE: Do NOT generate projected, estimated, or fabricated metrics. Campaign structure, keyword lists, audience targeting, ad copies, and bidding strategies are strategic outputs and are expected. However, for the "projections" object: set estimatedCPL, estimatedLeadsPerMonth, estimatedCPA, and estimatedROAS ALL to 0. These are unmeasured — real metrics will come from live campaign data after execution. For keyword estimatedCPC and monthlySearchVolume: only include values from real SerpAPI/keyword research data provided in the input. If no real keyword data exists, set these to 0. For audience estimatedSize: set to 0 unless real Meta Ads data is provided. Never invent numbers that look like measured data.
-
-Return ONLY valid JSON (no markdown, no explanation outside JSON) with this structure:
+Return ONLY valid JSON:
 {
   "googleAds": {
     "campaignName": "string",
-    "keywords": [{ "keyword": "string", "matchType": "exact|phrase|broad", "estimatedCPC": "number", "monthlySearchVolume": "number", "intent": "high|medium|low" }],
-    "adGroups": [{ "name": "string", "theme": "string", "keywords": ["string"], "adCopy": { "headlines": ["string (≤30 chars)"], "descriptions": ["string (≤90 chars)"] } }],
+    "keywords": [{ "keyword": "string", "matchType": "exact|phrase", "estimatedCPC": 0, "monthlySearchVolume": 0, "intent": "high|medium" }],
+    "adGroups": [{ "name": "string", "theme": "string", "keywords": ["string"], "adCopy": { "headlines": ["string ≤30ch"], "descriptions": ["string ≤90ch"] } }],
     "negativeKeywords": ["string"],
-    "dailyBudget": "number",
-    "biddingStrategy": "string",
-    "conversionTracking": { "conversionActions": ["string"], "trackingMethod": "string" },
+    "dailyBudget": 0,
+    "biddingStrategy": "Maximize Conversions",
+    "conversionTracking": { "conversionActions": ["form_submit","calendly_booking"], "trackingMethod": "GTM" },
     "extensions": { "sitelinks": [{ "text": "string", "url": "string" }], "callouts": ["string"] }
   },
   "metaAds": {
     "campaignName": "string",
-    "audiences": [{ "name": "string", "type": "cold|warm|hot", "targeting": "string", "estimatedSize": "number" }],
-    "adSets": [{ "name": "string", "audience": "string", "dailyBudget": "number", "creatives": [{ "name": "string", "format": "image|video|carousel", "hook": "string" }] }],
-    "pixelEvents": ["string"],
-    "placements": ["string"],
-    "dailyBudget": "number"
+    "audiences": [{ "name": "string", "type": "cold|warm|hot", "targeting": "string", "estimatedSize": 0 }],
+    "adSets": [{ "name": "string", "audience": "string", "dailyBudget": 0, "creatives": [{ "name": "string", "format": "image", "hook": "string", "primaryText": "string (2-3 sentences)", "headline": "string", "description": "string", "callToAction": "LEARN_MORE|SIGN_UP|BOOK_NOW" }] }],
+    "pixelEvents": ["ViewContent","Lead"],
+    "placements": ["Feed","Stories","Reels"],
+    "dailyBudget": 0
   },
-  "budgetAllocation": { "google": "number (percentage)", "meta": "number (percentage)", "totalMonthlyBudget": "number" },
-  "projections": { "estimatedCPL": "number", "estimatedLeadsPerMonth": "number", "estimatedCPA": "number", "estimatedROAS": "number" },
+  "budgetAllocation": { "google": 60, "meta": 40, "totalMonthlyBudget": 0 },
+  "projections": { "estimatedCPL": 0, "estimatedLeadsPerMonth": 0, "estimatedCPA": 0, "estimatedROAS": 0 },
   "reasoning": "string",
-  "confidence": "number 0-100"
+  "confidence": 0
 }`;
 
 // ── SerpAPI Keyword Research ────────────────────────────────────────────────
@@ -371,7 +325,7 @@ export class PaidTrafficAgent extends BaseAgent {
         },
       };
 
-      const response = await this.callClaude(SYSTEM_PROMPT, JSON.stringify(enrichedInput), 1, 10000);
+      const response = await this.callClaude(SYSTEM_PROMPT, JSON.stringify(enrichedInput), 2, 8192);
       let parsed: any = {};
       try {
         parsed = this.safeParseLLMJson<any>(response, ['googleAds', 'metaAds']);
@@ -424,148 +378,13 @@ export class PaidTrafficAgent extends BaseAgent {
         confidence: parsed.confidence || 0,
       };
 
-      // Steps 4 & 5: Create Google Ads + Meta Ads campaigns IN PARALLEL
-      const landingUrl = funnelData.landingPage?.url || offerData.landingPageUrl || 'https://leados.com';
-
-      const googleAdsPromise = (async () => {
-        if (!googleAds.isGoogleAdsAvailable() || !cleanOutput.googleAds) return;
-        try {
-          const dailyBudget = 100;
-          await this.log('google_ads_creating', { phase: 'Creating ENABLED campaign with budget' });
-          const campaign = await googleAds.createCampaign({
-            name: cleanOutput.googleAds.campaignName || 'LeadOS Google Campaign',
-            dailyBudgetMicros: dailyBudget * 1_000_000,
-          });
-          cleanOutput.googleAds._campaignId = campaign.campaignId;
-          cleanOutput.googleAds._budgetId = campaign.budgetId;
-          cleanOutput.googleAds._status = 'ENABLED';
-          cleanOutput.googleAds._createdInGoogleAds = true;
-          await this.log('google_ads_campaign_created', { campaignId: campaign.campaignId });
-
-          // Add negative keywords + create ad groups in parallel
-          const adGroups = cleanOutput.googleAds.adGroups || [];
-          cleanOutput.googleAds._adGroups = [];
-
-          const negativePromise = cleanOutput.googleAds.negativeKeywords?.length > 0
-            ? googleAds.addNegativeKeywords({
-                campaignResourceName: campaign.campaignResourceName,
-                keywords: cleanOutput.googleAds.negativeKeywords,
-              }).then(() => this.log('google_ads_negatives_added', { count: cleanOutput.googleAds.negativeKeywords.length }))
-              .catch((err: any) => this.log('google_ads_negatives_failed', { error: err.message }))
-            : Promise.resolve();
-
-          const adGroupPromises = adGroups.map(async (ag: any) => {
-            try {
-              const agResult = await googleAds.createAdGroup({
-                campaignResourceName: campaign.campaignResourceName,
-                name: ag.name,
-              });
-
-              const agKeywords = (ag.keywords || []).map((kw: string) => ({ text: kw, matchType: 'PHRASE' as const }));
-              const exactKeywords = (ag.keywords || []).map((kw: string) => ({ text: kw, matchType: 'EXACT' as const }));
-
-              // Add keywords + create RSA in parallel within each ad group
-              await Promise.all([
-                agKeywords.length > 0
-                  ? googleAds.addKeywords({ adGroupResourceName: agResult.adGroupResourceName, keywords: [...agKeywords, ...exactKeywords] })
-                  : Promise.resolve(),
-                ag.adCopy
-                  ? googleAds.createResponsiveSearchAd({
-                      adGroupResourceName: agResult.adGroupResourceName,
-                      headlines: ag.adCopy.headlines || [],
-                      descriptions: ag.adCopy.descriptions || [],
-                      finalUrl: landingUrl,
-                    })
-                  : Promise.resolve(),
-              ]);
-
-              cleanOutput.googleAds._adGroups.push({
-                name: ag.name,
-                adGroupId: agResult.adGroupId,
-                keywordsCount: agKeywords.length + exactKeywords.length,
-                status: 'ENABLED',
-              });
-            } catch (err: any) {
-              await this.log('google_ads_adgroup_failed', { adGroup: ag.name, error: err.message });
-            }
-          });
-
-          await Promise.all([negativePromise, ...adGroupPromises]);
-        } catch (err: any) {
-          await this.log('google_ads_create_failed', { error: err.message });
-        }
-      })();
-
-      const metaAdsPromise = (async () => {
-        if (!metaAds.isMetaAdsAvailable() || !cleanOutput.metaAds) return;
-        try {
-          await this.log('meta_creating', { phase: 'Creating ACTIVE Meta campaign' });
-          const campaign = await metaAds.createCampaign({
-            name: cleanOutput.metaAds.campaignName || 'LeadOS Meta Campaign',
-            objective: 'OUTCOME_LEADS',
-            dailyBudget: 50,
-            status: 'ACTIVE',
-          });
-          cleanOutput.metaAds._campaignId = campaign.campaignId;
-          cleanOutput.metaAds._status = 'ACTIVE';
-          cleanOutput.metaAds._createdInMeta = true;
-          await this.log('meta_campaign_created', { campaignId: campaign.campaignId });
-
-          const adSets = cleanOutput.metaAds.adSets || [];
-          cleanOutput.metaAds._adSets = [];
-
-          // Create all ad sets in parallel
-          await Promise.all(adSets.map(async (adSet: any) => {
-            try {
-              const adSetResult = await metaAds.createAdSet({
-                campaignId: campaign.campaignId,
-                name: adSet.name,
-                dailyBudget: adSet.dailyBudget || 20,
-                targeting: {
-                  geoLocations: { countries: ['US'] },
-                  ageMin: 25,
-                  ageMax: 55,
-                },
-              });
-
-              // Create all ads within this ad set in parallel
-              const creatives = adSet.creatives || [];
-              const adResults = await Promise.all(creatives.map(async (creative: any) => {
-                try {
-                  const adResult = await metaAds.createAd({
-                    adSetId: adSetResult.adSetId,
-                    name: creative.name,
-                    creativeData: {
-                      title: creative.hook?.substring(0, 100) || adSet.name,
-                      body: creative.hook || `Discover ${cleanOutput.metaAds.campaignName}`,
-                      linkUrl: landingUrl,
-                      callToAction: 'LEARN_MORE',
-                    },
-                  });
-                  return adResult.adId;
-                } catch (err: any) {
-                  await this.log('meta_ad_failed', { creative: creative.name, error: err.message });
-                  return null;
-                }
-              }));
-
-              cleanOutput.metaAds._adSets.push({
-                name: adSet.name,
-                adSetId: adSetResult.adSetId,
-                adsCount: adResults.filter(Boolean).length,
-                status: 'ACTIVE',
-              });
-            } catch (err: any) {
-              await this.log('meta_adset_failed', { adSet: adSet.name, error: err.message });
-            }
-          }));
-        } catch (err: any) {
-          await this.log('meta_create_failed', { error: err.message });
-        }
-      })();
-
-      // Wait for both platforms to finish simultaneously
-      await Promise.all([googleAdsPromise, metaAdsPromise]);
+      // ── APPROVAL MODE: Return campaign plan for user review ──
+      // Do NOT create live campaigns yet — wait for user approval
+      cleanOutput._approvalRequired = true;
+      cleanOutput._approvalStatus = 'pending';
+      cleanOutput._landingUrl = projectUrl || funnelData.landingPage?.url || offerData.landingPageUrl || 'https://leados.com';
+      cleanOutput._productName = productContext?.title || offerData.serviceName || inputs.config?.projectName || '';
+      cleanOutput._productDescription = productContext?.description || offerData.transformationPromise || '';
 
       // Inject real platform metrics into output (these are REAL, from API)
       if (realGoogleMetrics.length > 0) {
@@ -576,12 +395,12 @@ export class PaidTrafficAgent extends BaseAgent {
       }
 
       this.status = 'done';
-      await this.log('run_completed', { output: cleanOutput });
+      await this.log('run_completed', { output: cleanOutput, phase: 'plan_generated_awaiting_approval' });
 
       return {
         success: true,
         data: cleanOutput,
-        reasoning: cleanOutput.reasoning || 'Campaign setup complete',
+        reasoning: cleanOutput.reasoning || 'Campaign plan generated — awaiting your approval before launching ads',
         confidence: cleanOutput.confidence || 85,
       };
     } catch (error: any) {
