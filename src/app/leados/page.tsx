@@ -75,6 +75,14 @@ export default function LeadOSPage() {
   const [agentOutputs, setAgentOutputs] = useState<Record<string, any>>({});
   const [elapsedTimes, setElapsedTimes] = useState<Record<string, number>>({});
   const [snackbar, setSnackbar] = useState<string | null>(null);
+  // State for resuming pipeline after paid-traffic pause
+  const pausedPipelineRef = useRef<{
+    agentsToRun: string[];
+    projectConfig: Record<string, any>;
+    previousOutputs: Record<string, any>;
+    pipelineId: string;
+    pausedAfterIndex: number;
+  } | null>(null);
   const timerRef = useRef<Record<string, NodeJS.Timeout>>({});
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -177,7 +185,8 @@ export default function LeadOSPage() {
   // Total pipeline timer — start/stop based on pipeline status
   useEffect(() => {
     if (pipeline.status === 'running' && !totalTimerRef.current) {
-      if (!pipelineStartTime) setPipelineStartTime(Date.now());
+      // When resuming from pause, adjust start time so elapsed continues from where it left off
+      setPipelineStartTime(Date.now() - totalElapsed * 1000);
       totalTimerRef.current = setInterval(() => {
         setPipelineStartTime(prev => {
           if (!prev) return prev;
@@ -185,7 +194,8 @@ export default function LeadOSPage() {
           return prev;
         });
       }, 1000);
-    } else if (pipeline.status !== 'running' && pipeline.status !== 'paused' && totalTimerRef.current) {
+    } else if (pipeline.status !== 'running' && totalTimerRef.current) {
+      // Pause or stop: clear the interval but keep totalElapsed for resume
       clearInterval(totalTimerRef.current);
       totalTimerRef.current = null;
     }
@@ -355,6 +365,30 @@ export default function LeadOSPage() {
             preTranslateAgent(agentId, selectedProject.language, agentResult.output).catch(() => {});
           }
 
+          // Auto-open landing page when funnel-builder completes
+          if (agentId === 'funnel-builder') {
+            window.open('/funnel', '_blank');
+          }
+
+          // Auto-pause pipeline after paid-traffic agent for user review/approval
+          if (agentId === 'paid-traffic') {
+            pausedPipelineRef.current = {
+              agentsToRun,
+              projectConfig,
+              previousOutputs: { ...previousOutputs },
+              pipelineId: created.id,
+              pausedAfterIndex: i,
+            };
+            updatePipelineStatus('paused');
+            setRunningAgentId(null);
+            setSelectedAgent('paid-traffic');
+            addActivity({
+              type: 'info',
+              message: 'Pipeline paused — review Paid Traffic campaigns before continuing',
+            });
+            break;
+          }
+
         } catch (agentErr: any) {
           // If aborted due to pause, don't treat as error
           if (agentErr.name === 'AbortError') {
@@ -479,6 +513,11 @@ export default function LeadOSPage() {
               // Pre-translate in background
               if (selectedProject?.language && selectedProject.language !== 'en') {
                 preTranslateAgent(agentId, selectedProject.language, output).catch(() => {});
+              }
+
+              // Auto-open landing page when funnel-builder completes
+              if (agentId === 'funnel-builder') {
+                window.open('/funnel', '_blank');
               }
               return;
             }
@@ -851,12 +890,80 @@ export default function LeadOSPage() {
                 <button
                   onClick={async () => {
                     updatePipelineStatus('running');
-                    // Update DB status back to running — the backend loop will auto-resume
                     if (pipeline.id) {
                       try {
                         await apiFetch(`/api/pipelines/${pipeline.id}/resume`, { method: 'POST' });
-                      } catch {
-                        // ignore
+                      } catch { /* ignore */ }
+                    }
+
+                    // Resume pipeline from where it was paused (after paid-traffic)
+                    const saved = pausedPipelineRef.current;
+                    if (saved) {
+                      pausedPipelineRef.current = null;
+                      const { agentsToRun, projectConfig, previousOutputs, pipelineId, pausedAfterIndex } = saved;
+
+                      addActivity({ type: 'info', message: 'Pipeline resumed — continuing remaining agents' });
+
+                      // Continue from the agent AFTER the paused one
+                      for (let i = pausedAfterIndex + 1; i < agentsToRun.length; i++) {
+                        const agentId = agentsToRun[i];
+                        const agentName = LEADOS_AGENTS.find(a => a.id === agentId)?.name || agentId;
+
+                        const currentStatus = useAppStore.getState().pipeline.status;
+                        if (currentStatus !== 'running') break;
+
+                        setCurrentAgentIndex(i);
+                        setRunningAgentId(agentId);
+                        updateAgentStatus(agentId, { status: 'running', progress: 0 });
+                        startAgentTimer(agentId);
+                        addActivity({ type: 'agent_started', agentId, agentName, message: `${agentName} started` });
+
+                        try {
+                          const controller = new AbortController();
+                          abortControllerRef.current = controller;
+                          const agentResult = await agentsApi.run(agentId, {
+                            pipelineId,
+                            config: projectConfig,
+                            previousOutputs,
+                          }, controller.signal);
+                          abortControllerRef.current = null;
+
+                          const statusAfterAgent = useAppStore.getState().pipeline.status;
+                          if (statusAfterAgent !== 'running') {
+                            stopAgentTimer(agentId);
+                            break;
+                          }
+
+                          if (agentResult.output?.success) {
+                            previousOutputs[agentId] = agentResult.output.data;
+                          }
+
+                          stopAgentTimer(agentId);
+                          updateAgentStatus(agentId, {
+                            status: 'done', progress: 100,
+                            lastRunTime: new Date().toISOString(),
+                            outputPreview: typeof agentResult.output?.reasoning === 'string' ? agentResult.output.reasoning : 'Completed successfully',
+                          });
+                          setAgentOutputs(prev => ({ ...prev, [agentId]: agentResult.output }));
+                          addActivity({ type: 'agent_completed', agentId, agentName, message: `${agentName} completed` });
+
+                          if (selectedProject?.language && selectedProject.language !== 'en') {
+                            preTranslateAgent(agentId, selectedProject.language, agentResult.output).catch(() => {});
+                          }
+                        } catch (agentErr: any) {
+                          if (agentErr.name === 'AbortError') { stopAgentTimer(agentId); break; }
+                          stopAgentTimer(agentId);
+                          const errorMsg = agentErr.message || 'Agent failed';
+                          updateAgentStatus(agentId, { status: 'error', error: errorMsg });
+                          addActivity({ type: 'agent_error', agentId, agentName, message: `${agentName} failed: ${errorMsg}` });
+                        }
+                      }
+
+                      setRunningAgentId(null);
+                      const finalStatus = useAppStore.getState().pipeline.status;
+                      if (finalStatus === 'running') {
+                        updatePipelineStatus('completed');
+                        addActivity({ type: 'info', message: 'Pipeline completed' });
                       }
                     }
                   }}

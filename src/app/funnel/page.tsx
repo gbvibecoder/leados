@@ -19,6 +19,7 @@ import {
   Target,
   BarChart3,
   X,
+  BadgeCheck,
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
@@ -32,6 +33,7 @@ interface FunnelData {
     subheadline: string;
     sections: Array<{ type: string; content: any }>;
     cta: string;
+    seoMeta?: { title: string; description: string };
   };
   leadForm: {
     fields: Array<{
@@ -79,15 +81,7 @@ function useScrollReveal(threshold = 0.15) {
   return { ref, visible };
 }
 
-// ─── Animated Counter ───────────────────────────────────────────────────────
-
-function AnimatedCounter({ value, suffix = '' }: { value: string; suffix?: string }) {
-  return (
-    <span className="tabular-nums font-bold text-white">{value}{suffix}</span>
-  );
-}
-
-// ─── Pain Point Icons ───────────────────────────────────────────────────────
+// ─── Pain Point Icons (fallback when no emoji) ─────────────────────────────
 
 const PAIN_ICONS: Record<string, any> = {
   'chart-down': TrendingDown,
@@ -281,18 +275,40 @@ function FunnelPage() {
   }
 
   const sections = funnelData.landingPage?.sections || [];
-  const heroSection = sections.find((s) => s.type === 'hero')?.content;
-  const painSection = sections.find((s) => s.type === 'painPoints')?.content;
-  const solutionSection = sections.find((s) => s.type === 'solution')?.content;
-  const socialProofSection = sections.find((s) => s.type === 'socialProof')?.content;
-  const pricingSection = sections.find((s) => s.type === 'pricing')?.content;
-  const faqSection = sections.find((s) => s.type === 'faq')?.content;
+  const getSection = (type: string) => sections.find((s) => s.type === type)?.content;
+
+  const heroSection = getSection('hero');
+  const announcementBar = getSection('announcementBar');
+  const socialProofBar = getSection('socialProofBar');
+  const problemSection = getSection('problem') || getSection('painPoints');
+  const solutionSection = getSection('solution');
+  const whatsIncluded = getSection('whatsIncluded');
+  const comparisonTable = getSection('comparisonTable');
+  const testimonialSection = getSection('testimonials') || getSection('socialProof');
+  const mediaFeatures = getSection('mediaFeatures');
+  const pricingSection = getSection('pricing');
+  const faqSection = getSection('faq');
+  const trustSignals = getSection('trustSignals');
+  const finalCtaSection = getSection('finalCta') || getSection('cta');
   const ctaText = heroSection?.cta || funnelData.landingPage.cta || 'Get Started';
 
   return (
     <div className="min-h-screen bg-[#020205] text-gray-100 overflow-x-hidden">
       {/* Floating CTA */}
       <FloatingCTA text={ctaText} visible={showFloatingCTA} />
+
+      {/* ─── Announcement Bar ──────────────────────────────────── */}
+      {announcementBar && (
+        <div className="bg-gradient-to-r from-blue-600 via-cyan-600 to-blue-600 text-white text-center py-2.5 px-4 text-sm font-medium relative overflow-hidden">
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent_0%,rgba(255,255,255,0.1)_50%,transparent_100%)] animate-shimmer" />
+          <span className="relative">
+            {announcementBar.message}
+            {announcementBar.highlight && (
+              <span className="font-bold ml-1">{announcementBar.highlight}</span>
+            )}
+          </span>
+        </div>
+      )}
 
       {/* ─── Navbar ──────────────────────────────────────────────── */}
       <nav className="sticky top-0 z-40 border-b border-white/[0.03] bg-[#020205]/80 backdrop-blur-xl">
@@ -302,7 +318,17 @@ function FunnelPage() {
               <Zap className="w-5 h-5 text-white" />
             </div>
             <span className="text-white font-bold text-lg tracking-tight hidden sm:block">
-              {heroSection?.headline?.split(' ').slice(0, 3).join(' ') || 'LeadFlow'}
+              {(() => {
+                // Derive short brand name: use SEO title before "—" or pipeline name
+                const seoTitle = funnelData.landingPage.seoMeta?.title || '';
+                const beforeDash = seoTitle.split(/\s*[—–-]\s*/)[0]?.trim();
+                if (beforeDash && beforeDash.length <= 30) return beforeDash;
+                // Fallback: use CRM pipeline name before "—"
+                const pipeline = funnelData.crmIntegration?.pipeline || '';
+                const pipelineBrand = pipeline.split(/\s*[—–-]\s*/)[0]?.trim();
+                if (pipelineBrand && pipelineBrand.length <= 30) return pipelineBrand;
+                return 'LeadOS';
+              })()}
             </span>
           </div>
           <div className="flex items-center gap-3">
@@ -316,7 +342,6 @@ function FunnelPage() {
 
       {/* ─── Hero ──────────────────────────────────────────────────── */}
       <section ref={heroRef} className="relative overflow-hidden">
-        {/* Animated gradient background */}
         <div className="absolute inset-0">
           <div className="absolute inset-0 bg-gradient-to-b from-blue-950/40 via-indigo-950/20 to-zinc-950" />
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-blue-500/5 rounded-full blur-3xl" />
@@ -331,13 +356,31 @@ function FunnelPage() {
             </div>
           )}
 
-          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight text-white leading-[1.1] animate-fade-in-up">
-            {heroSection?.headline || funnelData.landingPage.headline}
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white leading-[1.15] animate-fade-in-up max-w-3xl mx-auto">
+            {(() => {
+              const raw = heroSection?.headline || funnelData.landingPage.headline || '';
+              // Keep headline short — if LLM returned a long one, take the first sentence or first 10 words
+              const firstSentence = raw.split(/[.!?—]/)[0]?.trim() || raw;
+              const words = firstSentence.split(/\s+/);
+              return words.length > 12 ? words.slice(0, 10).join(' ') : firstSentence;
+            })()}
           </h1>
 
           <p className="text-lg sm:text-xl md:text-2xl text-gray-400 max-w-3xl mx-auto leading-relaxed animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
             {heroSection?.subheadline || funnelData.landingPage.subheadline}
           </p>
+
+          {/* Stats Bar */}
+          {heroSection?.stats && heroSection.stats.length > 0 && (
+            <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-10 pt-2 animate-fade-in-up" style={{ animationDelay: '0.15s' }}>
+              {heroSection.stats.map((stat: any, i: number) => (
+                <div key={i} className="text-center">
+                  <div className="text-2xl sm:text-3xl font-extrabold text-white">{stat.value}</div>
+                  <div className="text-xs sm:text-sm text-gray-500">{stat.label}</div>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
             <a
@@ -360,14 +403,14 @@ function FunnelPage() {
             )}
           </div>
 
-          {heroSection?.socialProofBar && (
-            <p className="text-sm text-gray-500 pt-4 animate-fade-in" style={{ animationDelay: '0.4s' }}>
-              {heroSection.socialProofBar}
+          {heroSection?.ctaSubtext && (
+            <p className="text-sm text-gray-500 animate-fade-in" style={{ animationDelay: '0.3s' }}>
+              {heroSection.ctaSubtext}
             </p>
           )}
 
           {/* Trust indicators */}
-          <div className="flex items-center justify-center gap-8 pt-8 animate-fade-in" style={{ animationDelay: '0.5s' }}>
+          <div className="flex items-center justify-center gap-8 pt-4 animate-fade-in" style={{ animationDelay: '0.5s' }}>
             {[
               { icon: Shield, text: 'Money-Back Guarantee' },
               { icon: Clock, text: 'Setup in 48h' },
@@ -387,20 +430,38 @@ function FunnelPage() {
         </div>
       </section>
 
-      {/* ─── Pain Points ───────────────────────────────────────────── */}
-      {painSection && <PainPointsSection content={painSection} />}
+      {/* ─── Social Proof Bar ─────────────────────────────────────── */}
+      {socialProofBar && <SocialProofBarSection content={socialProofBar} />}
+
+      {/* ─── Problem / Pain Points ────────────────────────────────── */}
+      {problemSection && <ProblemSection content={problemSection} />}
 
       {/* ─── Solution ──────────────────────────────────────────────── */}
       {solutionSection && <SolutionSection content={solutionSection} ctaText={ctaText} />}
 
-      {/* ─── Social Proof ──────────────────────────────────────────── */}
-      {socialProofSection && <SocialProofSection content={socialProofSection} />}
+      {/* ─── What's Included ───────────────────────────────────────── */}
+      {whatsIncluded && <WhatsIncludedSection content={whatsIncluded} />}
+
+      {/* ─── Comparison Table ──────────────────────────────────────── */}
+      {comparisonTable && <ComparisonTableSection content={comparisonTable} />}
+
+      {/* ─── Testimonials ──────────────────────────────────────────── */}
+      {testimonialSection && <TestimonialsSection content={testimonialSection} />}
+
+      {/* ─── Media / As Seen In ────────────────────────────────────── */}
+      {mediaFeatures && <MediaFeaturesSection content={mediaFeatures} />}
 
       {/* ─── Pricing ───────────────────────────────────────────────── */}
       {pricingSection && <PricingSection content={pricingSection} />}
 
       {/* ─── FAQ ───────────────────────────────────────────────────── */}
       {faqSection && <FAQSection content={faqSection} />}
+
+      {/* ─── Trust Signals ─────────────────────────────────────────── */}
+      {trustSignals && <TrustSignalsSection content={trustSignals} />}
+
+      {/* ─── Final CTA ─────────────────────────────────────────────── */}
+      {finalCtaSection && <FinalCTASection content={finalCtaSection} />}
 
       {/* ─── Lead Capture Form ─────────────────────────────────────── */}
       <section id="lead-form" className="relative">
@@ -412,7 +473,7 @@ function FunnelPage() {
               Limited Spots Available
             </div>
             <h2 className="text-3xl sm:text-4xl font-bold text-white mb-3">
-              Ready to Transform Your Pipeline?
+              Ready to Get Started?
             </h2>
             <p className="text-gray-400 text-lg">
               Fill out the form below and get your custom growth plan.
@@ -446,7 +507,7 @@ function FunnelPage() {
                         required={field.required}
                         value={formData[field.name] || ''}
                         onChange={(e) => setFormData({ ...formData, [field.name]: e.target.value })}
-                        className="w-full bg-white/[0.03] border border-white/[0.08]/50 rounded-xl px-4 py-3.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all hover:border-cyan-500/20"
+                        className="w-full bg-white/[0.03] border border-white/[0.08] rounded-xl px-4 py-3.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all hover:border-cyan-500/20"
                       >
                         <option value="" className="bg-zinc-900">{field.placeholder}</option>
                         {field.options?.map((opt) => (
@@ -460,7 +521,7 @@ function FunnelPage() {
                         placeholder={field.placeholder}
                         value={formData[field.name] || ''}
                         onChange={(e) => setFormData({ ...formData, [field.name]: e.target.value })}
-                        className="w-full bg-white/[0.03] border border-white/[0.08]/50 rounded-xl px-4 py-3.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all hover:border-cyan-500/20"
+                        className="w-full bg-white/[0.03] border border-white/[0.08] rounded-xl px-4 py-3.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all hover:border-cyan-500/20"
                       />
                     )}
                   </div>
@@ -541,11 +602,16 @@ function FunnelPage() {
           from { opacity: 0; transform: translateY(40px); }
           to { opacity: 1; transform: translateY(0); }
         }
+        @keyframes shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
         .animate-fade-in { animation: fade-in 0.6s ease-out both; }
         .animate-fade-in-up { animation: fade-in-up 0.7s ease-out both; }
         .animate-scale-in { animation: scale-in 0.5s ease-out both; }
         .animate-progress { animation: progress 1.8s ease-in-out both; }
         .animate-reveal-up { animation: reveal-up 0.6s ease-out both; }
+        .animate-shimmer { animation: shimmer 3s ease-in-out infinite; }
       `}</style>
     </div>
   );
@@ -553,8 +619,28 @@ function FunnelPage() {
 
 // ─── Section Components ─────────────────────────────────────────────────────
 
-function PainPointsSection({ content }: { content: any }) {
+function SocialProofBarSection({ content }: { content: any }) {
+  return (
+    <section className="border-y border-white/[0.03] bg-white/[0.01]">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+        {content.label && (
+          <p className="text-center text-gray-500 text-xs uppercase tracking-wider mb-6">{content.label}</p>
+        )}
+        <div className="flex flex-wrap items-center justify-center gap-8 sm:gap-12">
+          {content.logos?.map((logo: string, i: number) => (
+            <span key={i} className="text-gray-500 text-sm sm:text-base font-semibold opacity-60 hover:opacity-100 transition-opacity">
+              {logo}
+            </span>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ProblemSection({ content }: { content: any }) {
   const { ref, visible } = useScrollReveal();
+  const painPoints = content.painPoints || content.points || [];
 
   return (
     <section ref={ref} className="max-w-6xl mx-auto px-4 sm:px-6 py-24">
@@ -565,25 +651,29 @@ function PainPointsSection({ content }: { content: any }) {
             {content.sectionTitle || 'Sound Familiar?'}
           </h2>
         </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {content.points?.map((point: any, i: number) => {
-            const Icon = getPainIcon(point.icon, i);
-            const colors = ['from-red-500/10 to-red-600/5 border-red-500/20', 'from-orange-500/10 to-orange-600/5 border-orange-500/20', 'from-amber-500/10 to-amber-600/5 border-amber-500/20', 'from-rose-500/10 to-rose-600/5 border-rose-500/20', 'from-pink-500/10 to-pink-600/5 border-pink-500/20'];
-            const iconColors = ['text-red-400 bg-red-500/10', 'text-orange-400 bg-orange-500/10', 'text-amber-400 bg-amber-500/10', 'text-rose-400 bg-rose-500/10', 'text-pink-400 bg-pink-500/10'];
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {painPoints.map((point: any, i: number) => {
+            const hasEmoji = point.emoji;
+            const Icon = !hasEmoji ? getPainIcon(point.icon, i) : null;
+            const colors = [
+              'from-red-500/10 to-red-600/5 border-red-500/15 hover:border-red-500/30',
+              'from-orange-500/10 to-orange-600/5 border-orange-500/15 hover:border-orange-500/30',
+              'from-amber-500/10 to-amber-600/5 border-amber-500/15 hover:border-amber-500/30',
+              'from-rose-500/10 to-rose-600/5 border-rose-500/15 hover:border-rose-500/30',
+            ];
 
             return (
               <div
                 key={i}
                 className={cn(
-                  'group bg-gradient-to-br border rounded-2xl p-6 space-y-4 hover:scale-[1.02] transition-all duration-300 cursor-default',
+                  'group bg-gradient-to-br border rounded-2xl p-6 space-y-4 hover:scale-[1.02] hover:-translate-y-1 transition-all duration-300 cursor-default',
                   colors[i % colors.length]
                 )}
-                style={{ animationDelay: `${i * 0.1}s` }}
               >
-                <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center', iconColors[i % iconColors.length])}>
-                  <Icon className="w-6 h-6" />
+                <div className="text-4xl">
+                  {hasEmoji ? point.emoji : (Icon && <Icon className="w-8 h-8 text-red-400" />)}
                 </div>
-                <h3 className="text-lg font-bold text-white group-hover:text-red-300 transition-colors">{point.title}</h3>
+                <h3 className="text-base font-bold text-white">{point.title}</h3>
                 <p className="text-gray-400 text-sm leading-relaxed">{point.description}</p>
               </div>
             );
@@ -596,6 +686,7 @@ function PainPointsSection({ content }: { content: any }) {
 
 function SolutionSection({ content, ctaText }: { content: any; ctaText: string }) {
   const { ref, visible } = useScrollReveal();
+  const steps = content.steps || content.features || [];
 
   return (
     <section ref={ref} className="relative overflow-hidden">
@@ -603,22 +694,28 @@ function SolutionSection({ content, ctaText }: { content: any; ctaText: string }
       <div className={cn('relative max-w-5xl mx-auto px-4 sm:px-6 py-24 transition-all duration-700', visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10')}>
         <div className="text-center mb-14">
           <span className="text-emerald-400 text-sm font-semibold uppercase tracking-wider">The Solution</span>
-          <h2 className="text-3xl sm:text-4xl font-bold text-white mt-3">{content.sectionTitle || 'How We Help'}</h2>
-          {content.transformationPromise && (
-            <p className="text-xl text-blue-400 font-semibold mt-4 max-w-2xl mx-auto">
-              {content.transformationPromise}
-            </p>
-          )}
+          <h2 className="text-3xl sm:text-4xl font-bold text-white mt-3">{content.sectionTitle || 'How It Works'}</h2>
         </div>
-        <div className="grid sm:grid-cols-2 gap-4 max-w-3xl mx-auto">
-          {content.features?.map((feature: any, i: number) => {
-            const text = typeof feature === 'string' ? feature : (feature?.title || feature?.body || JSON.stringify(feature));
+        <div className="grid sm:grid-cols-2 gap-5 max-w-4xl mx-auto">
+          {steps.map((step: any, i: number) => {
+            const text = typeof step === 'string' ? step : step.title;
+            const desc = typeof step === 'string' ? '' : step.description;
+            const icon = step.icon || step.emoji;
+            const stepNum = step.stepNumber || i + 1;
+
             return (
-              <div key={i} className="flex items-start gap-3 p-4 rounded-xl bg-[rgba(2,2,5,0.6)] border border-white/[0.04]/50 hover:border-emerald-500/20 transition-colors">
-                <div className="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0 mt-0.5">
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+              <div key={i} className="flex items-start gap-4 p-5 rounded-2xl bg-[rgba(2,2,5,0.6)] border border-white/[0.04] hover:border-emerald-500/20 transition-all duration-300 hover:-translate-y-1">
+                <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
+                  {icon && /\p{Emoji}/u.test(icon) ? (
+                    <span className="text-2xl">{icon}</span>
+                  ) : (
+                    <span className="text-emerald-400 font-bold text-lg">{stepNum}</span>
+                  )}
                 </div>
-                <span className="text-gray-300 text-sm leading-relaxed">{text}</span>
+                <div>
+                  <h3 className="text-white font-bold text-base mb-1">{text}</h3>
+                  {desc && <p className="text-gray-400 text-sm leading-relaxed">{desc}</p>}
+                </div>
               </div>
             );
           })}
@@ -634,23 +731,113 @@ function SolutionSection({ content, ctaText }: { content: any; ctaText: string }
   );
 }
 
-function SocialProofSection({ content }: { content: any }) {
+function WhatsIncludedSection({ content }: { content: any }) {
   const { ref, visible } = useScrollReveal();
 
   return (
     <section ref={ref} className="max-w-6xl mx-auto px-4 sm:px-6 py-24">
       <div className={cn('transition-all duration-700', visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10')}>
         <div className="text-center mb-14">
-          <span className="text-yellow-400 text-sm font-semibold uppercase tracking-wider">Social Proof</span>
+          <span className="text-cyan-400 text-sm font-semibold uppercase tracking-wider">What You Get</span>
+          <h2 className="text-3xl sm:text-4xl font-bold text-white mt-3">
+            {content.sectionTitle || "Everything You Need"}
+          </h2>
+        </div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {content.deliverables?.map((item: any, i: number) => (
+            <div
+              key={i}
+              className="p-5 rounded-2xl bg-[rgba(2,2,5,0.6)] border border-white/[0.04] hover:border-cyan-500/20 transition-all duration-300 hover:-translate-y-1 space-y-3"
+            >
+              <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center">
+                <Check className="w-5 h-5 text-cyan-400" />
+              </div>
+              <h3 className="text-white font-bold text-sm">{item.title}</h3>
+              <p className="text-gray-400 text-sm leading-relaxed">{item.description}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ComparisonTableSection({ content }: { content: any }) {
+  const { ref, visible } = useScrollReveal();
+  const columns = content.columns || ['Us', 'Competitors'];
+
+  return (
+    <section ref={ref} className="relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-b from-zinc-950 via-indigo-950/5 to-zinc-950" />
+      <div className={cn('relative max-w-3xl mx-auto px-4 sm:px-6 py-24 transition-all duration-700', visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10')}>
+        <div className="text-center mb-14">
+          <span className="text-blue-400 text-sm font-semibold uppercase tracking-wider">Compare</span>
+          <h2 className="text-3xl sm:text-4xl font-bold text-white mt-3">
+            {content.sectionTitle || 'Why Choose Us'}
+          </h2>
+        </div>
+        <div className="bg-zinc-900/50 border border-white/[0.04] rounded-2xl overflow-hidden">
+          {/* Header */}
+          <div className="grid grid-cols-[1fr_100px_100px] sm:grid-cols-[1fr_140px_140px] bg-white/[0.02] border-b border-white/[0.04]">
+            <div className="p-4 text-sm text-gray-500 font-medium">Feature</div>
+            <div className="p-4 text-sm font-bold text-emerald-400 text-center">{columns[0]}</div>
+            <div className="p-4 text-sm font-medium text-gray-500 text-center">{columns[1]}</div>
+          </div>
+          {/* Rows */}
+          {content.rows?.map((row: any, i: number) => (
+            <div key={i} className={cn(
+              'grid grid-cols-[1fr_100px_100px] sm:grid-cols-[1fr_140px_140px] border-b border-white/[0.03]',
+              i % 2 === 0 ? 'bg-transparent' : 'bg-white/[0.01]'
+            )}>
+              <div className="p-4 text-sm text-gray-300">{row.feature}</div>
+              <div className="p-4 flex items-center justify-center">
+                {row.us ? (
+                  <div className="w-7 h-7 rounded-full bg-emerald-500/15 flex items-center justify-center">
+                    <Check className="w-4 h-4 text-emerald-400" />
+                  </div>
+                ) : (
+                  <div className="w-7 h-7 rounded-full bg-red-500/10 flex items-center justify-center">
+                    <X className="w-4 h-4 text-red-400" />
+                  </div>
+                )}
+              </div>
+              <div className="p-4 flex items-center justify-center">
+                {row.them ? (
+                  <div className="w-7 h-7 rounded-full bg-emerald-500/15 flex items-center justify-center">
+                    <Check className="w-4 h-4 text-emerald-400" />
+                  </div>
+                ) : (
+                  <div className="w-7 h-7 rounded-full bg-red-500/10 flex items-center justify-center">
+                    <X className="w-4 h-4 text-red-400" />
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TestimonialsSection({ content }: { content: any }) {
+  const { ref, visible } = useScrollReveal();
+  const items = content.items || content.testimonials || [];
+
+  return (
+    <section ref={ref} className="max-w-6xl mx-auto px-4 sm:px-6 py-24">
+      <div className={cn('transition-all duration-700', visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10')}>
+        <div className="text-center mb-14">
+          <span className="text-yellow-400 text-sm font-semibold uppercase tracking-wider">Testimonials</span>
           <h2 className="text-3xl sm:text-4xl font-bold text-white mt-3">
             {content.sectionTitle || 'What Our Clients Say'}
           </h2>
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {content.testimonials?.map((t: any, i: number) => (
+          {items.map((t: any, i: number) => (
             <div
               key={i}
-              className="group bg-[rgba(2,2,5,0.6)] border border-white/[0.04]/50 rounded-2xl p-6 space-y-4 hover:border-yellow-500/20 hover:bg-zinc-900 transition-all duration-300"
+              className="group bg-[rgba(2,2,5,0.6)] border border-white/[0.04] rounded-2xl p-6 space-y-4 hover:border-yellow-500/20 hover:bg-zinc-900 transition-all duration-300 hover:-translate-y-1"
             >
               <div className="flex gap-1">
                 {[1, 2, 3, 4, 5].map((s) => (
@@ -658,18 +845,44 @@ function SocialProofSection({ content }: { content: any }) {
                 ))}
               </div>
               <p className="text-gray-300 text-sm italic leading-relaxed">&ldquo;{t.quote}&rdquo;</p>
-              <div className="flex items-center justify-between pt-2 border-t border-white/[0.03]">
+              <div className="flex items-center justify-between pt-3 border-t border-white/[0.03]">
                 <div>
-                  <p className="text-white font-semibold text-sm">{t.name}</p>
-                  <p className="text-gray-500 text-xs">{t.title}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-white font-semibold text-sm">{t.name}</p>
+                    {t.verified && (
+                      <BadgeCheck className="w-4 h-4 text-blue-400" />
+                    )}
+                  </div>
+                  <p className="text-gray-500 text-xs">{t.role}{t.company ? `, ${t.company}` : ''}</p>
                 </div>
                 {t.metric && (
-                  <span className="text-emerald-400 text-sm font-bold bg-emerald-500/10 px-3 py-1.5 rounded-lg">
+                  <span className="text-emerald-400 text-xs sm:text-sm font-bold bg-emerald-500/10 px-3 py-1.5 rounded-lg whitespace-nowrap">
                     {t.metric}
                   </span>
                 )}
               </div>
             </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MediaFeaturesSection({ content }: { content: any }) {
+  const { ref, visible } = useScrollReveal();
+
+  return (
+    <section ref={ref} className="border-y border-white/[0.03] bg-white/[0.01]">
+      <div className={cn('max-w-6xl mx-auto px-4 sm:px-6 py-14 transition-all duration-700', visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10')}>
+        <p className="text-center text-gray-500 text-xs uppercase tracking-wider mb-8">
+          {content.sectionTitle || 'As Seen In'}
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-8 sm:gap-14">
+          {content.publications?.map((pub: string, i: number) => (
+            <span key={i} className="text-gray-500 text-lg sm:text-xl font-bold opacity-40 hover:opacity-80 transition-opacity">
+              {pub}
+            </span>
           ))}
         </div>
       </div>
@@ -690,6 +903,20 @@ function PricingSection({ content }: { content: any }) {
             {content.sectionTitle || 'Choose Your Plan'}
           </h2>
         </div>
+
+        {/* Price anchoring banner */}
+        {content.savings && (
+          <div className="text-center mb-4">
+            <span className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-2 rounded-full text-sm font-bold">
+              <Sparkles className="w-4 h-4" />
+              {content.savings}
+            </span>
+          </div>
+        )}
+        {content.priceSubtext && (
+          <p className="text-center text-gray-500 text-sm mb-6">{content.priceSubtext}</p>
+        )}
+
         {content.guarantee && (
           <p className="text-center text-emerald-400 text-sm font-medium mb-14 flex items-center justify-center gap-2">
             <Shield className="w-4 h-4" />
@@ -714,7 +941,12 @@ function PricingSection({ content }: { content: any }) {
               )}
               <div>
                 <h3 className="text-lg font-bold text-white">{tier.name}</h3>
-                <p className="text-4xl font-extrabold text-white mt-3">{tier.price}</p>
+                <div className="mt-3 flex items-baseline gap-2">
+                  {tier.originalPrice && (
+                    <span className="text-lg text-gray-500 line-through">{tier.originalPrice}</span>
+                  )}
+                  <span className="text-4xl font-extrabold text-white">{tier.price}</span>
+                </div>
               </div>
               <ul className="space-y-3">
                 {tier.features?.map((f: any, j: number) => {
@@ -770,7 +1002,7 @@ function FAQSection({ content }: { content: any }) {
                 key={i}
                 className={cn(
                   'border rounded-xl overflow-hidden transition-all duration-300',
-                  isOpen ? 'border-purple-500/30 bg-purple-500/5' : 'border-white/[0.04] bg-[rgba(2,2,5,0.6)]/50 hover:border-cyan-500/15'
+                  isOpen ? 'border-purple-500/30 bg-purple-500/5' : 'border-white/[0.04] bg-[rgba(2,2,5,0.6)] hover:border-cyan-500/15'
                 )}
               >
                 <button
@@ -790,6 +1022,80 @@ function FAQSection({ content }: { content: any }) {
               </div>
             );
           })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TrustSignalsSection({ content }: { content: any }) {
+  const { ref, visible } = useScrollReveal();
+
+  return (
+    <section ref={ref} className="max-w-4xl mx-auto px-4 sm:px-6 py-16">
+      <div className={cn('transition-all duration-700', visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10')}>
+        {/* Guarantee banner */}
+        {content.guarantee && (
+          <div className="p-6 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 text-center mb-8">
+            <div className="flex items-center justify-center gap-2 mb-3">
+              <Shield className="w-6 h-6 text-emerald-400" />
+              <span className="text-lg font-bold text-emerald-400">Our Guarantee</span>
+            </div>
+            <p className="text-gray-300 text-sm leading-relaxed max-w-2xl mx-auto">{content.guarantee}</p>
+          </div>
+        )}
+
+        {/* Trust signal badges */}
+        {content.signals && content.signals.length > 0 && (
+          <div className="flex flex-wrap items-center justify-center gap-6">
+            {content.signals.map((signal: any, i: number) => (
+              <div key={i} className="flex items-center gap-2 text-gray-400 text-sm">
+                <span className="text-lg">{signal.icon}</span>
+                <span>{signal.text}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function FinalCTASection({ content }: { content: any }) {
+  const { ref, visible } = useScrollReveal();
+
+  return (
+    <section ref={ref} className="relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-b from-zinc-950 via-blue-950/15 to-zinc-950" />
+      <div className="absolute inset-0">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-blue-500/5 rounded-full blur-3xl" />
+      </div>
+      <div className={cn('relative max-w-3xl mx-auto px-4 sm:px-6 py-24 text-center transition-all duration-700', visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10')}>
+        <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-4">
+          {content.headline || 'Ready to Get Started?'}
+        </h2>
+        <p className="text-lg text-gray-400 mb-8 max-w-xl mx-auto">
+          {content.subheadline}
+        </p>
+
+        {content.urgencyMessage && (
+          <div className="inline-flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 text-orange-400 px-4 py-2 rounded-full text-sm font-medium mb-8">
+            <Sparkles className="w-4 h-4" />
+            {content.urgencyMessage}
+          </div>
+        )}
+
+        <div className="flex flex-col items-center gap-4">
+          <a
+            href="#lead-form"
+            className="group inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white px-10 py-5 rounded-xl text-xl font-bold transition-all hover:shadow-xl hover:shadow-blue-500/25 hover:-translate-y-1"
+          >
+            {content.ctaButton || 'Get Started Now'}
+            <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
+          </a>
+          {content.ctaSubtext && (
+            <p className="text-gray-500 text-sm">{content.ctaSubtext}</p>
+          )}
         </div>
       </div>
     </section>

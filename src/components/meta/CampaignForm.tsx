@@ -65,9 +65,15 @@ function defaultStart(): string {
 interface CampaignFormProps {
   onSubmit: (data: CampaignFormData) => void;
   isLoading: boolean;
+  /** Pre-fill form fields from agent output or other sources */
+  initialData?: Partial<CampaignFormData>;
+  /** Custom label for the submit button */
+  submitLabel?: string;
+  /** Called when user cancels/goes back */
+  onCancel?: () => void;
 }
 
-export default function CampaignForm({ onSubmit, isLoading }: CampaignFormProps) {
+export default function CampaignForm({ onSubmit, isLoading, initialData, submitLabel, onCancel }: CampaignFormProps) {
   const [form, setForm] = useState<CampaignFormData>({
     campaignName: '',
     objective: 'OUTCOME_LEADS',
@@ -86,6 +92,7 @@ export default function CampaignForm({ onSubmit, isLoading }: CampaignFormProps)
     adBody: '',
     destinationUrl: '',
     callToAction: 'LEARN_MORE',
+    ...initialData,
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -605,8 +612,14 @@ export default function CampaignForm({ onSubmit, isLoading }: CampaignFormProps)
         disabled={isLoading}
         className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-gray-500 text-white font-semibold rounded-lg transition-colors text-sm"
       >
-        {isLoading ? 'Creating Campaign...' : 'Create Campaign'}
+        {isLoading ? 'Launching...' : (submitLabel || 'Create Campaign')}
       </button>
+      {onCancel && (
+        <button type="button" onClick={onCancel}
+          className="w-full py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium rounded-lg transition-colors text-sm mt-2">
+          Cancel
+        </button>
+      )}
     </form>
   );
 }

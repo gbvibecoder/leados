@@ -3,10 +3,11 @@ import { createAdCreative } from '@/lib/meta-api';
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { message, link, cta_type } = body as {
+  const { message, link, cta_type, image_url } = body as {
     message: string;
     link: string;
     cta_type: string;
+    image_url?: string;
   };
 
   if (!message || !link || !cta_type) {
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const result = await createAdCreative({ message, link, cta_type });
+  const result = await createAdCreative({ message, link, cta_type, image_url });
 
   if (!result.success) {
     return NextResponse.json(

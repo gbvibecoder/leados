@@ -155,6 +155,24 @@ export async function createCampaign(params: {
   const accountId = AD_ACCOUNT_ID();
   const url = `${META_BASE}/act_${accountId}/campaigns`;
 
+  // Resolve the beneficiary/payor name for DSA transparency
+  // Try: ad account name → page name → fallback to campaign name
+  let dsaName = '';
+  try {
+    const accRes = await metaFetch<{ name: string }>(`/act_${accountId}?fields=name`);
+    if (accRes.success && accRes.data?.name) dsaName = accRes.data.name;
+  } catch { /* ignore */ }
+  if (!dsaName) {
+    const resolvedPageId = await getLinkedPageId() || PAGE_ID();
+    if (resolvedPageId) {
+      try {
+        const pgRes = await metaFetch<{ name: string }>(`/${resolvedPageId}?fields=name`);
+        if (pgRes.success && pgRes.data?.name) dsaName = pgRes.data.name;
+      } catch { /* ignore */ }
+    }
+  }
+  if (!dsaName) dsaName = params.name;
+
   const formBody = new URLSearchParams();
   formBody.append('name', params.name);
   formBody.append('objective', params.objective);
@@ -162,6 +180,8 @@ export async function createCampaign(params: {
   formBody.append('special_ad_categories', '["NONE"]');
   formBody.append('buying_type', 'AUCTION');
   formBody.append('is_adset_budget_sharing_enabled', 'false');
+  formBody.append('dsa_beneficiary', dsaName);
+  formBody.append('dsa_payor', dsaName);
   formBody.append('access_token', token);
 
   const timestamp = new Date().toISOString();
@@ -248,6 +268,15 @@ export async function createAdSet(params: {
 }): Promise<MetaApiResponse<{ id: string }>> {
   const optimizationGoal = mapObjectiveToGoal(params.objective);
 
+  // Force correct billing event per objective — Meta rejects mismatched combos
+  const OBJECTIVE_BILLING: Record<string, string> = {
+    OUTCOME_LEADS: 'IMPRESSIONS',
+    OUTCOME_SALES: 'IMPRESSIONS',
+    OUTCOME_AWARENESS: 'IMPRESSIONS',
+    OUTCOME_TRAFFIC: params.billing_event || 'LINK_CLICKS',
+  };
+  const billingEvent = OBJECTIVE_BILLING[params.objective] || params.billing_event || 'IMPRESSIONS';
+
   // Start time: use provided or default to 5 min from now
   const startTime = params.schedule_start
     ? new Date(params.schedule_start).toISOString()
@@ -277,13 +306,27 @@ export async function createAdSet(params: {
     targeting.genders = [params.gender];
   }
 
-  // Interest targeting
+  // Interest targeting — search Meta API for valid interest IDs
   if (params.interests) {
     const interestList = params.interests.split(',').map((s) => s.trim()).filter(Boolean);
     if (interestList.length > 0) {
-      targeting.flexible_spec = [
-        { interests: interestList.map((name) => ({ name })) },
-      ];
+      const resolvedInterests: { id: string; name: string }[] = [];
+      for (const term of interestList) {
+        try {
+          const searchRes = await fetch(
+            `${META_BASE}/search?type=adinterest&q=${encodeURIComponent(term)}&access_token=${ACCESS_TOKEN()}`,
+            { signal: AbortSignal.timeout(10_000) }
+          );
+          const searchData = await searchRes.json();
+          const match = searchData.data?.[0];
+          if (match?.id && match?.name) {
+            resolvedInterests.push({ id: match.id, name: match.name });
+          }
+        } catch { /* skip unresolvable interests */ }
+      }
+      if (resolvedInterests.length > 0) {
+        targeting.flexible_spec = [{ interests: resolvedInterests }];
+      }
     }
   }
 
@@ -297,7 +340,7 @@ export async function createAdSet(params: {
     name: `${params.campaign_id} — Ad Set`,
     campaign_id: params.campaign_id,
     daily_budget: String(params.daily_budget),
-    billing_event: params.billing_event || 'IMPRESSIONS',
+    billing_event: billingEvent,
     optimization_goal: optimizationGoal,
     bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
     targeting,
@@ -386,9 +429,16 @@ export async function createAdCreative(params: {
   message: string;
   link: string;
   cta_type: string;
+  image_url?: string;
 }): Promise<MetaApiResponse<{ id: string }>> {
   const pageId = await getLinkedPageId() || PAGE_ID();
   console.log(`[META-API] Using page_id for creative: ${pageId}`);
+
+  // Use provided image URL or a reliable public placeholder
+  // Pollinations.ai URLs are generated on-the-fly and Meta's crawlers can't download them
+  // Use a high-quality public stock image as fallback
+  const adImageUrl = params.image_url
+    || 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1200&h=628&fit=crop&q=80';
 
   // Step 1: Create a post directly on the Facebook Page
   // This bypasses the "app in development mode" restriction because
@@ -397,6 +447,7 @@ export async function createAdCreative(params: {
   const postResult = await metaFetch<{ id: string }>(`/${pageId}/feed`, 'POST', {
     message: postText,
     link: params.link,
+    picture: adImageUrl,
     published: false, // unpublished "dark post" — only used as ad
   });
 
@@ -410,6 +461,7 @@ export async function createAdCreative(params: {
         link_data: {
           message: params.message,
           link: params.link,
+          picture: adImageUrl,
           call_to_action: {
             type: params.cta_type,
             value: { link: params.link },
@@ -433,11 +485,34 @@ export async function createAd(params: {
   adset_id: string;
   creative_id: string;
 }): Promise<MetaApiResponse<{ id: string }>> {
+  // Fetch page name for DSA transparency fields (required by Meta)
+  let pageName = '';
+  const pageId = await getLinkedPageId() || PAGE_ID();
+  if (pageId) {
+    try {
+      const pageRes = await metaFetch<{ name: string }>(`/${pageId}?fields=name`);
+      if (pageRes.success && pageRes.data?.name) {
+        pageName = pageRes.data.name;
+      }
+    } catch { /* use fallback */ }
+  }
+  // Fallback: fetch from /me
+  if (!pageName) {
+    try {
+      const meRes = await metaFetch<{ name: string }>('/me?fields=name');
+      if (meRes.success && meRes.data?.name) pageName = meRes.data.name;
+    } catch { /* ignore */ }
+  }
+  if (!pageName) pageName = 'LeadOS';
+
   return metaFetch(`/act_${AD_ACCOUNT_ID()}/ads`, 'POST', {
     name: 'LeadOS Ad',
     adset_id: params.adset_id,
     creative: { creative_id: params.creative_id },
     status: 'PAUSED',
+    // DSA transparency fields — required by Meta for ad transparency
+    dsa_beneficiary: pageName,
+    dsa_payor: pageName,
   });
 }
 

@@ -5,59 +5,58 @@ import * as webflow from '../../integrations/webflow';
 // Slimmed prompt — LLM only generates landing page copy + sections.
 // leadForm, bookingCalendar, crmIntegration, tracking are all built from
 // deterministic defaults + real API data — no LLM needed for those.
-const SYSTEM_PROMPT = `You are the Funnel Builder Agent for LeadOS. Generate landing page copy ONLY.
+const SYSTEM_PROMPT = `You are the Funnel Builder Agent for LeadOS. Generate a high-converting landing page inspired by top Shopify/DTC sales pages.
 
 You receive JSON with the validated offer (ICP, pricing, guarantee, positioning) and optionally "productContext" scraped from the client's website. If productContext is provided, use the real product name, features, and value propositions to create landing page copy that accurately represents the actual product/service.
 
-## Proven Landing Page Structure (SOP)
+## High-Converting Landing Page Structure
 
-Follow this exact section order for every page:
+Follow this exact section order for maximum conversion:
 
-1. **Hero**: Bold headline with a specific outcome + subheadline explaining how. Single CTA button linking to Calendly or lead form.
-2. **Social Proof Bar**: Scrolling logo strip of existing clients. Establishes trust immediately.
-3. **Problem Section**: 3 pain points the target audience recognises. Use their language.
-4. **Solution Section**: How it works in 3-4 numbered steps with icons or images. Keep it visual.
-5. **What's Included**: List deliverables clearly. Use checkmarks or feature cards.
-6. **Comparison Table** (optional): Us vs traditional/competitors. Green checks vs red X's.
-7. **Testimonials**: Video testimonials preferred over text. Show real names, roles, companies.
-8. **Pricing** (if applicable): Transparent tiers or single offer with clear CTA.
-9. **FAQ**: 5-10 questions addressing objections. Collapsible accordion format.
-10. **Final CTA**: Repeat the main offer and button. Calendly embed or lead form.
+1. **Announcement Bar**: Urgency/scarcity message at the top (e.g. "Only X spots left at this price", "Limited-time offer ends soon").
+2. **Hero**: SHORT headline (max 8-10 words) with a specific outcome + subheadline explaining how. The headline MUST be punchy and concise like "Skip The 10-Step Routine, Get Results" or "Double Your Pipeline in 90 Days" — NEVER more than 10 words. Put the details in the subheadline instead. Single CTA button. Include a guarantee badge and key stats (e.g. "12,000+ Happy Customers", "4.8★ Rating", "96% See Results").
+3. **Social Proof Bar**: "Trusted by" or "As Featured In" with logo/brand names. Scrolling strip feel.
+4. **Problem Section**: 3-4 pain points the target audience recognises. Use emoji icons (😵‍💫 💸 ⏰ 🤷‍♀️) and their language.
+5. **Solution Section**: How it works in 3-4 numbered steps with icons. Keep it visual and clear.
+6. **What's Included**: List deliverables/features with checkmarks or feature cards. Show clear value.
+7. **Comparison Table**: Us vs traditional/competitors. Green checks vs red X's. Make the advantage obvious.
+8. **Testimonials**: 3 testimonials with names, roles, companies, and verified badges. Include a specific metric per testimonial.
+9. **Media Features**: "As Seen In" section with recognizable publication/brand names for credibility.
+10. **Pricing**: Transparent pricing with price anchoring (show original price crossed out + discounted price + savings percentage). Include guarantee.
+11. **FAQ**: 5-8 questions addressing objections. Collapsible accordion format.
+12. **Trust Signals**: Guarantee details, security badges, return policy, support info.
+13. **Final CTA**: Repeat the main offer with urgency. Scarcity reminder + CTA button.
 
-## Reference Sites — Proven Landing Page Designs
+## Conversion Psychology Rules
 
-Study these for structure and conversion patterns:
-- digifoot.de — B2B health/BGM offer. Hero + logo bar + pilot offer + 4-step process + video testimonials + FAQ
-- neo24.neobim.ai — B2B SaaS. Problem/solution + comparison table + pricing + process steps. Strong urgency angle
-- leadeasy.ai — B2B lead gen. Pain points + customer success + 3-tier pricing + feature grid. Calendly CTA throughout
-- zww-deutschland.de — B2B consulting. Problem vs solution split + eligibility + 4-step process + tiered packages
-
-## Template Reuse Rule
-
-If this is a niche we've built pages for before, reuse the proven template structure. Only create a new design when entering a completely new niche. When a page outperforms existing ones, save it as the new niche template.
-
-## Lead Form Fields (SOP)
-
-Every lead form must collect: name, email, phone, company, and 1-2 qualifying questions relevant to the niche.
+- Use specific numbers over vague claims ("96% see results in 30 days" not "most people see results")
+- Price anchor: always show a higher "original" price crossed out with the real price and savings %
+- Include at least 3 trust signals: guarantee, security, social proof count
+- Every section should have a micro-CTA or lead toward the main CTA
+- Use loss aversion language in problem section ("Stop wasting...", "Don't let...")
+- Testimonials must include a measurable result metric
 
 Return ONLY valid JSON (no markdown) with this structure:
 {
   "landingPage": {
     "url": "https://leadflow-ai.com/get-started",
     "deployTarget": "Webflow",
-    "headline": "string — transformation promise as primary headline",
-    "subheadline": "string — supporting subheadline",
+    "headline": "string — MAX 10 WORDS. Short, punchy transformation promise.",
+    "subheadline": "string — supporting detail that expands on the headline",
     "sections": [
-      { "type": "hero", "content": { "headline": "string", "subheadline": "string", "cta": "string", "ctaLink": "string — Calendly URL or #lead-form", "ctaSubtext": "string", "guaranteeBadge": "string" } },
-      { "type": "socialProofBar", "content": { "logos": ["string — client/partner logo names"], "label": "string — e.g. Trusted by 500+ companies" } },
-      { "type": "problem", "content": { "sectionTitle": "string", "painPoints": [{ "icon": "string", "title": "string", "description": "string — use target audience language" }] } },
+      { "type": "announcementBar", "content": { "message": "string — urgency/scarcity text", "highlight": "string — emphasized part e.g. the number" } },
+      { "type": "hero", "content": { "headline": "string — MAX 10 words, punchy", "subheadline": "string — longer detail", "cta": "string", "ctaLink": "#lead-form", "ctaSubtext": "string — e.g. No commitment required", "guaranteeBadge": "string", "stats": [{ "value": "string", "label": "string" }] } },
+      { "type": "socialProofBar", "content": { "logos": ["string — client/partner/media names"], "label": "string — e.g. Trusted by 500+ companies" } },
+      { "type": "problem", "content": { "sectionTitle": "string", "painPoints": [{ "emoji": "string — single emoji", "title": "string", "description": "string — use target audience language" }] } },
       { "type": "solution", "content": { "sectionTitle": "string", "steps": [{ "stepNumber": "number", "icon": "string", "title": "string", "description": "string" }] } },
       { "type": "whatsIncluded", "content": { "sectionTitle": "string", "deliverables": [{ "icon": "checkmark", "title": "string", "description": "string" }] } },
       { "type": "comparisonTable", "content": { "sectionTitle": "string", "columns": ["Us", "Traditional/Competitors"], "rows": [{ "feature": "string", "us": true, "them": false }] } },
-      { "type": "testimonials", "content": { "sectionTitle": "string", "items": [{ "quote": "string", "name": "string", "role": "string", "company": "string", "format": "video | text", "videoUrl": "string | null", "metric": "string" }] } },
-      { "type": "pricing", "content": { "sectionTitle": "string", "tiers": [{ "name": "string", "price": "string", "highlight": false, "badge": "string", "cta": "string", "features": ["string"] }], "guarantee": "string" } },
+      { "type": "testimonials", "content": { "sectionTitle": "string", "items": [{ "quote": "string", "name": "string", "role": "string", "company": "string", "verified": true, "metric": "string — specific result e.g. 4x qualified meetings" }] } },
+      { "type": "mediaFeatures", "content": { "sectionTitle": "string — e.g. As Seen In", "publications": ["string — publication/brand names"] } },
+      { "type": "pricing", "content": { "sectionTitle": "string", "originalPrice": "string — higher anchor price", "price": "string — actual price", "savings": "string — e.g. Save 47%", "tiers": [{ "name": "string", "price": "string", "originalPrice": "string", "highlight": false, "badge": "string", "cta": "string", "features": ["string"] }], "guarantee": "string", "priceSubtext": "string — e.g. Limited-time introductory pricing" } },
       { "type": "faq", "content": { "sectionTitle": "string", "format": "accordion", "questions": [{ "q": "string", "a": "string" }] } },
-      { "type": "finalCta", "content": { "headline": "string", "subheadline": "string", "ctaButton": "string", "ctaLink": "string — Calendly embed or #lead-form", "ctaSubtext": "string" } }
+      { "type": "trustSignals", "content": { "guarantee": "string — full guarantee text with details", "signals": [{ "icon": "string", "text": "string" }] } },
+      { "type": "finalCta", "content": { "headline": "string", "subheadline": "string", "ctaButton": "string", "ctaLink": "#lead-form", "ctaSubtext": "string — urgency/scarcity reminder", "urgencyMessage": "string" } }
     ],
     "cta": "string",
     "seoMeta": { "title": "string", "description": "string" }
@@ -339,30 +338,41 @@ export class FunnelBuilderAgent extends BaseAgent {
 
       // ── Build fallback landing page if LLM didn't produce one ─────
       if (!parsed.landingPage) {
-        const transformationPromise = offerData.transformationPromise || 'Double Your Qualified Leads in 90 Days';
+        const transformationPromise = offerData.transformationPromise || '';
+        const serviceName = offerData.serviceName || niche;
+        // Short headline: max ~10 words. Use service name or a punchy version.
+        const shortHeadline = serviceName
+          ? `Get More Leads with ${serviceName}`
+          : 'Double Your Qualified Leads in 90 Days';
         const guarantee = offerData.guarantee || '90-Day Money-Back Guarantee';
         const basePrice = offerData.pricingTiers?.[0]?.price || '$2,500/mo';
 
         parsed.landingPage = {
           url: 'https://leadflow-ai.com/get-started',
           deployTarget: 'Webflow',
-          headline: transformationPromise,
-          subheadline: `B2B companies use our AI engine to build a predictable, scalable pipeline for ${niche.toLowerCase()} — fully autonomous, performance-guaranteed, and live in 48 hours`,
+          headline: shortHeadline,
+          subheadline: transformationPromise || `We build a predictable, scalable pipeline for ${niche.toLowerCase()} — fully autonomous, performance-guaranteed, and live in 48 hours`,
           sections: [
-            { type: 'hero', content: { headline: transformationPromise, subheadline: `Built for companies investing in ${niche.toLowerCase()}`, cta: 'Book Your Free Strategy Call', ctaLink: '#lead-form', ctaSubtext: 'No commitment. See your custom growth plan in 30 minutes.', guaranteeBadge: guarantee } },
+            { type: 'announcementBar', content: { message: 'Only 10 onboarding spots left at this price', highlight: '10 spots' } },
+            { type: 'hero', content: { headline: shortHeadline, subheadline: transformationPromise || `Built for companies investing in ${niche.toLowerCase()} — the done-for-you lead engine`, cta: 'Book Your Free Strategy Call', ctaLink: '#lead-form', ctaSubtext: 'No commitment. See your custom growth plan in 30 minutes.', guaranteeBadge: guarantee, stats: [
+              { value: '500+', label: 'Happy Clients' },
+              { value: '4.9★', label: 'Average Rating' },
+              { value: '93%', label: 'See Results in 30 Days' },
+            ] } },
             { type: 'socialProofBar', content: { logos: ['TechCorp', 'GrowthHQ', 'ScaleUp Inc', 'Pipeline Pro', 'RevenueLab'], label: `Trusted by 500+ companies for ${niche.toLowerCase()}` } },
             { type: 'problem', content: { sectionTitle: 'Sound Familiar?', painPoints: [
-              { icon: 'chart-down', title: 'Feast-or-Famine Pipeline', description: 'One month you\'re drowning in leads, the next it\'s crickets.' },
-              { icon: 'money-burn', title: 'Burning Cash on Bad Leads', description: 'Spending $200+ per lead on channels that produce tire-kickers.' },
-              { icon: 'clock', title: 'Sales Team Wasting Time', description: 'Your reps spend 60% of their day chasing unqualified leads.' },
+              { emoji: '😵‍💫', title: 'Feast-or-Famine Pipeline', description: 'One month you\'re drowning in leads, the next it\'s crickets. You can\'t plan growth on unpredictable deal flow.' },
+              { emoji: '💸', title: 'Burning Cash on Bad Leads', description: 'Spending $200+ per lead on channels that produce tire-kickers who never convert.' },
+              { emoji: '⏰', title: 'Sales Team Wasting Time', description: 'Your reps spend 60% of their day chasing unqualified leads instead of closing deals.' },
+              { emoji: '🤷‍♀️', title: 'Information Overload', description: 'Too many tools, dashboards, and reports — but no clear picture of what\'s actually working.' },
             ] } },
             { type: 'solution', content: { sectionTitle: `How It Works: Your Autonomous ${niche} Engine`, steps: [
-              { stepNumber: 1, icon: 'search', title: 'We Research Your Market', description: 'AI agents analyze your niche, competitors, and ideal buyers to build a custom strategy.' },
-              { stepNumber: 2, icon: 'funnel', title: 'We Build Your Funnel', description: 'Landing pages, lead forms, and booking flows go live within 48 hours.' },
-              { stepNumber: 3, icon: 'megaphone', title: 'We Launch Campaigns', description: 'Multi-channel outreach across paid ads, email, and LinkedIn — fully automated.' },
-              { stepNumber: 4, icon: 'handshake', title: 'You Close Deals', description: 'AI-qualified leads land in your CRM, scored and ready for your sales team.' },
+              { stepNumber: 1, icon: '🔍', title: 'We Research Your Market', description: 'AI agents analyze your niche, competitors, and ideal buyers to build a custom strategy.' },
+              { stepNumber: 2, icon: '🏗️', title: 'We Build Your Funnel', description: 'Landing pages, lead forms, and booking flows go live within 48 hours.' },
+              { stepNumber: 3, icon: '📣', title: 'We Launch Campaigns', description: 'Multi-channel outreach across paid ads, email, and LinkedIn — fully automated.' },
+              { stepNumber: 4, icon: '🤝', title: 'You Close Deals', description: 'AI-qualified leads land in your CRM, scored and ready for your sales team.' },
             ] } },
-            { type: 'whatsIncluded', content: { sectionTitle: 'What\'s Included', deliverables: [
+            { type: 'whatsIncluded', content: { sectionTitle: 'Everything You Get', deliverables: [
               { icon: 'checkmark', title: 'AI-Powered Multi-Channel Campaigns', description: 'Google Ads, Meta, email, and LinkedIn outreach managed by AI agents.' },
               { icon: 'checkmark', title: 'Autonomous Lead Scoring & Voice Qualification', description: 'Every lead scored on BANT criteria with AI voice calls.' },
               { icon: 'checkmark', title: 'Real-Time Budget Reallocation', description: 'Ad spend automatically shifted to highest-performing channels.' },
@@ -378,14 +388,15 @@ export class FunnelBuilderAgent extends BaseAgent {
               { feature: 'Transparent, real-time reporting', us: true, them: false },
             ] } },
             { type: 'testimonials', content: { sectionTitle: 'What Our Clients Say', items: [
-              { quote: 'We went from 12 to 47 qualified meetings per month in 60 days.', name: 'Sarah Chen', role: 'VP Marketing', company: 'TechCorp', format: 'video', videoUrl: null, metric: '4x qualified meetings' },
-              { quote: 'LeadFlow replaced our entire outbound team and cut our CPL by 60%.', name: 'Marcus Johnson', role: 'CEO', company: 'GrowthHQ', format: 'video', videoUrl: null, metric: '60% lower CPL' },
-              { quote: 'The AI qualification calls are indistinguishable from our best SDRs.', name: 'Priya Patel', role: 'Head of Sales', company: 'ScaleUp Inc', format: 'text', videoUrl: null, metric: '3x conversion rate' },
+              { quote: 'We went from 12 to 47 qualified meetings per month in 60 days.', name: 'Sarah Chen', role: 'VP Marketing', company: 'TechCorp', verified: true, metric: '4x qualified meetings' },
+              { quote: 'LeadFlow replaced our entire outbound team and cut our CPL by 60%.', name: 'Marcus Johnson', role: 'CEO', company: 'GrowthHQ', verified: true, metric: '60% lower CPL' },
+              { quote: 'The AI qualification calls are indistinguishable from our best SDRs.', name: 'Priya Patel', role: 'Head of Sales', company: 'ScaleUp Inc', verified: true, metric: '3x conversion rate' },
             ] } },
-            { type: 'pricing', content: { sectionTitle: 'Simple, Transparent Pricing', tiers: [
-              { name: 'Starter', price: basePrice, highlight: false, cta: 'Get Started', features: ['5 active campaigns', 'AI lead scoring', '500 outbound/mo', 'Weekly reports'] },
-              { name: 'Growth', price: offerData.pricingTiers?.[1]?.price || '$5,000/mo', highlight: true, badge: 'Most Popular', cta: 'Book Strategy Call', features: ['Unlimited campaigns', 'AI voice qualification', '2,500 outbound + LinkedIn', 'Multi-touch attribution'] },
-              { name: 'Enterprise', price: offerData.pricingTiers?.[2]?.price || '$7,500/mo', highlight: false, cta: 'Talk to Sales', features: ['Everything in Growth', 'Custom AI scripts', '10,000 outbound + LinkedIn', 'White-glove funnel design'] },
+            { type: 'mediaFeatures', content: { sectionTitle: 'As Seen In', publications: ['TechCrunch', 'Forbes', 'Business Insider', 'Inc.', 'Entrepreneur'] } },
+            { type: 'pricing', content: { sectionTitle: 'Simple, Transparent Pricing', originalPrice: '$4,500/mo', price: basePrice, savings: 'Save 44%', priceSubtext: 'Limited-time introductory pricing', tiers: [
+              { name: 'Starter', price: basePrice, originalPrice: '$4,500/mo', highlight: false, cta: 'Get Started', features: ['5 active campaigns', 'AI lead scoring', '500 outbound/mo', 'Weekly reports'] },
+              { name: 'Growth', price: offerData.pricingTiers?.[1]?.price || '$5,000/mo', originalPrice: '$8,500/mo', highlight: true, badge: 'Most Popular', cta: 'Book Strategy Call', features: ['Unlimited campaigns', 'AI voice qualification', '2,500 outbound + LinkedIn', 'Multi-touch attribution'] },
+              { name: 'Enterprise', price: offerData.pricingTiers?.[2]?.price || '$7,500/mo', originalPrice: '$12,000/mo', highlight: false, cta: 'Talk to Sales', features: ['Everything in Growth', 'Custom AI scripts', '10,000 outbound + LinkedIn', 'White-glove funnel design'] },
             ], guarantee } },
             { type: 'faq', content: { sectionTitle: 'Frequently Asked Questions', format: 'accordion', questions: [
               { q: 'How long until I see results?', a: 'Most clients see first qualified leads within 7-14 days of launch.' },
@@ -394,7 +405,13 @@ export class FunnelBuilderAgent extends BaseAgent {
               { q: 'What if it doesn\'t work?', a: `We offer a ${guarantee}. If we don\'t deliver, you don\'t pay.` },
               { q: 'How is this different from a marketing agency?', a: 'We\'re fully autonomous AI — no account managers, no delays, no markup on ad spend. You get 24/7 optimization at a fraction of the cost.' },
             ] } },
-            { type: 'finalCta', content: { headline: 'Ready to Transform Your Pipeline?', subheadline: 'Book a free 30-minute strategy call with a custom growth projection.', ctaButton: 'Book Your Free Strategy Call', ctaLink: '#lead-form', ctaSubtext: 'Limited spots — we only onboard 10 new clients per month' } },
+            { type: 'trustSignals', content: { guarantee: `${guarantee} — if we don't deliver the results we promised, you get a full refund. No questions asked.`, signals: [
+              { icon: '🔒', text: 'Bank-level 256-bit SSL encryption' },
+              { icon: '✅', text: 'SOC 2 Type II compliant' },
+              { icon: '📞', text: '24/7 priority support' },
+              { icon: '🔄', text: 'Cancel anytime — no long-term contracts' },
+            ] } },
+            { type: 'finalCta', content: { headline: 'Ready to Transform Your Pipeline?', subheadline: 'Book a free 30-minute strategy call with a custom growth projection.', ctaButton: 'Book Your Free Strategy Call', ctaLink: '#lead-form', ctaSubtext: 'Limited spots — we only onboard 10 new clients per month', urgencyMessage: 'Only 10 onboarding spots remaining at this price' } },
           ],
           cta: 'Book Your Free Strategy Call',
           seoMeta: { title: `LeadFlow AI — ${transformationPromise}`, description: `B2B companies use LeadFlow AI for autonomous, AI-powered ${niche.toLowerCase()}. ${guarantee}.`, ogImage: '/og/leadflow-ai.png' },

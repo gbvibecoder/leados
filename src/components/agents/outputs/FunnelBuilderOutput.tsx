@@ -170,7 +170,11 @@ export function FunnelBuilderOutput({ data }: Props) {
       <CollapsibleSection
         icon={<FileText className="w-4 h-4 text-orange-400" />}
         title="Landing Page Copy"
-        subtitle={funnelData.landingPage.headline}
+        subtitle={(() => {
+          const seoTitle = funnelData.landingPage.seoMeta?.title || '';
+          const brand = seoTitle.split(/\s*[—–-]\s*/)[0]?.trim();
+          return brand || funnelData.landingPage.headline?.split(/\s+/).slice(0, 6).join(' ') || '';
+        })()}
         defaultOpen
       >
         <div className="space-y-3">
@@ -665,12 +669,21 @@ function LandingPageSectionCard({ section, index }: { section: LandingPageSectio
   const content = section.content;
 
   const sectionLabels: Record<string, { label: string; color: string }> = {
+    announcementBar: { label: 'Announcement Bar', color: 'text-orange-400' },
     hero: { label: 'Hero', color: 'text-blue-400' },
+    socialProofBar: { label: 'Social Proof Bar', color: 'text-yellow-400' },
+    problem: { label: 'Problem', color: 'text-red-400' },
     painPoints: { label: 'Pain Points', color: 'text-red-400' },
     solution: { label: 'Solution', color: 'text-green-400' },
+    whatsIncluded: { label: "What's Included", color: 'text-cyan-400' },
+    comparisonTable: { label: 'Comparison Table', color: 'text-indigo-400' },
+    testimonials: { label: 'Testimonials', color: 'text-yellow-400' },
     socialProof: { label: 'Social Proof', color: 'text-yellow-400' },
+    mediaFeatures: { label: 'As Seen In', color: 'text-gray-400' },
     pricing: { label: 'Pricing', color: 'text-purple-400' },
     faq: { label: 'FAQ', color: 'text-orange-400' },
+    trustSignals: { label: 'Trust Signals', color: 'text-emerald-400' },
+    finalCta: { label: 'Final CTA', color: 'text-cyan-400' },
     cta: { label: 'CTA', color: 'text-cyan-400' },
   };
 
@@ -715,23 +728,57 @@ function renderSectionContent(type: string, content: any): React.ReactNode {
   }
 
   switch (type) {
+    case 'announcementBar':
+      return (
+        <div className="p-2.5 bg-orange-500/10 rounded-lg border border-orange-500/20">
+          <div className="text-xs text-orange-400 font-medium">{content.message}</div>
+          {content.highlight && <div className="text-xs text-orange-300 font-bold mt-0.5">{content.highlight}</div>}
+        </div>
+      );
+
     case 'hero':
       return (
         <div className="space-y-2">
           <div className="text-sm font-bold">{content.headline}</div>
           <div className="text-xs text-muted-foreground">{content.subheadline}</div>
+          {content.stats && content.stats.length > 0 && (
+            <div className="flex flex-wrap gap-3 mt-2">
+              {content.stats.map((stat: any, i: number) => (
+                <div key={i} className="text-xs px-2 py-1 bg-blue-500/10 rounded border border-blue-500/20">
+                  <span className="font-bold text-blue-400">{stat.value}</span>
+                  <span className="text-muted-foreground ml-1">{stat.label}</span>
+                </div>
+              ))}
+            </div>
+          )}
           {content.cta && <div className="text-xs text-blue-400">{content.cta}</div>}
           {content.ctaSubtext && <div className="text-xs text-muted-foreground italic">{content.ctaSubtext}</div>}
-          {content.socialProofBar && <div className="text-xs text-yellow-400/70 mt-1">{content.socialProofBar}</div>}
+          {content.guaranteeBadge && <div className="text-xs text-green-400/70 mt-1">{content.guaranteeBadge}</div>}
         </div>
       );
 
-    case 'painPoints':
+    case 'socialProofBar':
+      return (
+        <div className="space-y-2">
+          {content.label && <div className="text-xs text-muted-foreground">{content.label}</div>}
+          {content.logos && (
+            <div className="flex flex-wrap gap-1">
+              {content.logos.map((logo: string, i: number) => (
+                <span key={i} className="text-xs px-2 py-0.5 bg-muted/20 rounded text-muted-foreground">{logo}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+
+    case 'problem':
+    case 'painPoints': {
+      const points = content.painPoints || content.points || [];
       return (
         <div className="space-y-1.5">
-          {content.points?.map((point: any, i: number) => (
+          {points.map((point: any, i: number) => (
             <div key={i} className="flex items-start gap-2 text-xs">
-              <span className="text-red-400 shrink-0 font-bold">{i + 1}.</span>
+              <span className="shrink-0">{point.emoji || <span className="text-red-400 font-bold">{i + 1}.</span>}</span>
               <div>
                 <span className="font-medium">{point.title}</span>
                 {point.description && <span className="text-muted-foreground"> — {point.description}</span>}
@@ -740,29 +787,83 @@ function renderSectionContent(type: string, content: any): React.ReactNode {
           ))}
         </div>
       );
+    }
 
     case 'solution':
       return (
         <div className="space-y-2">
-          <div className="text-xs sm:text-sm font-medium text-green-400">{content.transformationPromise}</div>
-          <div className="text-xs text-muted-foreground">{content.uniqueMechanism}</div>
-          {content.features?.map((f: string, i: number) => (
-            <div key={i} className="flex items-center gap-1.5 text-xs">
-              <CheckCircle2 className="w-3 h-3 text-green-400 shrink-0" />
-              <span>{f}</span>
+          {content.transformationPromise && <div className="text-xs sm:text-sm font-medium text-green-400">{content.transformationPromise}</div>}
+          {content.steps?.map((step: any, i: number) => (
+            <div key={i} className="flex items-start gap-2 text-xs">
+              <span className="w-5 h-5 rounded-full bg-green-500/10 text-green-400 flex items-center justify-center text-[10px] font-bold shrink-0">
+                {step.icon && /\p{Emoji}/u.test(step.icon) ? step.icon : step.stepNumber || i + 1}
+              </span>
+              <div>
+                <span className="font-medium">{step.title}</span>
+                {step.description && <span className="text-muted-foreground"> — {step.description}</span>}
+              </div>
+            </div>
+          ))}
+          {content.features?.map((f: any, i: number) => {
+            const text = typeof f === 'string' ? f : f?.title || JSON.stringify(f);
+            return (
+              <div key={i} className="flex items-center gap-1.5 text-xs">
+                <CheckCircle2 className="w-3 h-3 text-green-400 shrink-0" />
+                <span>{text}</span>
+              </div>
+            );
+          })}
+        </div>
+      );
+
+    case 'whatsIncluded':
+      return (
+        <div className="space-y-1.5">
+          {content.deliverables?.map((item: any, i: number) => (
+            <div key={i} className="flex items-start gap-2 text-xs">
+              <CheckCircle2 className="w-3 h-3 text-cyan-400 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-medium">{item.title}</span>
+                {item.description && <span className="text-muted-foreground"> — {item.description}</span>}
+              </div>
             </div>
           ))}
         </div>
       );
 
-    case 'socialProof':
+    case 'comparisonTable': {
+      const cols = content.columns || ['Us', 'Competitors'];
+      return (
+        <div className="space-y-1">
+          <div className="flex items-center gap-4 text-xs font-medium mb-1">
+            <span className="flex-1">Feature</span>
+            <span className="w-16 text-center text-green-400">{cols[0]}</span>
+            <span className="w-16 text-center text-muted-foreground">{cols[1]}</span>
+          </div>
+          {content.rows?.map((row: any, i: number) => (
+            <div key={i} className="flex items-center gap-4 text-xs py-1 border-t border-border/20">
+              <span className="flex-1 text-muted-foreground">{row.feature}</span>
+              <span className="w-16 text-center">{row.us ? '✅' : '❌'}</span>
+              <span className="w-16 text-center">{row.them ? '✅' : '❌'}</span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    case 'testimonials':
+    case 'socialProof': {
+      const items = content.items || content.testimonials || [];
       return (
         <div className="space-y-2">
-          {content.testimonials?.map((t: any, i: number) => (
+          {items.map((t: any, i: number) => (
             <div key={i} className="p-2 bg-muted/20 rounded-lg border border-border/30">
-              <div className="text-xs italic text-muted-foreground">"{t.quote}"</div>
+              <div className="text-xs italic text-muted-foreground">&ldquo;{t.quote}&rdquo;</div>
               <div className="flex items-center justify-between mt-1">
-                <span className="text-xs font-medium">{t.name}, {t.title}</span>
+                <span className="text-xs font-medium">
+                  {t.name}{t.role ? `, ${t.role}` : ''}{t.company ? ` @ ${t.company}` : ''}
+                  {t.verified && ' ✓'}
+                </span>
                 {t.metric && <span className="text-xs text-green-400 font-bold">{t.metric}</span>}
               </div>
             </div>
@@ -776,23 +877,40 @@ function renderSectionContent(type: string, content: any): React.ReactNode {
           )}
         </div>
       );
+    }
+
+    case 'mediaFeatures':
+      return (
+        <div className="flex flex-wrap gap-2">
+          {content.publications?.map((pub: string, i: number) => (
+            <span key={i} className="text-xs px-2.5 py-1 bg-muted/20 rounded-lg border border-border/30 text-muted-foreground font-medium">{pub}</span>
+          ))}
+        </div>
+      );
 
     case 'pricing':
       return (
         <div className="space-y-2">
+          {content.savings && (
+            <div className="text-xs text-green-400 font-bold">{content.savings}</div>
+          )}
           {content.tiers?.map((tier: any, i: number) => (
             <div key={i} className={`p-2.5 rounded-lg border ${tier.highlight ? 'border-purple-500/30 bg-purple-500/5' : 'border-border/50 bg-muted/10'}`}>
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-sm font-bold">{tier.name}</span>
+                {tier.originalPrice && <span className="text-xs text-muted-foreground line-through">{tier.originalPrice}</span>}
                 <span className="text-sm text-purple-400 font-bold">{tier.price}</span>
                 {tier.badge && <span className="text-xs px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-400">{tier.badge}</span>}
               </div>
               <div className="flex flex-wrap gap-1">
-                {tier.features?.map((f: string, fi: number) => (
-                  <span key={fi} className="text-xs text-muted-foreground">
-                    {fi > 0 && ' · '}{f}
-                  </span>
-                ))}
+                {tier.features?.map((f: any, fi: number) => {
+                  const text = typeof f === 'string' ? f : f?.title || JSON.stringify(f);
+                  return (
+                    <span key={fi} className="text-xs text-muted-foreground">
+                      {fi > 0 && ' · '}{text}
+                    </span>
+                  );
+                })}
               </div>
             </div>
           ))}
@@ -807,19 +925,36 @@ function renderSectionContent(type: string, content: any): React.ReactNode {
         <div className="space-y-1.5">
           {content.questions?.map((qa: any, i: number) => (
             <div key={i} className="text-xs">
-              <div className="font-medium">{qa.q}</div>
-              <div className="text-muted-foreground mt-0.5">{qa.a}</div>
+              <div className="font-medium">{typeof qa.q === 'string' ? qa.q : JSON.stringify(qa.q)}</div>
+              <div className="text-muted-foreground mt-0.5">{typeof qa.a === 'string' ? qa.a : JSON.stringify(qa.a)}</div>
             </div>
           ))}
         </div>
       );
 
+    case 'trustSignals':
+      return (
+        <div className="space-y-2">
+          {content.guarantee && (
+            <div className="text-xs text-green-400 font-medium p-2 bg-green-500/5 rounded border border-green-500/20">{content.guarantee}</div>
+          )}
+          {content.signals?.map((signal: any, i: number) => (
+            <div key={i} className="flex items-center gap-2 text-xs">
+              <span>{signal.icon}</span>
+              <span className="text-muted-foreground">{signal.text}</span>
+            </div>
+          ))}
+        </div>
+      );
+
+    case 'finalCta':
     case 'cta':
       return (
         <div className="space-y-1">
           <div className="text-sm font-bold">{content.headline}</div>
           <div className="text-xs text-muted-foreground">{content.subheadline}</div>
           {content.ctaButton && <div className="text-xs text-blue-400 font-medium mt-1">{content.ctaButton}</div>}
+          {content.urgencyMessage && <div className="text-xs text-orange-400 font-medium">{content.urgencyMessage}</div>}
           {content.ctaSubtext && <div className="text-xs text-muted-foreground italic">{content.ctaSubtext}</div>}
         </div>
       );
