@@ -361,7 +361,28 @@ export class PaidTrafficAgent extends BaseAgent {
         metaAds: {
           campaignName: parsed.metaAds?.campaignName || '',
           audiences: (parsed.metaAds?.audiences || []).map((a: any) => ({ ...a, estimatedSize: 0 })),
-          adSets: parsed.metaAds?.adSets || [],
+          adSets: (parsed.metaAds?.adSets || []).map((adSet: any, setIdx: number) => ({
+            ...adSet,
+            creatives: (adSet.creatives || []).map((cr: any, crIdx: number) => {
+              // Generate a project-aware image prompt for each creative
+              const pName = productContext?.title || offerData.serviceName || inputs.config?.projectName || 'Product';
+              const pDesc = productContext?.description || offerData.transformationPromise || cr.description || '';
+              const audience = adSet.audience || adSet.type || '';
+              const promptStyles = [
+                `Professional social media ad for "${pName}". Smartphone or laptop showing the "${pName}" app dashboard with realistic UI. Dark navy-blue background, subtle orange accent lighting. ${pDesc ? `Product: ${pDesc}.` : ''} Photorealistic marketing photography, no text overlay, sharp details.`,
+                `Professional person using "${pName}" on a laptop in a modern office. Screen shows product dashboard. ${pDesc ? `Context: ${pDesc}.` : ''} Warm natural lighting, shallow depth of field, corporate photography, no text overlay.`,
+                `Split-screen ad concept. Left: cluttered desk with papers, stress, dim lighting. Right: clean workspace with laptop showing "${pName}" dashboard, organized, bright. ${pDesc ? `Product solves: ${pDesc}.` : ''} Professional photography, high contrast, no text overlay.`,
+                `Hero image for "${pName}" showing floating holographic dashboard with charts, maps, notifications. Dark blue-black background, glowing orange and white UI elements. ${pDesc ? `Dashboard: ${pDesc}.` : ''} Cinematic 3D render, no text overlay.`,
+                `Business professionals in conference room viewing "${pName}" analytics on large screen. ${pDesc ? `Product: ${pDesc}.` : ''} Warm lighting, glass walls, modern office. Corporate photography, no text overlay.`,
+                `Close-up product shot of smartphone displaying "${pName}" app with notification alerts. Phone floating at angle against dark gradient background with subtle orange glow. ${pDesc ? `App: ${pDesc}.` : ''} Premium product photography, no text overlay.`,
+              ];
+              const idx = (setIdx * 3 + crIdx) % promptStyles.length;
+              return {
+                ...cr,
+                imagePrompt: cr.imagePrompt || promptStyles[idx],
+              };
+            }),
+          })),
           pixelEvents: parsed.metaAds?.pixelEvents || [],
           placements: parsed.metaAds?.placements || [],
           dailyBudget: 0,
@@ -385,6 +406,7 @@ export class PaidTrafficAgent extends BaseAgent {
       cleanOutput._landingUrl = projectUrl || funnelData.landingPage?.url || offerData.landingPageUrl || 'https://leados.com';
       cleanOutput._productName = productContext?.title || offerData.serviceName || inputs.config?.projectName || '';
       cleanOutput._productDescription = productContext?.description || offerData.transformationPromise || '';
+      cleanOutput._language = inputs.config?.language || 'en';
 
       // Inject real platform metrics into output (these are REAL, from API)
       if (realGoogleMetrics.length > 0) {

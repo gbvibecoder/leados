@@ -112,14 +112,15 @@ function GoogleAdPreview({ adGroup, landingUrl, index }: { adGroup: any; landing
 // ── Module-level image cache — persists across re-renders ────────────────────
 const imageCache = new Map<string, string>();
 
-// Generate image via backend API (Gemini/Imagen)
+// Generate image via FAL API
 async function generateAdImage(prompt: string): Promise<string | null> {
   try {
-    const res = await fetch('/api/generate-image', {
+    const res = await fetch('/api/ads/generate-image', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({ prompt, width: 1080, height: 1080, style: 'photorealistic' }),
     });
+    if (!res.ok) return null;
     const data = await res.json();
     return data.imageUrl || null;
   } catch {
@@ -237,42 +238,125 @@ function getIndustryImage(productName: string, productDescription: string, index
   return images[index % images.length];
 }
 
-// AI prompt templates for when API is available
-const AD_VISUAL_STYLES = [
-  (brand: string, desc: string) =>
-    `Professional advertisement for ${brand}, ${desc}, dark background, orange accents, product mockup, photorealistic`,
-  (brand: string, desc: string) =>
-    `Before and after comparison ad for ${brand}, ${desc}, split screen, professional photography`,
-  (brand: string, desc: string) =>
-    `Professional using ${brand} on laptop, ${desc}, modern office, warm lighting, corporate photography`,
-  (brand: string, desc: string) =>
-    `Data visualization for ${brand}, ${desc}, holographic UI, dark blue and orange, cinematic`,
-  (brand: string, desc: string) =>
-    `Business team using ${brand}, ${desc}, conference room, analytics on screen, professional photo`,
-  (brand: string, desc: string) =>
-    `Smartphone showing ${brand} app, ${desc}, blurred office background, product photography`,
+// Build a rich, project-aware image prompt from all available creative data
+function buildAdImagePrompt(
+  brand: string,
+  desc: string,
+  styleIndex: number,
+  creative?: any,
+  audienceType?: string,
+): string {
+  const hook = creative?.hook || creative?.headline || '';
+  const format = creative?.format || 'image';
+  const cta = creative?.callToAction?.replace(/_/g, ' ') || '';
+
+  // Core visual themes inspired by professional ad creatives:
+  // dark backgrounds, product mockups, bold typography, accent colors
+  const STYLE_TEMPLATES = [
+    // Style 0: Product mockup on dark background (like NeoSearch phone mockup ads)
+    `Professional social media advertisement for "${brand}". Show a smartphone or laptop displaying the "${brand}" app/dashboard with realistic UI elements. Dark navy-blue background with subtle orange accent lighting. Product mockup centered, clean composition. ${desc ? `The product: ${desc}.` : ''} Photorealistic, high-end marketing photography, no text overlay, sharp details.`,
+
+    // Style 1: Professional at work with product (like NeoSearch office ads)
+    `Professional person using "${brand}" on a modern laptop in a bright contemporary office. Screen shows the product dashboard/interface. ${desc ? `Context: ${desc}.` : ''} Warm natural lighting, shallow depth of field on the person, the screen is clearly visible. Corporate photography style, candid feel, no text overlay.`,
+
+    // Style 2: Before/after split-screen concept (manual process vs automated)
+    `Split-screen advertisement concept. Left side: cluttered desk with papers, documents, stress, dim lighting. Right side: clean modern workspace with a laptop showing "${brand}" dashboard, organized, bright. ${desc ? `Product solves: ${desc}.` : ''} Professional advertising photography, high contrast, no text overlay.`,
+
+    // Style 3: Data visualization / dashboard hero (like tech SaaS ads)
+    `Hero image for "${brand}" showing a floating holographic-style dashboard with charts, maps, and notification alerts. Dark blue-black background with glowing orange and white UI elements. ${desc ? `Dashboard context: ${desc}.` : ''} Futuristic but professional, cinematic lighting, 3D render style, no text overlay.`,
+
+    // Style 4: Team/business impact scene
+    `Business professionals in a modern conference room looking at a large screen displaying "${brand}" analytics dashboard. ${desc ? `The product: ${desc}.` : ''} Collaborative atmosphere, warm office lighting, glass walls, urban view outside. Corporate photography, natural poses, no text overlay.`,
+
+    // Style 5: Mobile-first product showcase
+    `Close-up product photography of a smartphone displaying "${brand}" app with notification alerts and real-time updates. Phone floating at slight angle against a dark gradient background with subtle orange glow. ${desc ? `App purpose: ${desc}.` : ''} Premium product photography, reflections on glass, no text overlay.`,
+  ];
+
+  let base = STYLE_TEMPLATES[styleIndex % STYLE_TEMPLATES.length];
+
+  // Enrich with audience context
+  if (audienceType === 'cold') {
+    base += ' Eye-catching, awareness-focused composition, bold visual impact.';
+  } else if (audienceType === 'warm') {
+    base += ' Trust-building, show social proof elements, professional credibility.';
+  } else if (audienceType === 'hot') {
+    base += ' Action-oriented, urgency feel, conversion-focused framing.';
+  }
+
+  return base;
+}
+
+// ── Favicon Avatar — shows website favicon with letter-initial fallback ──────
+
+// Favicon sources ordered by reliability
+const FAVICON_SOURCES = (domain: string) => [
+  `https://icons.duckduckgo.com/ip3/${domain}.ico`,
+  `https://www.google.com/s2/favicons?domain=${domain}&sz=64`,
+  `https://${domain}/favicon.ico`,
 ];
+
+function FaviconAvatar({ domain, brand, size = 'md' }: { domain: string; brand: string; size?: 'sm' | 'md' }) {
+  const [sourceIdx, setSourceIdx] = useState(0);
+  const sources = domain ? FAVICON_SOURCES(domain) : [];
+
+  const sizeClass = size === 'sm' ? 'w-5 h-5 text-[9px]' : 'w-9 h-9 text-sm';
+
+  if (!domain || sourceIdx >= sources.length) {
+    return (
+      <div className={`${sizeClass} rounded-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center text-white font-bold flex-shrink-0`}>
+        {brand[0]?.toUpperCase() || '?'}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={sources[sourceIdx]}
+      alt={brand}
+      className={`${sizeClass} rounded-full bg-white flex-shrink-0 object-contain ${size === 'sm' ? 'p-0' : 'p-0.5'}`}
+      onError={() => setSourceIdx(prev => prev + 1)}
+    />
+  );
+}
+
+// ── CTA translations by language ─────────────────────────────────────────────
+
+const CTA_TRANSLATIONS: Record<string, Record<string, string>> = {
+  de: { 'LEARN MORE': 'MEHR ERFAHREN', 'SIGN UP': 'REGISTRIEREN', 'BOOK NOW': 'JETZT BUCHEN', 'CONTACT US': 'KONTAKT', 'GET QUOTE': 'ANGEBOT ERHALTEN', 'SHOP NOW': 'JETZT KAUFEN', 'DOWNLOAD': 'HERUNTERLADEN', 'GET OFFER': 'ANGEBOT SICHERN' },
+  es: { 'LEARN MORE': 'MÁS INFORMACIÓN', 'SIGN UP': 'REGISTRARSE', 'BOOK NOW': 'RESERVAR AHORA', 'CONTACT US': 'CONTÁCTENOS', 'GET QUOTE': 'OBTENER COTIZACIÓN', 'SHOP NOW': 'COMPRAR AHORA', 'DOWNLOAD': 'DESCARGAR', 'GET OFFER': 'OBTENER OFERTA' },
+  fr: { 'LEARN MORE': 'EN SAVOIR PLUS', 'SIGN UP': 'S\'INSCRIRE', 'BOOK NOW': 'RÉSERVER', 'CONTACT US': 'NOUS CONTACTER', 'GET QUOTE': 'OBTENIR UN DEVIS', 'SHOP NOW': 'ACHETER', 'DOWNLOAD': 'TÉLÉCHARGER', 'GET OFFER': 'OBTENIR L\'OFFRE' },
+  it: { 'LEARN MORE': 'SCOPRI DI PIÙ', 'SIGN UP': 'ISCRIVITI', 'BOOK NOW': 'PRENOTA ORA', 'CONTACT US': 'CONTATTACI', 'GET QUOTE': 'RICHIEDI PREVENTIVO', 'SHOP NOW': 'ACQUISTA ORA', 'DOWNLOAD': 'SCARICA', 'GET OFFER': 'OTTIENI OFFERTA' },
+  pt: { 'LEARN MORE': 'SAIBA MAIS', 'SIGN UP': 'CADASTRAR', 'BOOK NOW': 'RESERVAR AGORA', 'CONTACT US': 'FALE CONOSCO', 'GET QUOTE': 'SOLICITAR ORÇAMENTO', 'SHOP NOW': 'COMPRAR AGORA', 'DOWNLOAD': 'BAIXAR', 'GET OFFER': 'OBTER OFERTA' },
+  nl: { 'LEARN MORE': 'MEER INFO', 'SIGN UP': 'AANMELDEN', 'BOOK NOW': 'NU BOEKEN', 'CONTACT US': 'CONTACT', 'GET QUOTE': 'OFFERTE AANVRAGEN', 'SHOP NOW': 'NU KOPEN', 'DOWNLOAD': 'DOWNLOADEN', 'GET OFFER': 'AANBIEDING' },
+  hi: { 'LEARN MORE': 'और जानें', 'SIGN UP': 'साइन अप करें', 'BOOK NOW': 'अभी बुक करें', 'CONTACT US': 'संपर्क करें', 'GET QUOTE': 'कोटेशन प्राप्त करें', 'SHOP NOW': 'अभी खरीदें', 'DOWNLOAD': 'डाउनलोड', 'GET OFFER': 'ऑफर पाएं' },
+};
+
+function translateCTA(cta: string, lang: string): string {
+  const normalized = cta.toUpperCase().replace(/_/g, ' ');
+  const langKey = (lang || 'en').toLowerCase().split('-')[0];
+  return CTA_TRANSLATIONS[langKey]?.[normalized] || normalized;
+}
 
 // ── Meta/Instagram Ad Preview (realistic feed style with AI image) ──────────
 
-function MetaAdPreview({ adSet, campaignName, productName, productDescription, landingUrl, index }: {
-  adSet: any; campaignName?: string; productName?: string; productDescription?: string; landingUrl?: string; index: number;
+function MetaAdPreview({ adSet, campaignName, productName, productDescription, landingUrl, index, language }: {
+  adSet: any; campaignName?: string; productName?: string; productDescription?: string; landingUrl?: string; index: number; language?: string;
 }) {
   const creative = adSet.creatives?.[0];
   if (!creative) return null;
 
   const brand = (typeof productName === 'string' && productName) || (typeof campaignName === 'string' && campaignName) || 'Brand';
   const displayUrl = (landingUrl || '').replace(/^https?:\/\//, '').replace(/\/$/, '').split('/')[0];
-  const ctaLabel = (typeof creative.callToAction === 'string' ? creative.callToAction.replace(/_/g, ' ') : null) || 'Learn More';
+  const rawCta = (typeof creative.callToAction === 'string' ? creative.callToAction : '') || 'LEARN_MORE';
+  const ctaLabel = translateCTA(rawCta, language || 'en');
 
-  // Build product-specific image — try AI first, fall back to industry-matched stock photos
+  // Build product-specific image
   const rawDesc = productDescription || creative.description || '';
   const desc = typeof rawDesc === 'string' ? rawDesc : String(rawDesc ?? '');
-  const styleIndex = index % AD_VISUAL_STYLES.length;
-  const imagePrompt = creative.imagePrompt || AD_VISUAL_STYLES[styleIndex](brand, desc);
+  const styleIndex = index % 6;
+  const audienceType = adSet.audience || adSet.type || '';
+  const imagePrompt = creative.imagePrompt || buildAdImagePrompt(brand, desc, styleIndex, creative, audienceType);
   const cacheKey = `${brand}:${index}:${styleIndex}`;
-
-  // Get industry-matched stock photo as fallback
   const stockUrl = getIndustryImage(brand, desc, index);
 
   const [imageUrl, setImageUrl] = useState<string | null>(() => imageCache.get(cacheKey) || null);
@@ -290,10 +374,7 @@ function MetaAdPreview({ adSet, campaignName, productName, productDescription, l
       setImageLoading(false);
       return;
     }
-
     setImageLoading(true);
-
-    // Try AI image generation first, then fall back to industry-matched stock photo
     generateAdImage(imagePrompt)
       .then((aiUrl) => {
         if (!mountedRef.current) return;
@@ -310,14 +391,16 @@ function MetaAdPreview({ adSet, campaignName, productName, productDescription, l
       });
   }, [cacheKey, imagePrompt, stockUrl]);
 
+  const primaryText = safeText(creative.primaryText) || safeText(creative.description) || safeText(adSet.name);
+  const headline = safeText(creative.hook) || safeText(creative.headline) || safeText(creative.name);
+
   return (
-    <div className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition-shadow max-w-sm">
-      {/* Page header */}
+    <div className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm max-w-sm">
+
+      {/* ── Page header ── */}
       <div className="flex items-center gap-2.5 p-3">
-        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-          {brand[0].toUpperCase()}
-        </div>
-        <div className="min-w-0">
+        <FaviconAvatar domain={displayUrl} brand={brand} />
+        <div className="min-w-0 flex-1">
           <div className="text-[13px] font-semibold text-gray-900 truncate">{brand}</div>
           <div className="text-[11px] text-gray-500 flex items-center gap-1">
             Sponsored · <Eye className="w-3 h-3 inline" />
@@ -325,57 +408,97 @@ function MetaAdPreview({ adSet, campaignName, productName, productDescription, l
         </div>
       </div>
 
-      {/* Primary text */}
-      <div className="px-3 pb-2.5">
-        <p className="text-[13px] text-gray-800 leading-relaxed">
-          {safeText(creative.primaryText) || safeText(creative.hook) || safeText(adSet.name)}
-        </p>
-      </div>
-
-      {/* Creative visual — AI generated image or loading state */}
-      <div className="relative aspect-square overflow-hidden bg-gray-100">
+      {/* ── Ad creative image with text + CTA overlay ── */}
+      <div className="relative overflow-hidden bg-gray-900" style={{ aspectRatio: '4/5' }}>
+        {/* Background image */}
         {imageUrl ? (
-          <img src={imageUrl} alt={creative.headline || creative.name}
-            className="w-full h-full object-cover" loading="lazy" />
+          <img src={imageUrl} alt={headline}
+            className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
         ) : imageLoading ? (
-          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-            <Loader2 className="w-8 h-8 text-white/40 animate-spin mb-3" />
-            <span className="text-white/50 text-xs">Generating ad image…</span>
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+            <Loader2 className="w-6 h-6 text-white/30 animate-spin mb-2" />
+            <span className="text-white/40 text-[11px]">Generating…</span>
           </div>
         ) : (
-          /* Fallback: styled text creative */
-          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-            <div className="text-center px-6 max-w-[85%]">
-              <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/10 backdrop-blur-sm text-white/80 text-[10px] font-medium mb-4">
-                {creative.format === 'video' ? '▶' : creative.format === 'carousel' ? '⟩⟩' : '◻'} {safeText(creative.format, 'image').toUpperCase()}
+          <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900" />
+        )}
+
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/40 to-black/85" />
+
+        {/* Full-height text layout */}
+        <div className="relative z-10 flex flex-col h-full p-4">
+
+          {/* Top zone: Audience label + bold headline */}
+          <div className="mb-auto">
+            {audienceType && (
+              <div className="text-[9px] text-orange-300 font-bold uppercase tracking-widest mb-2 drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">
+                {audienceType} – {safeText(adSet.name)}
               </div>
-              <h3 className="text-white font-bold text-lg leading-tight mb-2">
-                {safeText(creative.headline) || safeText(creative.name)}
-              </h3>
-              {creative.description && typeof creative.description === 'string' && (
-                <p className="text-white/70 text-xs leading-relaxed">{creative.description}</p>
+            )}
+            <h3 className="text-white font-extrabold text-[20px] leading-[1.2] drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]">
+              {(() => {
+                const words = headline.split(' ');
+                if (words.length >= 4) {
+                  const mid = Math.floor(words.length / 3);
+                  const end = Math.min(mid + Math.ceil(words.length / 3), words.length);
+                  return (
+                    <>
+                      {words.slice(0, mid).join(' ')}{' '}
+                      <span className="text-orange-400 italic font-black">{words.slice(mid, end).join(' ')}</span>
+                      {end < words.length ? ` ${words.slice(end).join(' ')}` : ''}
+                    </>
+                  );
+                }
+                return headline;
+              })()}
+            </h3>
+          </div>
+
+          {/* Middle zone: Description text with frosted glass backdrop */}
+          <div className="my-3 bg-black/50 backdrop-blur-md rounded-lg p-3 border border-white/10">
+            <p className="text-white text-[13px] leading-relaxed line-clamp-5 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">
+              {primaryText}
+            </p>
+          </div>
+
+          {/* Bottom zone: CTA + brand */}
+          <div className="mt-auto flex items-end justify-between">
+            <div>
+              <div className="inline-block px-5 py-2 bg-orange-500 text-white text-[12px] font-bold rounded cursor-pointer uppercase tracking-wide shadow-[0_2px_12px_rgba(249,115,22,0.4)]">
+                {ctaLabel}
+              </div>
+              {displayUrl && (
+                <div className="text-white/50 text-[10px] mt-1.5 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">{displayUrl}</div>
               )}
             </div>
+            {/* Brand mark in bottom-right */}
+            <div className="flex items-center gap-1.5 bg-black/50 backdrop-blur-sm rounded px-2 py-1 border border-white/10">
+              <FaviconAvatar domain={displayUrl} brand={brand} size="sm" />
+              <span className="text-white/90 text-[10px] font-semibold">{brand.split(' ')[0]}</span>
+            </div>
           </div>
-        )}
+        </div>
       </div>
 
-      {/* CTA bar */}
-      <div className="p-3 flex items-center justify-between bg-gray-50 border-t border-gray-100">
-        <div className="min-w-0 mr-2">
+      {/* ── Bottom bar: URL + headline + CTA ── */}
+      <div className="p-3 flex items-center justify-between border-t border-gray-100">
+        <div className="min-w-0 mr-3">
           <div className="text-[10px] text-gray-500 truncate">{displayUrl}</div>
           <div className="text-[12px] font-semibold text-gray-900 truncate">{safeText(creative.headline) || safeText(creative.name)}</div>
         </div>
         <a href={landingUrl} target="_blank" rel="noopener noreferrer"
-          className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold rounded-md flex-shrink-0 transition-colors cursor-pointer">
+          className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold rounded flex-shrink-0 transition-colors cursor-pointer">
           {ctaLabel}
         </a>
       </div>
 
-      {/* Creative label */}
+      {/* ── Creative label ── */}
       <div className="px-3 py-1.5 border-t border-gray-100 flex items-center justify-between">
-        <span className="text-[9px] text-gray-400 uppercase tracking-wider">Creative {index + 1}: {safeText(adSet.audience) || safeText(adSet.name)}</span>
-        <CopyButton text={safeText(creative.primaryText) || safeText(creative.hook)} />
+        <span className="text-[9px] text-gray-400 uppercase tracking-wider">
+          Creative {index + 1}: {safeText(adSet.audience) || safeText(adSet.name)}
+        </span>
+        <CopyButton text={`${headline}\n\n${primaryText}\n\nCTA: ${ctaLabel}`} />
       </div>
     </div>
   );
@@ -638,7 +761,7 @@ export function PaidTrafficOutput({ data }: Props) {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {metaAds.adSets.map((adSet: any, idx: number) => (
                     <MetaAdPreview key={idx} adSet={adSet} campaignName={metaAds.campaignName}
-                      productName={d._productName} productDescription={d._productDescription} landingUrl={d._landingUrl} index={idx} />
+                      productName={d._productName} productDescription={d._productDescription} landingUrl={d._landingUrl} index={idx} language={d._language} />
                   ))}
                 </div>
               </div>

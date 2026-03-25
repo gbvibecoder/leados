@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Workflow, Users, BarChart3, Settings,
-  Bot, ChevronLeft, ChevronRight, Zap, FolderKanban, ShieldBan,
+  Bot, ChevronLeft, ChevronRight, Zap, FolderKanban, ShieldBan, Megaphone,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/lib/store';
@@ -16,6 +16,7 @@ const navigation = [
   { name: 'Projects', href: '/projects', icon: FolderKanban, accent: '#3b82f6' },
   { name: 'LeadOS Pipeline', href: '/leados', icon: Workflow, accent: '#8b5cf6' },
   { name: 'Leads / CRM', href: '/leads', icon: Users, accent: '#10b981' },
+  { name: 'Ad Creator', href: '/ads', icon: Megaphone, accent: '#ff6b00' },
   { name: 'Analytics', href: '/analytics', icon: BarChart3, accent: '#f59e0b' },
   { name: 'Blacklist', href: '/blacklist', icon: ShieldBan, accent: '#ef4444' },
   { name: 'Settings', href: '/settings', icon: Settings, accent: '#6b7280' },
