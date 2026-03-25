@@ -1,5 +1,13 @@
 'use client';
 
+/** Safely coerce any value to a renderable string — prevents React error #31 */
+function safeText(value: any, fallback = ''): string {
+  if (value == null) return fallback;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return fallback;
+}
+
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Megaphone, Search, Target, DollarSign, TrendingUp, Users,
@@ -253,12 +261,13 @@ function MetaAdPreview({ adSet, campaignName, productName, productDescription, l
   const creative = adSet.creatives?.[0];
   if (!creative) return null;
 
-  const brand = productName || campaignName || 'Brand';
+  const brand = (typeof productName === 'string' && productName) || (typeof campaignName === 'string' && campaignName) || 'Brand';
   const displayUrl = (landingUrl || '').replace(/^https?:\/\//, '').replace(/\/$/, '').split('/')[0];
-  const ctaLabel = creative.callToAction?.replace(/_/g, ' ') || 'Learn More';
+  const ctaLabel = (typeof creative.callToAction === 'string' ? creative.callToAction.replace(/_/g, ' ') : null) || 'Learn More';
 
   // Build product-specific image — try AI first, fall back to industry-matched stock photos
-  const desc = productDescription || creative.description || '';
+  const rawDesc = productDescription || creative.description || '';
+  const desc = typeof rawDesc === 'string' ? rawDesc : String(rawDesc ?? '');
   const styleIndex = index % AD_VISUAL_STYLES.length;
   const imagePrompt = creative.imagePrompt || AD_VISUAL_STYLES[styleIndex](brand, desc);
   const cacheKey = `${brand}:${index}:${styleIndex}`;
@@ -319,7 +328,7 @@ function MetaAdPreview({ adSet, campaignName, productName, productDescription, l
       {/* Primary text */}
       <div className="px-3 pb-2.5">
         <p className="text-[13px] text-gray-800 leading-relaxed">
-          {creative.primaryText || creative.hook || adSet.name}
+          {safeText(creative.primaryText) || safeText(creative.hook) || safeText(adSet.name)}
         </p>
       </div>
 
@@ -338,12 +347,12 @@ function MetaAdPreview({ adSet, campaignName, productName, productDescription, l
           <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
             <div className="text-center px-6 max-w-[85%]">
               <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/10 backdrop-blur-sm text-white/80 text-[10px] font-medium mb-4">
-                {creative.format === 'video' ? '▶' : creative.format === 'carousel' ? '⟩⟩' : '◻'} {(creative.format || 'image').toUpperCase()}
+                {creative.format === 'video' ? '▶' : creative.format === 'carousel' ? '⟩⟩' : '◻'} {safeText(creative.format, 'image').toUpperCase()}
               </div>
               <h3 className="text-white font-bold text-lg leading-tight mb-2">
-                {creative.headline || creative.name}
+                {safeText(creative.headline) || safeText(creative.name)}
               </h3>
-              {creative.description && (
+              {creative.description && typeof creative.description === 'string' && (
                 <p className="text-white/70 text-xs leading-relaxed">{creative.description}</p>
               )}
             </div>
@@ -355,7 +364,7 @@ function MetaAdPreview({ adSet, campaignName, productName, productDescription, l
       <div className="p-3 flex items-center justify-between bg-gray-50 border-t border-gray-100">
         <div className="min-w-0 mr-2">
           <div className="text-[10px] text-gray-500 truncate">{displayUrl}</div>
-          <div className="text-[12px] font-semibold text-gray-900 truncate">{creative.headline || creative.name}</div>
+          <div className="text-[12px] font-semibold text-gray-900 truncate">{safeText(creative.headline) || safeText(creative.name)}</div>
         </div>
         <a href={landingUrl} target="_blank" rel="noopener noreferrer"
           className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold rounded-md flex-shrink-0 transition-colors cursor-pointer">
@@ -365,8 +374,8 @@ function MetaAdPreview({ adSet, campaignName, productName, productDescription, l
 
       {/* Creative label */}
       <div className="px-3 py-1.5 border-t border-gray-100 flex items-center justify-between">
-        <span className="text-[9px] text-gray-400 uppercase tracking-wider">Creative {index + 1}: {adSet.audience || adSet.name}</span>
-        <CopyButton text={creative.primaryText || creative.hook || ''} />
+        <span className="text-[9px] text-gray-400 uppercase tracking-wider">Creative {index + 1}: {safeText(adSet.audience) || safeText(adSet.name)}</span>
+        <CopyButton text={safeText(creative.primaryText) || safeText(creative.hook)} />
       </div>
     </div>
   );
@@ -859,7 +868,7 @@ export function PaidTrafficOutput({ data }: Props) {
                         aud.type === 'cold' ? 'bg-blue-500/20 text-blue-400' :
                         aud.type === 'warm' ? 'bg-orange-500/20 text-orange-400' :
                         'bg-red-500/20 text-red-400'
-                      }`}>{(aud.type || '').toUpperCase()}</span>
+                      }`}>{safeText(aud.type).toUpperCase()}</span>
                       <span className="font-medium text-sm">{aud.name}</span>
                     </div>
                     <p className="text-[10px] text-muted-foreground break-words">{aud.targeting}</p>
