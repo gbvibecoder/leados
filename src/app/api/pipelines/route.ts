@@ -60,6 +60,7 @@ export async function GET(req?: Request) {
     id: p.id,
     type: p.type,
     status: p.status,
+    projectId: p.projectId,
     config: p.config ? JSON.parse(p.config) : {},
     currentAgentIndex: p.currentAgentIndex,
     createdAt: p.createdAt,

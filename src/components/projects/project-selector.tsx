@@ -11,6 +11,8 @@ interface ProjectSelectorProps {
   selectedProjectId: string | null;
   onSelectProject: (projectId: string | null) => void;
   onCreateProject: (data: { name: string; description?: string; url?: string; language?: string; type: 'internal' | 'external'; enabledAgentIds?: string[] }) => void;
+  /** When true, the selector is locked (e.g. pipeline is running) */
+  disabled?: boolean;
 }
 
 export function ProjectSelector({
@@ -18,6 +20,7 @@ export function ProjectSelector({
   selectedProjectId,
   onSelectProject,
   onCreateProject,
+  disabled = false,
 }: ProjectSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -148,10 +151,14 @@ export function ProjectSelector({
     <div className="relative" ref={containerRef}>
       {/* Compact trigger button */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        disabled={disabled}
+        title={disabled ? 'Cannot switch projects while pipeline is running' : undefined}
         className={cn(
           'flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors',
-          selectedProject
+          disabled
+            ? 'border-white/[0.06] bg-white/[0.02] text-gray-500 cursor-not-allowed opacity-60'
+            : selectedProject
             ? 'border-cyan-500/30 bg-cyan-500/5 text-white'
             : 'border-white/[0.06] bg-white/[0.02] text-gray-400 hover:border-cyan-500/20'
         )}

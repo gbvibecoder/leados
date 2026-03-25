@@ -21,6 +21,10 @@ interface AgentDetailPanelProps {
   prerequisiteAgent?: string | null;
   /** Whether any other agent in the pipeline is currently running */
   isPipelineRunning?: boolean;
+  /** Whether the pipeline is paused — overrides isRunning/agentStatus to prevent stale running state */
+  isPipelinePaused?: boolean;
+  /** Filter runs to only this project (pass null/undefined for all) */
+  projectId?: string | null;
   onClose: () => void;
   onRun: () => void;
   onPause?: () => void;
@@ -34,7 +38,10 @@ function formatElapsed(seconds: number): string {
   return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
-function AgentDetailPanelInner({ agentId, agentName, description, isRunning, elapsedTime, agentStatus, agentError, prerequisiteAgent, isPipelineRunning, onClose, onRun, onPause, onReset, onResolved }: AgentDetailPanelProps) {
+function AgentDetailPanelInner({ agentId, agentName, description, isRunning: isRunningProp, elapsedTime, agentStatus: agentStatusProp, agentError, prerequisiteAgent, isPipelineRunning, isPipelinePaused, projectId, onClose, onRun, onPause, onReset, onResolved }: AgentDetailPanelProps) {
+  // If pipeline is paused, this agent cannot be running — override stale state
+  const isRunning = isPipelinePaused ? false : isRunningProp;
+  const agentStatus = isPipelinePaused && agentStatusProp === 'running' ? 'idle' : agentStatusProp;
   const [runs, setRuns] = useState<any[]>([]);
   const [selectedRun, setSelectedRun] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -43,7 +50,7 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
   const prevRunningRef = useRef(isRunning);
 
   const fetchRuns = () => {
-    agentsApi.runs(agentId)
+    agentsApi.runs(agentId, projectId)
       .then((data) => {
         const runsList = Array.isArray(data) ? data : [];
         setRuns(runsList);
@@ -76,7 +83,7 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning, ela
   useEffect(() => {
     if (!isRunning && agentStatus !== 'running') return;
     const interval = setInterval(() => {
-      agentsApi.runs(agentId).then((data) => {
+      agentsApi.runs(agentId, projectId).then((data) => {
         const runsList = Array.isArray(data) ? data : [];
         if (runsList.length > 0 && runsList[0].status !== 'running') {
           setRuns(runsList);

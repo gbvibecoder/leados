@@ -88,6 +88,13 @@ export const DISCOVERY_AGENT_IDS = [
   'funnel-builder',
 ];
 
+/** Cached pipeline + outputs for a project so we can restore after switching */
+interface ProjectPipelineCache {
+  pipeline: PipelineState;
+  agentOutputs: Record<string, any>;
+  elapsedTimes: Record<string, number>;
+}
+
 interface AppState {
   pipeline: PipelineState;
   updatePipelineStatus: (status: PipelineState['status']) => void;
@@ -117,6 +124,12 @@ interface AppState {
   removeProject: (projectId: string) => void;
   selectProject: (projectId: string | null) => void;
   loadProjects: () => void;
+
+  // Per-project pipeline state cache (save/restore on switch)
+  projectPipelineCache: Record<string, ProjectPipelineCache>;
+  cacheProjectPipeline: (projectId: string, agentOutputs: Record<string, any>, elapsedTimes: Record<string, number>) => void;
+  getProjectPipelineCache: (projectId: string) => ProjectPipelineCache | undefined;
+  clearProjectPipelineCache: (projectId: string) => void;
 
   // Blacklist
   blacklist: BlacklistEntry[];
@@ -197,6 +210,14 @@ function isPipelineActive(pipeline: PipelineState): boolean {
   // Even if overall status is idle/error, some agents may have completed
   if (pipeline.agents.some(a => a.status === 'running' || a.status === 'done')) return true;
   return false;
+}
+
+/** Deep-clone a pipeline so the cache holds an independent copy */
+function clonePipeline(p: PipelineState): PipelineState {
+  return {
+    ...p,
+    agents: p.agents.map(a => ({ ...a })),
+  };
 }
 
 function buildIdlePipeline(project: Project | undefined, disabledAgentIds: Set<string>, globalStartFromAgentId?: string | null): PipelineState {
@@ -326,7 +347,9 @@ export const useAppStore = create<AppState>()((set, get) => ({
     const selectedProject = state.projects.find((p) => p.id === state.selectedProjectId);
 
     if (selectedProject) {
-      const allIds = LEADOS_AGENTS.map((a) => a.id);
+      const allIds = selectedProject.type === 'internal'
+        ? LEADOS_AGENTS.filter((a) => !DISCOVERY_AGENT_IDS.includes(a.id)).map((a) => a.id)
+        : LEADOS_AGENTS.map((a) => a.id);
       const newConfig: ProjectConfig = { ...selectedProject.config, enabledAgentIds: allIds };
       const updatedProject = { ...selectedProject, config: newConfig, updatedAt: new Date().toISOString() };
       const updated = state.projects.map((p) => p.id === selectedProject.id ? updatedProject : p);
@@ -509,18 +532,44 @@ export const useAppStore = create<AppState>()((set, get) => ({
   selectProject: (projectId) => {
     const state = get();
 
-    // Don't reset pipeline if it's active — just switch the project ID
-    if (isPipelineActive(state.pipeline)) {
-      set({ selectedProjectId: projectId });
-      try { localStorage.setItem(userKey('leados_selected_project'), projectId || ''); } catch {}
+    // No-op if already on this project
+    if (state.selectedProjectId === projectId) return;
+
+    // BLOCK project switching entirely when pipeline is actively running
+    if (state.pipeline.status === 'running') {
       return;
     }
 
-    const project = state.projects.find((p) => p.id === projectId);
-    set({
-      selectedProjectId: projectId,
-      pipeline: buildIdlePipeline(project, state.disabledAgentIds, state.globalStartFromAgentId),
-    });
+    // Always cache the outgoing project's pipeline state if it has activity
+    if (state.selectedProjectId) {
+      const hadActivity = state.pipeline.agents.some(a => a.status === 'done' || a.status === 'running');
+      if (hadActivity || state.pipeline.status === 'paused' || state.pipeline.status === 'completed') {
+        // Cache pipeline state (agentOutputs handled separately by the page)
+        const existing = state.projectPipelineCache[state.selectedProjectId];
+        set({
+          projectPipelineCache: {
+            ...state.projectPipelineCache,
+            [state.selectedProjectId]: {
+              pipeline: clonePipeline(state.pipeline),
+              agentOutputs: existing?.agentOutputs || {},
+              elapsedTimes: existing?.elapsedTimes || {},
+            },
+          },
+        });
+      }
+    }
+
+    // Restore cached pipeline for the target project, or build idle
+    const cached = projectId ? get().projectPipelineCache[projectId] : undefined;
+    if (cached) {
+      set({ selectedProjectId: projectId, pipeline: clonePipeline(cached.pipeline) });
+    } else {
+      const project = state.projects.find((p) => p.id === projectId);
+      set({
+        selectedProjectId: projectId,
+        pipeline: buildIdlePipeline(project, state.disabledAgentIds, state.globalStartFromAgentId),
+      });
+    }
     try { localStorage.setItem(userKey('leados_selected_project'), projectId || ''); } catch {}
   },
   loadProjects: () => {
@@ -683,6 +732,31 @@ export const useAppStore = create<AppState>()((set, get) => ({
       if (e.domain && domainLower && domainLower.includes(e.domain.toLowerCase())) return true;
       return false;
     });
+  },
+
+  // Per-project pipeline state cache (plain object for reliable Zustand reactivity)
+  projectPipelineCache: {},
+  cacheProjectPipeline: (projectId, agentOutputs, elapsedTimes) => {
+    const state = get();
+    const existing = state.projectPipelineCache[projectId];
+    set({
+      projectPipelineCache: {
+        ...state.projectPipelineCache,
+        [projectId]: {
+          pipeline: existing?.pipeline ? clonePipeline(existing.pipeline) : clonePipeline(state.pipeline),
+          agentOutputs: { ...agentOutputs },
+          elapsedTimes: { ...elapsedTimes },
+        },
+      },
+    });
+  },
+  getProjectPipelineCache: (projectId) => {
+    return get().projectPipelineCache[projectId];
+  },
+  clearProjectPipelineCache: (projectId) => {
+    const state = get();
+    const { [projectId]: _, ...rest } = state.projectPipelineCache;
+    set({ projectPipelineCache: rest });
   },
 
   sidebarOpen: true,

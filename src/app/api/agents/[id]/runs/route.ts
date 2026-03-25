@@ -8,10 +8,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const { id } = await params;
   const userId = getUserId(req);
 
+  // Optional project filter via query param
+  const url = new URL(req.url);
+  const projectId = url.searchParams.get('projectId');
+
   // First, check database for real agent runs
   try {
+    const pipelineWhere: any = { userId: userId ?? 'no-user' };
+    if (projectId) {
+      pipelineWhere.projectId = projectId;
+    }
+
     const dbRuns = await prisma.agentRun.findMany({
-      where: { agentId: id, pipeline: { userId: userId ?? 'no-user' } },
+      where: { agentId: id, pipeline: pipelineWhere },
       orderBy: { createdAt: 'desc' },
       take: 10,
     });

@@ -65,6 +65,9 @@ export default function LeadOSPage() {
     globalStartFromAgentId,
     addActivity,
     clearActivities,
+    cacheProjectPipeline,
+    getProjectPipelineCache,
+    clearProjectPipelineCache,
   } = useAppStore();
 
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
@@ -75,13 +78,21 @@ export default function LeadOSPage() {
   const [agentOutputs, setAgentOutputs] = useState<Record<string, any>>({});
   const [elapsedTimes, setElapsedTimes] = useState<Record<string, number>>({});
   const [snackbar, setSnackbar] = useState<string | null>(null);
-  // State for resuming pipeline after paid-traffic pause
+  // State for resuming pipeline after pause (manual or auto paid-traffic pause)
   const pausedPipelineRef = useRef<{
     agentsToRun: string[];
     projectConfig: Record<string, any>;
     previousOutputs: Record<string, any>;
     pipelineId: string;
     pausedAfterIndex: number;
+  } | null>(null);
+  // Tracks the live execution context so manual pause can save it for resume
+  const activePipelineCtxRef = useRef<{
+    agentsToRun: string[];
+    projectConfig: Record<string, any>;
+    previousOutputs: Record<string, any>;
+    pipelineId: string;
+    currentIndex: number;
   } | null>(null);
   const timerRef = useRef<Record<string, NodeJS.Timeout>>({});
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -93,6 +104,133 @@ export default function LeadOSPage() {
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
   const isInternal = selectedProject?.type === 'internal';
+
+  // Load agent run statuses from DB for a project that was run previously
+  const loadProjectRunsFromDB = useCallback(async (projectId: string) => {
+    try {
+      // Fetch latest pipeline for this project
+      const allPipelines = await apiFetch('/api/pipelines').then(r => r.json());
+      if (!Array.isArray(allPipelines)) return;
+
+      // Find the most recent pipeline for this project
+      const projectPipeline = allPipelines.find((p: any) => p.projectId === projectId);
+      if (!projectPipeline || !projectPipeline.agentRuns?.length) return;
+
+      // Bail if user already switched away while we were fetching
+      if (useAppStore.getState().selectedProjectId !== projectId) return;
+
+      // Update agent statuses in the store pipeline
+      const restoredOutputs: Record<string, any> = {};
+      let restoredCount = 0;
+      for (const run of projectPipeline.agentRuns) {
+        if (run.status === 'done' || run.status === 'error') {
+          updateAgentStatus(run.agentId, {
+            status: run.status,
+            progress: run.status === 'done' ? 100 : 0,
+            lastRunTime: run.completedAt || run.startedAt,
+            outputPreview: typeof run.outputsJson?.reasoning === 'string'
+              ? run.outputsJson.reasoning.slice(0, 120)
+              : run.status === 'done' ? 'Completed successfully' : undefined,
+            error: run.status === 'error' ? (run.error || 'Agent failed') : undefined,
+          });
+          restoredCount++;
+          if (run.outputsJson) {
+            restoredOutputs[run.agentId] = run.outputsJson;
+          }
+        }
+      }
+
+      // Update page-level outputs
+      if (Object.keys(restoredOutputs).length > 0) {
+        setAgentOutputs(restoredOutputs);
+      }
+
+      // Update pipeline status to reflect the DB state
+      if (restoredCount > 0) {
+        if (projectPipeline.status === 'completed') {
+          updatePipelineStatus('completed');
+        } else if (projectPipeline.status === 'error') {
+          updatePipelineStatus('error');
+        } else if (projectPipeline.status === 'paused') {
+          updatePipelineStatus('paused');
+        }
+      }
+
+      // Cache the restored state so future switches are instant (no re-fetch)
+      // Defer slightly so updateAgentStatus calls have propagated to the store
+      requestAnimationFrame(() => {
+        if (useAppStore.getState().selectedProjectId === projectId) {
+          cacheProjectPipeline(projectId, restoredOutputs, {});
+        }
+      });
+    } catch {
+      // DB unavailable — no previous runs to show
+    }
+  }, [updateAgentStatus, updatePipelineStatus, cacheProjectPipeline]);
+
+  // Keep a ref to agentOutputs/elapsedTimes so the project-switch effect
+  // can cache them without stale closures
+  const agentOutputsRef = useRef(agentOutputs);
+  agentOutputsRef.current = agentOutputs;
+  const elapsedTimesRef = useRef(elapsedTimes);
+  elapsedTimesRef.current = elapsedTimes;
+
+  // React to selectedProjectId changes — works whether triggered from page or navbar
+  const prevProjectIdRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    // Skip first mount
+    if (prevProjectIdRef.current === undefined) {
+      prevProjectIdRef.current = selectedProjectId;
+      return;
+    }
+    if (prevProjectIdRef.current === selectedProjectId) return;
+
+    const prevId = prevProjectIdRef.current;
+    prevProjectIdRef.current = selectedProjectId;
+
+    // Close any open agent detail panel — it shows project-specific data
+    setSelectedAgent(null);
+
+    // Cache outgoing project's agentOutputs into the store cache
+    // (pipeline state is already cached by store.selectProject)
+    if (prevId) {
+      cacheProjectPipeline(prevId, agentOutputsRef.current, elapsedTimesRef.current);
+    }
+
+    // Restore incoming project's cached outputs, or load from DB
+    if (selectedProjectId) {
+      const cached = getProjectPipelineCache(selectedProjectId);
+      // Cache is valid if it has agentOutputs OR if the pipeline has agents with done/error status
+      const cacheHasOutputs = cached && Object.keys(cached.agentOutputs).length > 0;
+      const cacheHasStatuses = cached && cached.pipeline.agents.some(a => a.status === 'done' || a.status === 'error');
+      if (cached && (cacheHasOutputs || cacheHasStatuses)) {
+        setAgentOutputs(cached.agentOutputs);
+        setElapsedTimes(cached.elapsedTimes);
+        // If cache has statuses but no outputs, load outputs from DB in background
+        if (cacheHasStatuses && !cacheHasOutputs) {
+          loadProjectRunsFromDB(selectedProjectId);
+        }
+      } else {
+        setAgentOutputs({});
+        setElapsedTimes({});
+        loadProjectRunsFromDB(selectedProjectId);
+      }
+    } else {
+      setAgentOutputs({});
+      setElapsedTimes({});
+    }
+  }, [selectedProjectId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Wraps selectProject to cache outgoing agentOutputs BEFORE the store replaces pipeline
+  const handleSelectProject = useCallback((projectId: string | null) => {
+    const currentProjectId = useAppStore.getState().selectedProjectId;
+    if (currentProjectId === projectId) return;
+    // Cache agentOutputs for outgoing project before store.selectProject caches pipeline
+    if (currentProjectId) {
+      cacheProjectPipeline(currentProjectId, agentOutputs, elapsedTimes);
+    }
+    selectProject(projectId);
+  }, [selectProject, cacheProjectPipeline, agentOutputs, elapsedTimes]);
 
   /** Build projectConfig with language/localization from the selected project */
   const buildProjectConfig = useCallback((): Record<string, any> => {
@@ -308,9 +446,23 @@ export default function LeadOSPage() {
       // Orchestrate: call each agent one by one from the frontend
       const previousOutputs: Record<string, any> = {};
 
+      // Track live execution context for manual pause → resume
+      activePipelineCtxRef.current = {
+        agentsToRun,
+        projectConfig,
+        previousOutputs,
+        pipelineId: created.id,
+        currentIndex: 0,
+      };
+
       for (let i = 0; i < agentsToRun.length; i++) {
         const agentId = agentsToRun[i];
         const agentName = LEADOS_AGENTS.find(a => a.id === agentId)?.name || agentId;
+
+        // Update live context with current index
+        if (activePipelineCtxRef.current) {
+          activePipelineCtxRef.current.currentIndex = i;
+        }
 
         // Check if pipeline was cancelled/paused
         const currentStatus = useAppStore.getState().pipeline.status;
@@ -404,6 +556,7 @@ export default function LeadOSPage() {
           setPipelineError(`${agentName} failed: ${errMsg}`);
           updatePipelineStatus('error');
           setRunningAgentId(null);
+          activePipelineCtxRef.current = null;
 
           try {
             await apiFetch(`/api/pipelines/${created.id}`, {
@@ -418,6 +571,7 @@ export default function LeadOSPage() {
       // Only mark as completed if the pipeline was not paused or cancelled
       const finalStatus = useAppStore.getState().pipeline.status;
       setRunningAgentId(null);
+      activePipelineCtxRef.current = null;
       if (finalStatus === 'running') {
         updatePipelineStatus('completed');
         addActivity({ type: 'pipeline_completed', message: 'LeadOS pipeline completed' });
@@ -764,14 +918,15 @@ export default function LeadOSPage() {
             <ProjectSelector
               projects={projects}
               selectedProjectId={selectedProjectId}
-              onSelectProject={selectProject}
+              onSelectProject={handleSelectProject}
+              disabled={pipeline.status === 'running'}
               onCreateProject={async (data) => {
                 try {
                   const created = await createProjectAsync(data);
-                  selectProject(created.id);
+                  handleSelectProject(created.id);
                 } catch {
                   const created = createProject(data);
-                  selectProject(created.id);
+                  handleSelectProject(created.id);
                 }
               }}
             />
@@ -863,18 +1018,43 @@ export default function LeadOSPage() {
               )}
               {isRunning && pipeline.status !== 'completed' && (
                 <button
-                  onClick={() => {
+                  onClick={async () => {
+                    // 1. FIRST: update DB — set pipeline to 'paused' and agent runs to 'idle'
+                    //    This MUST complete before the server-side agent can write 'done'
+                    if (pipeline.id) {
+                      try {
+                        await apiFetch(`/api/pipelines/${pipeline.id}/pause-agents`, { method: 'POST' });
+                      } catch { /* ignore */ }
+                    }
+
+                    // 2. Save execution context so Resume can continue from here
+                    const ctx = activePipelineCtxRef.current;
+                    if (ctx) {
+                      pausedPipelineRef.current = {
+                        agentsToRun: ctx.agentsToRun,
+                        projectConfig: ctx.projectConfig,
+                        previousOutputs: { ...ctx.previousOutputs },
+                        pipelineId: ctx.pipelineId,
+                        pausedAfterIndex: ctx.currentIndex - 1,
+                      };
+                      activePipelineCtxRef.current = null;
+                    }
+
+                    // 3. Update frontend state
+                    const pausedAgentId = runningAgentId;
+                    if (pausedAgentId) {
+                      updateAgentStatus(pausedAgentId, { status: 'idle' });
+                    }
+                    setRunningAgentId(null);
                     updatePipelineStatus('paused');
-                    // Abort the in-flight agent request so it doesn't complete
+
+                    // 4. Abort the in-flight client request
                     if (abortControllerRef.current) {
                       abortControllerRef.current.abort();
                       abortControllerRef.current = null;
                     }
-                    // Pause in backend too so the background runner stops
-                    if (pipeline.id) {
-                      pipelinesApi.pause(pipeline.id).catch(() => {});
-                    }
-                    // Stop all running agent timers
+
+                    // 5. Stop all running agent timers
                     Object.keys(timerRef.current).forEach(id => {
                       clearInterval(timerRef.current[id]);
                       delete timerRef.current[id];
@@ -896,11 +1076,20 @@ export default function LeadOSPage() {
                       } catch { /* ignore */ }
                     }
 
-                    // Resume pipeline from where it was paused (after paid-traffic)
+                    // Resume pipeline from where it was paused
                     const saved = pausedPipelineRef.current;
                     if (saved) {
                       pausedPipelineRef.current = null;
                       const { agentsToRun, projectConfig, previousOutputs, pipelineId, pausedAfterIndex } = saved;
+
+                      // Track live context for re-pause support
+                      activePipelineCtxRef.current = {
+                        agentsToRun,
+                        projectConfig,
+                        previousOutputs,
+                        pipelineId,
+                        currentIndex: pausedAfterIndex + 1,
+                      };
 
                       addActivity({ type: 'info', message: 'Pipeline resumed — continuing remaining agents' });
 
@@ -908,6 +1097,11 @@ export default function LeadOSPage() {
                       for (let i = pausedAfterIndex + 1; i < agentsToRun.length; i++) {
                         const agentId = agentsToRun[i];
                         const agentName = LEADOS_AGENTS.find(a => a.id === agentId)?.name || agentId;
+
+                        // Update live context
+                        if (activePipelineCtxRef.current) {
+                          activePipelineCtxRef.current.currentIndex = i;
+                        }
 
                         const currentStatus = useAppStore.getState().pipeline.status;
                         if (currentStatus !== 'running') break;
@@ -960,6 +1154,7 @@ export default function LeadOSPage() {
                       }
 
                       setRunningAgentId(null);
+                      activePipelineCtxRef.current = null;
                       const finalStatus = useAppStore.getState().pipeline.status;
                       if (finalStatus === 'running') {
                         updatePipelineStatus('completed');
@@ -985,9 +1180,9 @@ export default function LeadOSPage() {
                         try { await apiFetch(`/api/pipelines/${pipeline.id}/pause`, { method: 'POST' }); } catch {}
                       }
                     }
-                    // Clear all agent run history from DB
-                    for (const agent of LEADOS_AGENTS) {
-                      apiFetch(`/api/agents/${agent.id}/runs`, { method: 'DELETE' }).catch(() => {});
+                    // Clear agent run history from DB — only for the current pipeline, not all projects
+                    if (pipeline.id) {
+                      apiFetch(`/api/pipelines/${pipeline.id}/runs`, { method: 'DELETE' }).catch(() => {});
                     }
                     // Stop ALL timers
                     Object.keys(timerRef.current).forEach(id => {
@@ -996,6 +1191,8 @@ export default function LeadOSPage() {
                     });
                     // Reset ALL frontend state
                     setRunningAgentId(null);
+                    activePipelineCtxRef.current = null;
+                    pausedPipelineRef.current = null;
                     setPipelineError(null);
                     setAgentOutputs({});
                     setElapsedTimes({});
@@ -1003,6 +1200,8 @@ export default function LeadOSPage() {
                     setPipelineStartTime(null);
                     if (totalTimerRef.current) { clearInterval(totalTimerRef.current); totalTimerRef.current = null; }
                     clearActivities();
+                    // Clear cached pipeline state for this project
+                    if (selectedProjectId) clearProjectPipelineCache(selectedProjectId);
                     // Reset pipeline LAST — this clears pipeline.id which blocks further SSE events
                     resetPipeline();
                     // Show success snackbar
@@ -1422,6 +1621,8 @@ export default function LeadOSPage() {
               agentError={pipeline.agents.find((a) => a.id === selectedAgent)?.error}
               prerequisiteAgent={getPrerequisiteAgent(selectedAgent)}
               isPipelineRunning={isRunning || (!!runningAgentId && runningAgentId !== selectedAgent)}
+              isPipelinePaused={pipeline.status === 'paused'}
+              projectId={selectedProjectId}
               onClose={() => setSelectedAgent(null)}
               onRun={() => handleRunAgent(selectedAgent)}
               onPause={() => handlePauseAgent(selectedAgent)}

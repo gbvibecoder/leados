@@ -8,8 +8,9 @@ import { cn } from '@/lib/utils';
 
 export function Navbar() {
   const router = useRouter();
-  const { sidebarOpen, projects, selectedProjectId, selectProject } = useAppStore();
+  const { sidebarOpen, projects, selectedProjectId, selectProject, pipeline } = useAppStore();
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
+  const isPipelineRunning = pipeline.status === 'running';
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [userName, setUserName] = useState('User');
   const menuRef = useRef<HTMLDivElement>(null);
@@ -67,8 +68,13 @@ export function Navbar() {
               <Globe className="h-3.5 w-3.5 text-cyan-400" />
             )}
             <span className="text-xs font-medium text-gray-300">{selectedProject.name}</span>
-            <button onClick={() => selectProject(null)}
-              className="ml-1 rounded p-0.5 text-gray-500 hover:text-cyan-400 transition-colors" title="Clear project filter">
+            <button onClick={() => !isPipelineRunning && selectProject(null)}
+              disabled={isPipelineRunning}
+              className={cn(
+                "ml-1 rounded p-0.5 transition-colors",
+                isPipelineRunning ? "text-gray-700 cursor-not-allowed" : "text-gray-500 hover:text-cyan-400"
+              )}
+              title={isPipelineRunning ? "Cannot switch projects while pipeline is running" : "Clear project filter"}>
               <X className="h-3 w-3" />
             </button>
           </div>

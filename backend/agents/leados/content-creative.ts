@@ -242,12 +242,30 @@ export class ContentCreativeAgent extends BaseAgent {
       // ── Call LLM with fallback ────────────────────────────────────
       let parsed: any = {};
       try {
-        const response = await this.callClaude(SYSTEM_PROMPT, enrichedInput, 1, 8192);
+        const response = await this.callClaude(SYSTEM_PROMPT, enrichedInput, 2, 16384);
         parsed = this.safeParseLLMJson<any>(response, ['adCopies', 'hooks', 'coldEmailSequence']);
       } catch (err: any) {
         await this.log('llm_failed', { error: err.message });
         // Build complete fallback from upstream + product context
         parsed = this.buildFallbackContent(niche, offerData, funnelData, productContext);
+
+        // If a non-English language is set, attempt to translate the fallback content via LLM
+        const outputLang = inputs.config?.language;
+        if (outputLang && outputLang !== 'en') {
+          try {
+            const langLabel = localization?.instruction?.match(/in (\w+)/)?.[1] || outputLang;
+            const translatePrompt = `Translate ALL text values in the following JSON to ${langLabel}. Keep JSON structure, keys, brand names, and URLs unchanged. Only translate the string values that are user-facing content (headlines, descriptions, hooks, email bodies, LinkedIn messages, video scripts). Return valid JSON only.`;
+            const translateResponse = await this.callClaude(translatePrompt, JSON.stringify(parsed), 1, 16384);
+            const translated = this.safeParseLLMJson<any>(translateResponse, []);
+            if (translated && Object.keys(translated).length > 0) {
+              parsed = translated;
+              await this.log('fallback_translated', { language: langLabel });
+            }
+          } catch {
+            await this.log('fallback_translation_failed', { language: outputLang });
+            // Keep English fallback — better than nothing
+          }
+        }
       }
 
       // Force-zero any LLM-fabricated performance metrics

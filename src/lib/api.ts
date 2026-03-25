@@ -55,7 +55,8 @@ export const agents = {
   get: (id: string) => fetchApi<any>(`/agents/${id}`),
   run: (id: string, data?: { pipelineId?: string; config?: Record<string, unknown>; previousOutputs?: Record<string, unknown> }, signal?: AbortSignal) =>
     fetchApi<any>(`/agents/${id}/run`, { method: 'POST', body: JSON.stringify(data || {}), signal }),
-  runs: (id: string) => fetchApi<any[]>(`/agents/${id}/runs`),
+  runs: (id: string, projectId?: string | null) =>
+    fetchApi<any[]>(`/agents/${id}/runs${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''}`),
 };
 
 // Project endpoints

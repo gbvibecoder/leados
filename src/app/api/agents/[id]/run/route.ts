@@ -65,17 +65,30 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       userId,
     });
 
-    // Save result to DB
+    // Save result to DB — only mark as 'done' if the run is STILL 'running'.
+    // If the pause-agents endpoint already set it to 'idle', this conditional update
+    // won't match, preventing the race condition entirely.
     if (agentRun) {
       try {
-        await prisma.agentRun.update({
-          where: { id: agentRun.id },
+        const outputJson = JSON.stringify(output);
+
+        // Atomic conditional update: only set 'done' if status is still 'running'
+        const updated = await prisma.agentRun.updateMany({
+          where: { id: agentRun.id, status: 'running' },
           data: {
             status: 'done',
-            outputsJson: JSON.stringify(output),
+            outputsJson: outputJson,
             completedAt: new Date(),
           },
         });
+
+        // If no rows were updated, the run was paused — save output without changing status
+        if (updated.count === 0) {
+          await prisma.agentRun.update({
+            where: { id: agentRun.id },
+            data: { outputsJson: outputJson },
+          });
+        }
       } catch (e) {
         console.error(`[agent-run] Failed to update agentRun ${id}:`, e);
       }
@@ -95,8 +108,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     if (agentRun) {
       try {
-        await prisma.agentRun.update({
-          where: { id: agentRun.id },
+        // Only set error if still running (not paused)
+        await prisma.agentRun.updateMany({
+          where: { id: agentRun.id, status: 'running' },
           data: { status: 'error', error: errorMsg, completedAt: new Date() },
         });
       } catch { /* ignore */ }

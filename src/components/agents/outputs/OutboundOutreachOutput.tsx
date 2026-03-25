@@ -213,7 +213,7 @@ export function OutboundOutreachOutput({ data }: Props) {
       </div>
 
       {/* Channel Performance Split */}
-      {metrics.expectedReplyRate && metrics.linkedInReplyRate && (
+      {!!(metrics.expectedReplyRate && metrics.linkedInReplyRate) && (
         <div className="p-3 bg-muted/30 rounded-lg border border-border/50">
           <div className="text-xs font-medium text-muted-foreground mb-2">Projected Performance by Channel</div>
           <div className="grid grid-cols-2 gap-3">
