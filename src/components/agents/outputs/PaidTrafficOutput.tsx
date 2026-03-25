@@ -1059,14 +1059,31 @@ export function PaidTrafficOutput({ data }: Props) {
         </div>
       </Section>
 
-      {/* Reasoning */}
+      {/* Reasoning / Campaign Strategy */}
       {d.reasoning && (
         <div className="p-3 sm:p-4 bg-gradient-to-r from-indigo-500/10 to-blue-500/10 rounded-lg border border-cyan-500/20">
           <div className="flex items-center gap-2 mb-2">
             <Sparkles className="w-4 h-4 text-cyan-400 flex-shrink-0" />
             <span className="text-xs sm:text-sm font-medium">Campaign Strategy</span>
           </div>
-          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed break-words">{typeof d.reasoning === 'string' ? d.reasoning : JSON.stringify(d.reasoning)}</p>
+          {typeof d.reasoning === 'string' ? (
+            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed break-words">{d.reasoning}</p>
+          ) : typeof d.reasoning === 'object' && d.reasoning !== null ? (
+            <div className="space-y-2">
+              {Object.entries(d.reasoning).map(([key, value]) => (
+                <div key={key}>
+                  <span className="text-[10px] sm:text-xs text-cyan-400 font-semibold uppercase tracking-wide">
+                    {key.replace(/([A-Z])/g, ' $1').replace(/^./, (s: string) => s.toUpperCase())}
+                  </span>
+                  <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed break-words mt-0.5">
+                    {typeof value === 'string' ? value : String(value ?? '')}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed break-words">{String(d.reasoning)}</p>
+          )}
         </div>
       )}
     </div>
