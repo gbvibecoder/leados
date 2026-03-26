@@ -176,7 +176,6 @@ export class AIQualificationAgent extends BaseAgent {
                 ownershipCondition,
                 projectCondition,
                 { stage: 'new' }, // only call leads that haven't been processed yet
-                { qualificationOutcome: null }, // not yet qualified
                 { score: { gte: 30 } }, // minimum score threshold for qualification
               ],
             },
@@ -516,9 +515,10 @@ For leads in emailOnlyLeads: set callStatus to "no_valid_phone", outcome to "med
           for (const result of parsed.callResults || []) {
             if (!result.leadEmail) continue;
             const isNoPhone = result.callStatus === 'no_valid_phone';
-            const isNotCalled = result.callStatus === 'not_called' || result.outcome === 'pending_call';
-            const newStage = isNotCalled ? '' : isNoPhone ? 'contacted' : (stageMap[result.outcome] || 'contacted');
-            if (isNotCalled) continue;
+            // Always update stage based on LLM outcome — even if no real call was made.
+            // pending_call / missing outcome = no stage change (skip).
+            const newStage = isNoPhone ? 'contacted' : (stageMap[result.outcome] || '');
+            if (!newStage) continue;
 
             await tx.lead.updateMany({
               where: { email: result.leadEmail, ...userScope },
