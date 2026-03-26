@@ -312,7 +312,7 @@ export class AIQualificationAgent extends BaseAgent {
 
           const waitPromises = initiatedCalls.map(async ({ lead, callId }) => {
             try {
-              const completed = await blandAI.waitForCall(callId, 50000);
+              const completed = await blandAI.waitForCall(callId, 250000); // 250s — fits within route's maxDuration:300
               await this.log('bland_ai_call_completed', { callId, lead: lead.name, status: completed.status, duration: completed.duration });
               return {
                 leadName: lead.name,
@@ -328,7 +328,7 @@ export class AIQualificationAgent extends BaseAgent {
                 dataSource: 'live_bland_ai',
               };
             } catch (err: any) {
-              await this.log('bland_ai_wait_timeout', { callId, lead: lead.name, note: 'Call still in progress after 50s' });
+              await this.log('bland_ai_wait_timeout', { callId, lead: lead.name, note: 'Call still in progress after 250s — likely exceeded max call duration' });
               return {
                 leadName: lead.name,
                 leadEmail: lead.email,
