@@ -38,6 +38,7 @@ export interface BlandCallRequest {
   record?: boolean;
   transferPhoneNumber?: string;
   metadata?: Record<string, any>;
+  webhook?: string;
 }
 
 export interface BlandCallResult {
@@ -65,6 +66,7 @@ export async function makeCall(params: BlandCallRequest): Promise<BlandCallResul
       record: params.record !== false,
       transfer_phone_number: params.transferPhoneNumber || undefined,
       metadata: params.metadata || {},
+      ...(params.webhook ? { webhook: params.webhook } : {}),
     },
   });
 

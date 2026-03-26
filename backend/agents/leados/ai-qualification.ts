@@ -277,13 +277,15 @@ export class AIQualificationAgent extends BaseAgent {
           try {
             const callTask = `You are Alex, an AI qualification specialist from LeadOS. You're calling ${lead.name || 'the prospect'} at ${lead.company || 'their company'} to qualify them for ${niche} services. Follow the BANT framework: ask about Budget, Authority, Need, and Timeline. Be warm, consultative, never pushy. Keep the call under 5 minutes. Start by obtaining consent to record.`;
 
+            const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://leados-ten.vercel.app'}/api/webhooks/bland-ai`;
             const call = await blandAI.makeCall({
               phone: lead.phone,
               task: callTask,
               firstSentence: `Hi ${lead.name?.split(' ')[0] || 'there'}, this is Alex from LeadOS. Thanks for your interest in our growth services — do you have about 3 minutes for a quick chat?`,
-              maxDuration: 300,
+              maxDuration: 300, // 5 min max — webhook handles scoring for calls that complete after agent timeout
               record: true,
               metadata: { leadEmail: lead.email, leadScore: lead.score },
+              webhook: webhookUrl,
             });
 
             initiatedCalls.push({ lead, callId: call.callId });
@@ -306,13 +308,14 @@ export class AIQualificationAgent extends BaseAgent {
         await this.log('bland_ai_all_initiated', { total: initiatedCalls.length });
 
         // Step 2: Wait for all calls to complete in parallel.
-        // Cap each wait at 50s to stay within Vercel's serverless timeout.
+        // Cap at 280s — calls are max 300s, so most will finish; any still in progress
+        // will be handled by the Bland AI webhook (/api/webhooks/bland-ai).
         if (initiatedCalls.length > 0) {
           await this.log('bland_ai_waiting', { message: `Waiting for ${initiatedCalls.length} call(s) to complete...` });
 
           const waitPromises = initiatedCalls.map(async ({ lead, callId }) => {
             try {
-              const completed = await blandAI.waitForCall(callId, 250000); // 250s — fits within route's maxDuration:300
+              const completed = await blandAI.waitForCall(callId, 280000); // 280s — calls are max 300s; webhook handles the rest
               await this.log('bland_ai_call_completed', { callId, lead: lead.name, status: completed.status, duration: completed.duration });
               return {
                 leadName: lead.name,
@@ -328,7 +331,7 @@ export class AIQualificationAgent extends BaseAgent {
                 dataSource: 'live_bland_ai',
               };
             } catch (err: any) {
-              await this.log('bland_ai_wait_timeout', { callId, lead: lead.name, note: 'Call still in progress after 250s — likely exceeded max call duration' });
+              await this.log('bland_ai_wait_timeout', { callId, lead: lead.name, note: 'Call still in progress after 280s — webhook will handle scoring when call completes' });
               return {
                 leadName: lead.name,
                 leadEmail: lead.email,
@@ -525,7 +528,10 @@ For leads in emailOnlyLeads: set callStatus to "no_valid_phone", outcome to "med
           for (const result of parsed.callResults || []) {
             if (!result.leadEmail) continue;
             const isNoPhone = result.callStatus === 'no_valid_phone';
-            // Always update stage based on LLM outcome — even if no real call was made.
+            // Skip leads whose call is still in progress — they remain 'contacted'
+            // and will be re-processed on the next pipeline run once the call finishes.
+            // This prevents fake LLM outcomes being written for incomplete calls.
+            if (result.callStatus === 'in_progress') continue;
             // pending_call / missing outcome = no stage change (skip).
             const newStage = isNoPhone ? 'contacted' : (stageMap[result.outcome] || '');
             if (!newStage) continue;

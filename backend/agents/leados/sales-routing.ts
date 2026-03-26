@@ -186,7 +186,10 @@ export class SalesRoutingAgent extends BaseAgent {
         };
       }
 
-      // Fetch user's leads from DB to validate upstream data — prevent cross-user leakage
+      // Read qualification outcomes directly from the DB — this is the source of truth.
+      // The AI Qualification Agent updates leads in the DB as calls complete, even if
+      // the agent output (previousOutputs) was incomplete due to call timing/timeouts.
+      let dbQualifiedLeads: any[] = [];
       let userLeadEmails = new Set<string>();
       let userLeadNames = new Set<string>();
       try {
@@ -205,21 +208,34 @@ export class SalesRoutingAgent extends BaseAgent {
             ],
           };
         }
-        // Filter by projectId when running within a project pipeline
         const projectId = inputs.config?.projectId;
-        const projectCondition = projectId ? { projectId } : {};
+        const projectCondition = projectId
+          ? { OR: [{ projectId }, { projectId: null }] }
+          : {};
 
+        // Fetch all leads that have been contacted/qualified — the DB has the real outcomes
         const userDbLeads = await prisma.lead.findMany({
-          where: { AND: [ownershipCondition, projectCondition] },
-          select: { email: true, name: true },
+          where: {
+            AND: [
+              ownershipCondition,
+              projectCondition,
+              { stage: { in: ['contacted', 'nurture', 'qualified', 'disqualified'] } },
+            ],
+          },
+          select: {
+            email: true, name: true, company: true, phone: true, score: true,
+            stage: true, qualificationOutcome: true, qualificationScore: true, routingDecision: true,
+          },
         });
+
         for (const l of userDbLeads) {
           if (l.email) userLeadEmails.add(l.email);
           if (l.name) userLeadNames.add(l.name.toLowerCase());
         }
-        await this.log('user_leads_verified', { count: userDbLeads.length });
+        dbQualifiedLeads = userDbLeads;
+        await this.log('db_qualified_leads_fetched', { count: userDbLeads.length });
       } catch (err: any) {
-        await this.log('user_leads_verify_error', { error: err.message });
+        await this.log('db_leads_fetch_error', { error: err.message });
       }
 
       // Helper: check if a lead belongs to the current user
@@ -232,8 +248,28 @@ export class SalesRoutingAgent extends BaseAgent {
         return false;
       };
 
-      // Filter upstream data to only include this user's leads
-      const scopedCallResults = (qualificationData.callResults || []).filter(isUserLead);
+      // Build scopedCallResults: prefer DB data (real outcomes) and enrich with
+      // transcript/BANT details from upstream output where available
+      const upstreamCallResults = (qualificationData.callResults || []).filter(isUserLead);
+      const upstreamByEmail = new Map(upstreamCallResults.map((r: any) => [r.leadEmail, r]));
+
+      const scopedCallResults = dbQualifiedLeads.map((dbLead: any) => {
+        const upstream = upstreamByEmail.get(dbLead.email) || {};
+        return {
+          leadName: dbLead.name,
+          leadEmail: dbLead.email,
+          company: dbLead.company,
+          phone: dbLead.phone,
+          score: dbLead.qualificationScore || dbLead.score || upstream.score || 0,
+          outcome: dbLead.qualificationOutcome || upstream.outcome || null,
+          callStatus: upstream.callStatus || (dbLead.qualificationOutcome ? 'completed' : 'contacted'),
+          bantBreakdown: upstream.bantBreakdown || { budget: 0, authority: 0, need: 0, timeline: 0 },
+          transcript: upstream.transcript || '',
+          budgetConfirmed: upstream.budgetConfirmed || false,
+        };
+      });
+
+      // Also include inbound leads scoped to this user (for leads that bypassed calling)
       const scopedInboundLeads = (inboundData.leadsProcessed || []).filter(isUserLead);
 
       const userMessage = JSON.stringify({
