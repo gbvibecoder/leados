@@ -266,11 +266,12 @@ export class AIQualificationAgent extends BaseAgent {
         const niche = inputs.config?.niche || 'B2B SaaS Lead Generation';
         const leadsToCall = callableLeads.slice(0, 8);
 
-        // Step 1: Initiate ALL calls in parallel (fast — ~1-2s total)
-        await this.log('bland_ai_initiating', { count: leadsToCall.length });
-        const initiatedCalls: Array<{ lead: any; callId: string }> = [];
+        // Initiate and wait for calls SEQUENTIALLY — one lead at a time.
+        // Parallel calls overwhelm the recipient (multiple simultaneous calls).
+        // Each call waits up to 50s before moving on (fits Vercel's 60s function limit).
+        await this.log('bland_ai_initiating', { count: leadsToCall.length, mode: 'sequential' });
 
-        const initPromises = leadsToCall.map(async (lead: any) => {
+        for (const lead of leadsToCall) {
           try {
             const callTask = `You are Alex, an AI qualification specialist from LeadOS. You're calling ${lead.name || 'the prospect'} at ${lead.company || 'their company'} to qualify them for ${niche} services. Follow the BANT framework: ask about Budget, Authority, Need, and Timeline. Be warm, consultative, never pushy. Keep the call under 5 minutes. Start by obtaining consent to record.`;
 
@@ -284,74 +285,59 @@ export class AIQualificationAgent extends BaseAgent {
             });
 
             await this.log('bland_ai_call_initiated', { callId: call.callId, lead: lead.name });
-            return { lead, callId: call.callId };
-          } catch (err: any) {
-            await this.log('bland_ai_call_error', { lead: lead.name, error: err.message });
-            return null;
-          }
-        });
 
-        const initResults = await Promise.allSettled(initPromises);
-        for (const r of initResults) {
-          if (r.status === 'fulfilled' && r.value) {
-            initiatedCalls.push(r.value);
-          }
-        }
-        await this.log('bland_ai_all_initiated', { total: initiatedCalls.length });
-
-        // Step 2: Wait for ALL calls to complete in parallel (each polls independently)
-        if (initiatedCalls.length > 0) {
-          await this.log('bland_ai_waiting', { message: `Waiting for ${initiatedCalls.length} call(s) to complete...` });
-
-          const waitPromises = initiatedCalls.map(async ({ lead, callId }) => {
+            // Wait for this call to finish before dialling the next lead.
+            // Cap at 50s so we stay within Vercel's 60s serverless timeout.
             try {
-              const completed = await blandAI.waitForCall(callId, 480000); // max 8 min per call
-              await this.log('bland_ai_call_completed', { callId, lead: lead.name, status: completed.status, duration: completed.duration });
-              return {
+              const completed = await blandAI.waitForCall(call.callId, 50000);
+              await this.log('bland_ai_call_completed', { callId: call.callId, lead: lead.name, status: completed.status, duration: completed.duration });
+              realCallResults.push({
                 leadName: lead.name,
                 leadEmail: lead.email,
                 company: lead.company,
                 phone: lead.phone,
-                callId,
+                callId: call.callId,
                 callStatus: (completed.status === 'completed' || completed.status === 'ended') ? 'completed' as const : completed.status as any,
                 duration: completed.duration || 0,
                 transcript: completed.transcript || '',
                 recordingUrl: completed.recordingUrl || '',
                 analysis: {},
                 dataSource: 'live_bland_ai',
-              };
-            } catch (err: any) {
-              await this.log('bland_ai_wait_error', { callId, lead: lead.name, error: err.message });
-              return {
+              });
+            } catch (waitErr: any) {
+              await this.log('bland_ai_wait_timeout', { callId: call.callId, lead: lead.name, note: 'Call still in progress — recorded as in_progress' });
+              realCallResults.push({
                 leadName: lead.name,
                 leadEmail: lead.email,
                 company: lead.company,
                 phone: lead.phone,
-                callId,
-                callStatus: 'error' as const,
+                callId: call.callId,
+                callStatus: 'in_progress' as any,
                 duration: 0,
                 transcript: '',
                 recordingUrl: '',
                 analysis: {},
                 dataSource: 'live_bland_ai',
-              };
+              });
             }
-          });
 
-          const waitResults = await Promise.allSettled(waitPromises);
-          for (const r of waitResults) {
-            if (r.status === 'fulfilled' && r.value) {
-              realCallResults.push(r.value);
+            // 3-second gap between calls so the previous call is fully connected
+            // before the next one is initiated (avoids near-simultaneous ringing).
+            if (leadsToCall.indexOf(lead) < leadsToCall.length - 1) {
+              await new Promise(r => setTimeout(r, 3000));
             }
+          } catch (err: any) {
+            await this.log('bland_ai_call_error', { lead: lead.name, error: err.message });
           }
-
-          const completed = realCallResults.filter(r => r.callStatus === 'completed');
-          await this.log('bland_ai_all_completed', {
-            total: realCallResults.length,
-            completed: completed.length,
-            withTranscript: completed.filter(r => r.transcript.length > 50).length,
-          });
         }
+
+        const completed = realCallResults.filter(r => r.callStatus === 'completed');
+        await this.log('bland_ai_all_processed', {
+          total: realCallResults.length,
+          completed: completed.length,
+          inProgress: realCallResults.filter(r => r.callStatus === 'in_progress').length,
+          withTranscript: completed.filter(r => r.transcript.length > 50).length,
+        });
       }
 
       const userMessage = JSON.stringify({
