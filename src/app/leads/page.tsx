@@ -91,6 +91,7 @@ function AddLeadModal({ onClose, onAdded }: { onClose: () => void; onAdded: () =
     { code: '+54', iso: 'ar', name: 'Argentina' },
     { code: '+56', iso: 'cl', name: 'Chile' },
     { code: '+57', iso: 'co', name: 'Colombia' },
+    { code: '+381', iso: 'rs', name: 'Serbia' },
   ];
   const FlagImg = ({ iso, size = 20 }: { iso: string; size?: number }) => (
     <img src={`https://flagsapi.com/${iso.toUpperCase()}/flat/32.png`}
