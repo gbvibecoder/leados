@@ -167,8 +167,12 @@ export class AIQualificationAgent extends BaseAgent {
           }
 
           // Filter by projectId when running within a project pipeline
+          // Match leads that either belong to this project OR have no project assigned
+          // (mirrors the GET /leads endpoint behaviour so manually-added leads are included)
           const projectId = inputs.config?.projectId;
-          const projectCondition = projectId ? { projectId } : {};
+          const projectCondition = projectId
+            ? { OR: [{ projectId }, { projectId: null }] }
+            : {};
 
           const dbLeads = await prisma.lead.findMany({
             where: {
