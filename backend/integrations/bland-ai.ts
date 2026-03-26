@@ -39,6 +39,7 @@ export interface BlandCallRequest {
   transferPhoneNumber?: string;
   metadata?: Record<string, any>;
   webhook?: string;
+  from?: string; // Bland AI phone number to call from (required for international calls)
 }
 
 export interface BlandCallResult {
@@ -67,6 +68,8 @@ export async function makeCall(params: BlandCallRequest): Promise<BlandCallResul
       transfer_phone_number: params.transferPhoneNumber || undefined,
       metadata: params.metadata || {},
       ...(params.webhook ? { webhook: params.webhook } : {}),
+      // 'from' is required for international calls — set BLANDAI_FROM_NUMBER in env
+      ...(params.from ? { from: params.from } : {}),
     },
   });
 

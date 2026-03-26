@@ -278,6 +278,7 @@ export class AIQualificationAgent extends BaseAgent {
             const callTask = `You are Alex, an AI qualification specialist from LeadOS. You're calling ${lead.name || 'the prospect'} at ${lead.company || 'their company'} to qualify them for ${niche} services. Follow the BANT framework: ask about Budget, Authority, Need, and Timeline. Be warm, consultative, never pushy. Keep the call under 5 minutes. Start by obtaining consent to record.`;
 
             const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://leados-ten.vercel.app'}/api/webhooks/bland-ai`;
+            const fromNumber = process.env.BLANDAI_FROM_NUMBER || undefined;
             const call = await blandAI.makeCall({
               phone: lead.phone,
               task: callTask,
@@ -286,6 +287,7 @@ export class AIQualificationAgent extends BaseAgent {
               record: true,
               metadata: { leadEmail: lead.email, leadScore: lead.score },
               webhook: webhookUrl,
+              from: fromNumber, // international-capable number (set BLANDAI_FROM_NUMBER in env)
             });
 
             initiatedCalls.push({ lead, callId: call.callId });
