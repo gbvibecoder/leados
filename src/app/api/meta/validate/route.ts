@@ -13,6 +13,12 @@ export async function GET() {
 
   return NextResponse.json({
     success: true,
-    data: { valid: true, name: result.data?.name, id: result.data?.id },
+    data: {
+      valid: true,
+      name: result.data?.name,
+      id: result.data?.id,
+      page_id: (result.data as any)?.page_id || null,
+      dsa_name: (result.data as any)?.dsa_name || null,
+    },
   });
 }

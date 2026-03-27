@@ -51,10 +51,13 @@ export function useMetaCampaign() {
     const ids: Partial<CampaignIds> = {};
 
     try {
-      // Step 1: Validate token
+      // Step 1: Validate token and check page/DSA setup
       setStep('validating', { formData: form });
 
-      await apiCall('/api/meta/validate');
+      const validateData = await apiCall<{ valid: boolean; page_id?: string; dsa_name?: string }>('/api/meta/validate');
+      if (!validateData.page_id) {
+        throw new Error('No Facebook Page linked to your ad account. Add META_PAGE_ID to your .env file (find it at facebook.com/your-page → About → Page ID).');
+      }
 
       // Step 2: Create campaign
       setStep('creating_campaign');

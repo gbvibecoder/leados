@@ -15,6 +15,93 @@ const ACCESS_TOKEN = () => process.env.META_ACCESS_TOKEN || '';
 const AD_ACCOUNT_ID = () => process.env.META_AD_ACCOUNT_ID || '';
 const PAGE_ID = () => process.env.META_PAGE_ID || '';
 
+// ── DSA Beneficiary/Payor Resolution ────────────────────────────────────────
+// Meta DSA transparency: campaigns & ads require dsa_beneficiary + dsa_payor.
+// These must match the beneficiary/payer configured in Meta Business Suite.
+// Resolution order: Page Name → Ad Account business name → /me name → env var
+let _cachedDsaName: string | null = null;
+let _cachedPageId: string | null = null;
+
+async function resolvePageId(): Promise<string> {
+  if (_cachedPageId) return _cachedPageId;
+
+  // 1. Try linked pages via /me/accounts
+  const linked = await getLinkedPageId();
+  if (linked) { _cachedPageId = linked; return linked; }
+
+  // 2. Try env var
+  const envPageId = PAGE_ID();
+  if (envPageId) { _cachedPageId = envPageId; return envPageId; }
+
+  // 3. Try ad account's promoted pages
+  const accountId = AD_ACCOUNT_ID();
+  if (accountId) {
+    try {
+      const pagesRes = await metaFetch<{ data: { id: string }[] }>(
+        `/act_${accountId}/promote_pages?fields=id&limit=1`
+      );
+      if (pagesRes.success && pagesRes.data?.data?.[0]?.id) {
+        _cachedPageId = pagesRes.data.data[0].id;
+        console.log(`[META-API] Found promote page: ${_cachedPageId}`);
+        return _cachedPageId;
+      }
+    } catch { /* ignore */ }
+  }
+
+  _cachedPageId = '';
+  return '';
+}
+
+async function resolveDsaName(): Promise<string> {
+  if (_cachedDsaName) return _cachedDsaName;
+
+  // 1. Try the Facebook Page name — this is "the person or organisation promoted"
+  const pageId = await resolvePageId();
+  if (pageId) {
+    try {
+      const pgRes = await metaFetch<{ name: string }>(`/${pageId}?fields=name`);
+      if (pgRes.success && pgRes.data?.name) {
+        _cachedDsaName = pgRes.data.name;
+        console.log(`[META-API] DSA name from page: "${_cachedDsaName}"`);
+        return _cachedDsaName;
+      }
+    } catch { /* ignore */ }
+  }
+
+  // 2. Try ad account business info
+  const accountId = AD_ACCOUNT_ID();
+  if (accountId) {
+    try {
+      const accRes = await metaFetch<{ name: string; business_name?: string }>(
+        `/act_${accountId}?fields=name,business_name`
+      );
+      if (accRes.success) {
+        const name = accRes.data?.business_name || accRes.data?.name;
+        if (name) {
+          _cachedDsaName = name;
+          console.log(`[META-API] DSA name from ad account: "${_cachedDsaName}"`);
+          return _cachedDsaName;
+        }
+      }
+    } catch { /* ignore */ }
+  }
+
+  // 3. Try /me name
+  try {
+    const meRes = await metaFetch<{ name: string }>('/me?fields=name');
+    if (meRes.success && meRes.data?.name) {
+      _cachedDsaName = meRes.data.name;
+      console.log(`[META-API] DSA name from /me: "${_cachedDsaName}"`);
+      return _cachedDsaName;
+    }
+  } catch { /* ignore */ }
+
+  // 4. Env fallback
+  _cachedDsaName = process.env.META_DSA_BENEFICIARY || process.env.META_PAGE_NAME || 'LeadOS';
+  console.log(`[META-API] DSA name fallback: "${_cachedDsaName}"`);
+  return _cachedDsaName;
+}
+
 // ── Rate-limit delay ────────────────────────────────────────────────────────
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -133,15 +220,24 @@ export async function getLinkedPageId(): Promise<string | null> {
   return null;
 }
 
-export async function validateToken(): Promise<MetaApiResponse<{ id: string; name: string; page_id?: string }>> {
+export async function validateToken(): Promise<MetaApiResponse<{ id: string; name: string; page_id?: string; dsa_name?: string }>> {
+  // Clear caches so we always re-resolve during validation
+  _cachedDsaName = null;
+  _cachedPageId = null;
+
   const result = await metaFetch<{ id: string; name: string }>('/me?fields=id,name');
   if (result.success) {
-    // Also resolve the linked page ID and include it in the response
-    const pageId = await getLinkedPageId();
+    // Resolve page ID and DSA name during validation so issues surface early
+    const pageId = await resolvePageId();
+    const dsaName = await resolveDsaName();
     if (result.data) {
-      (result.data as any).page_id = pageId;
+      (result.data as any).page_id = pageId || null;
+      (result.data as any).dsa_name = dsaName;
     }
-    console.log(`[META-API] Token valid for: ${result.data?.name} (${result.data?.id}), Page: ${pageId}`);
+    console.log(`[META-API] Token valid for: ${result.data?.name} (${result.data?.id}), Page: ${pageId || 'NONE'}, DSA: ${dsaName}`);
+    if (!pageId) {
+      console.warn('[META-API] WARNING: No Facebook Page found. Lead Gen campaigns will fail. Set META_PAGE_ID in .env');
+    }
   }
   return result;
 }
@@ -155,23 +251,14 @@ export async function createCampaign(params: {
   const accountId = AD_ACCOUNT_ID();
   const url = `${META_BASE}/act_${accountId}/campaigns`;
 
-  // Resolve the beneficiary/payor name for DSA transparency
-  // Try: ad account name → page name → fallback to campaign name
-  let dsaName = '';
-  try {
-    const accRes = await metaFetch<{ name: string }>(`/act_${accountId}?fields=name`);
-    if (accRes.success && accRes.data?.name) dsaName = accRes.data.name;
-  } catch { /* ignore */ }
-  if (!dsaName) {
-    const resolvedPageId = await getLinkedPageId() || PAGE_ID();
-    if (resolvedPageId) {
-      try {
-        const pgRes = await metaFetch<{ name: string }>(`/${resolvedPageId}?fields=name`);
-        if (pgRes.success && pgRes.data?.name) dsaName = pgRes.data.name;
-      } catch { /* ignore */ }
-    }
+  // Resolve the beneficiary/payor name + page ID for DSA transparency
+  const dsaName = await resolveDsaName();
+  const pageId = await resolvePageId();
+  console.log(`[META-API] DSA beneficiary/payor: "${dsaName}", page_id: "${pageId}"`);
+
+  if (!dsaName || dsaName === 'LeadOS') {
+    console.warn('[META-API] WARNING: DSA name could not be resolved from your Meta account. Campaign may fail. Set META_PAGE_ID or META_DSA_BENEFICIARY in .env');
   }
-  if (!dsaName) dsaName = params.name;
 
   const formBody = new URLSearchParams();
   formBody.append('name', params.name);
@@ -355,7 +442,10 @@ export async function createAdSet(params: {
 
   // OUTCOME_LEADS requires promoted_object with page_id
   if (params.objective === 'OUTCOME_LEADS') {
-    const pageId = await getLinkedPageId() || PAGE_ID();
+    const pageId = await resolvePageId();
+    if (!pageId) {
+      return { success: false, error: 'Lead Generation campaigns require a Facebook Page. Set META_PAGE_ID in your .env file.' };
+    }
     body.promoted_object = { page_id: pageId };
     console.log(`[META-API] Using page_id for promoted_object: ${pageId}`);
   }
@@ -431,7 +521,10 @@ export async function createAdCreative(params: {
   cta_type: string;
   image_url?: string;
 }): Promise<MetaApiResponse<{ id: string }>> {
-  const pageId = await getLinkedPageId() || PAGE_ID();
+  const pageId = await resolvePageId();
+  if (!pageId) {
+    return { success: false, error: 'Ad creative requires a Facebook Page. Set META_PAGE_ID in your .env file.' };
+  }
   console.log(`[META-API] Using page_id for creative: ${pageId}`);
 
   // Use provided image URL or a reliable public placeholder
@@ -485,34 +578,16 @@ export async function createAd(params: {
   adset_id: string;
   creative_id: string;
 }): Promise<MetaApiResponse<{ id: string }>> {
-  // Fetch page name for DSA transparency fields (required by Meta)
-  let pageName = '';
-  const pageId = await getLinkedPageId() || PAGE_ID();
-  if (pageId) {
-    try {
-      const pageRes = await metaFetch<{ name: string }>(`/${pageId}?fields=name`);
-      if (pageRes.success && pageRes.data?.name) {
-        pageName = pageRes.data.name;
-      }
-    } catch { /* use fallback */ }
-  }
-  // Fallback: fetch from /me
-  if (!pageName) {
-    try {
-      const meRes = await metaFetch<{ name: string }>('/me?fields=name');
-      if (meRes.success && meRes.data?.name) pageName = meRes.data.name;
-    } catch { /* ignore */ }
-  }
-  if (!pageName) pageName = 'LeadOS';
+  // Resolve DSA transparency name (required by Meta for ad transparency)
+  const dsaName = await resolveDsaName();
 
   return metaFetch(`/act_${AD_ACCOUNT_ID()}/ads`, 'POST', {
     name: 'LeadOS Ad',
     adset_id: params.adset_id,
     creative: { creative_id: params.creative_id },
     status: 'PAUSED',
-    // DSA transparency fields — required by Meta for ad transparency
-    dsa_beneficiary: pageName,
-    dsa_payor: pageName,
+    dsa_beneficiary: dsaName,
+    dsa_payor: dsaName,
   });
 }
 
