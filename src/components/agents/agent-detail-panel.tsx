@@ -55,17 +55,28 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning: isR
         const runsList = Array.isArray(data) ? data : [];
         setRuns(runsList);
         if (runsList.length > 0) setSelectedRun(runsList[0]);
+        else setSelectedRun(null);
       })
       .catch(() => setRuns([]))
       .finally(() => setLoading(false));
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     setLoading(true);
     setPrompt('');
     setHistoryExpanded(false);
     fetchRuns();
   }, [agentId]);
+
+  // Clear runs immediately when agent status resets to idle (e.g. pipeline reset)
+  // This prevents showing stale data while the DB delete is still in-flight
+  useEffect(() => {
+    if (agentStatus === 'idle' && !isRunning && !isPipelineRunning && !isPipelinePaused) {
+      setRuns([]);
+      setSelectedRun(null);
+    }
+  }, [agentStatus, isRunning, isPipelineRunning, isPipelinePaused]);
 
   // Auto-refresh runs when agent finishes (running → done/error)
   const prevStatusRef = useRef(agentStatus);
@@ -305,7 +316,7 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning: isR
                       className="flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium bg-red-600/20 border border-red-500/30 text-red-300 hover:bg-red-600/30 transition-all"
                     >
                       <RotateCcw className="h-4 w-4" />
-                      Reset Agent
+                      Reset All Agents
                     </button>
                   </div>
                 </div>

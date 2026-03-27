@@ -1,143 +1,58 @@
 import { BaseAgent, AgentInput, AgentOutput } from '../base-agent';
 import { scrapeProductContext, type ProductContext } from '../scrape-url';
 
-const SYSTEM_PROMPT = `You are a Content & Creative Agent. You create marketing materials for the CLIENT'S product/service — NOT for LeadOS or any AI agent platform.
+// ── Shared preamble — sent to ALL groups (kept minimal to reduce input tokens) ──
+const PROMPT_BASE = `You are a Content & Creative Agent creating marketing materials for the CLIENT'S product/service — NOT for LeadOS or any AI agent platform.
+CRITICAL: You are NOT advertising LeadOS, AI agents, or lead generation platforms. ALL content is about the CLIENT'S actual product.
+NEVER mention "13 agents", "AI engine", "LeadOS", "autonomous pipeline", or lead generation automation.
 
-CRITICAL — YOU ARE CREATING ADS FOR THE CLIENT'S PRODUCT:
-- You are NOT advertising LeadOS, AI agents, or any lead generation platform
-- You ARE advertising the client's actual product/service described in the input
-- NEVER mention "13 agents", "AI engine", "LeadOS", "autonomous pipeline", or lead generation automation
-- ALL content must be about the CLIENT'S product features, benefits, and value propositions
+PRODUCT CONTEXT RULE: If "productContext" is provided, use the actual product name, features, and value propositions from the website. Match the tone and industry terminology.
+LOCALIZATION RULE: If "localization" or "outputLanguage" is provided, ALL output MUST be in the specified language. Keep brand names in original form.
+Adapt ALL content to the specific product, ICP, and offer. Use rising keywords from Google Trends.
+Do NOT invent performance metrics (open rates, click rates, impressions). Only creative content.
+Return ONLY valid JSON (no markdown).`;
 
-You receive JSON with the offer (ICP, pain points, pricing, positioning), funnel data, market context, and PRODUCT CONTEXT scraped from the client's actual website.
+// ── Storytelling framework — shared by ads, hooks, video, and UGC groups ──
+const STORYTELLING_FRAMEWORK = `
+## STORYTELLING AD FRAMEWORK — MANDATORY
+You are telling a friend what you found. The best ads don't feel like ads.
 
-PRODUCT CONTEXT RULE: If "productContext" is provided, it contains data scraped from the client's website. You MUST:
-1. Study the website title, description, headings, and content to understand EXACTLY what the product/service does
-2. Use the actual product name, feature names, and value propositions from the website
-3. Write ads that a potential CUSTOMER of this product would find compelling
-4. Reference real features and benefits from the website — NOT generic marketing language
-5. Match the tone and industry terminology of the website
+Four Rules: 1) Never sound like an ad. 2) Never list features — tell a STORY. 3) Never lecture — tell it like gossip. 4) Never pitch the product too early.
 
-LOCALIZATION RULE: If "localization" or "outputLanguage" is provided in the input, ALL output content (ad copies, email sequences, LinkedIn messages, video scripts, UGC scripts, hooks — everything) MUST be written in the specified language. Keep brand names and product names in their original form, but write all surrounding copy in the target language.
+30-Second Structure: Beat 1 HOOK (0-3s): Make them FEEL something. Beat 2 STORY (3-10s): A real result told like gossip. Beat 3 REFRAME+PRODUCT (10-22s): Connect to THEIR life, introduce product casually — "It's called..." Beat 4 CLOSE (22-30s): Identity-level CTA looping back to hook.
 
-Adapt ALL content to the specific product, ICP, and offer. Use rising keywords from Google Trends in ad copies.
+Three Hook Types: 1) Gut Punch — specific loss + unexpected outcome. 2) Open Loop — promise aimed at a specific person. 3) Body Memory — visceral, physical, you feel it reading it.
 
-## UGC Script Template Patterns
+Triple Hook Layers: Visual (stops the scroll), Audio (first sentence, works standalone), Text on Screen (bold text for muted viewing — must pass MUTE TEST).
 
-Generate UGC scripts using BOTH of these proven patterns:
+Product Introduction: Product appears INSIDE the story, reluctantly. "It's called [Product]. I found it through a Reddit thread."
+Identity Close: NOT "Shop now" but "If you've been [doing X] and wondering why nothing's changing, this is probably why."
+Creative Diversity: Each ad signals a DIFFERENT buyer — guilt, exposé, active user, comparison, rescue, money, unexpected benefit, friend recommendation, skeptic-turned-believer, before/after.`;
 
-**Pattern A — Role-Specific Hooks:**
-Write one script per decision-maker role (Finance, CEO, HR, Operations). Each script must include:
-- Role-specific hook (speaks directly to that persona's concerns)
-- Credibility setup (why they should listen)
-- Product intro (what the solution is)
-- Key benefit (the #1 outcome for that role)
-- Business case (ROI or efficiency argument for that persona)
-- Role-specific CTA (action relevant to their authority level)
+// ── Single LLM prompt — only Meta Ads need AI-generated storytelling ──
+// Everything else (Google Ads, emails, LinkedIn, video scripts, UGC, briefs) uses instant templates.
+const PROMPT_CREATIVE = `${PROMPT_BASE}
+${STORYTELLING_FRAMEWORK}
 
-**Pattern B — Same Message, Different Hooks:**
-Write 3-4 variations of the same core script with different openers for A/B testing:
-- Variation 1: Personal experience opener ("I used to spend 4 hours a day on...")
-- Variation 2: Pain point opener ("If you're still doing X manually...")
-- Variation 3: Bold statement opener ("Cold calling is dead. Here's proof.")
-- Variation 4: Social proof opener ("500+ companies switched last quarter...")
-
-## UGC Video Structure (15-60s)
-
-Every UGC video script MUST follow this exact structure:
-- Hook (0-3s): Bold statement, question, or surprising result
-- Problem (3-10s): State the pain point in their words
-- Solution (10-25s): Show/explain what you do. One core idea.
-- Proof (25-40s): Result, testimonial, or before/after. Specifics beat generalities.
-- CTA (last 3-5s): Exactly what to do next.
-
-## Video Types by Priority
-
-Generate scripts in this priority order (most credible first):
-1. Customer testimonial (most credible)
-2. Before/after walkthrough
-3. Founder/team talking head
-4. Screen recording + voiceover
-5. Process reveal
-
-## Cold Email Sequence (SOP Structure)
-
-Generate a 3-5 email sequence, spaced 2-3 days apart, following this exact structure:
-- Email 1: Personalised opener + problem statement + soft CTA
-- Email 2: Value drop — case study or result, no pitch
-- Email 3: Nudge — reference email 1, ask if timing is better
-- Email 4: Breakup — "last one from me" energy, creates urgency
-
-## LinkedIn DM Sequence (SOP Structure)
-
-Generate a 3-message LinkedIn sequence following this exact structure:
-- Message 1: Thank + mention something specific from their profile. No pitch.
-- Message 2 (day 2-3): Share useful article/insight/case study relevant to their role.
-- Message 3 (day 5-7): Soft CTA — ask if problem is relevant, offer quick call.
-
-Return ONLY valid JSON (no markdown) with this structure:
+Generate Meta/Facebook Ads and hooks. Return ONLY this JSON (no other keys):
 {
-  "adCopies": {
-    "google": [{ "headline": "string (≤30 chars)", "description": "string (≤90 chars)", "targetKeyword": "string" }],
-    "meta": [{ "primaryText": "string", "headline": "string", "description": "string", "targetAudience": "string" }]
-  },
-  "hooks": [{ "angle": "pain|curiosity|social_proof|urgency|contrarian", "hook": "string", "useCase": "string" }],
-  "coldEmailSequence": [{ "step": "number", "delay": "string", "subject": "string", "body": "string", "purpose": "string", "sopRole": "personalised_opener|value_drop|nudge|breakup" }],
-  "linkedInDMSequence": {
-    "message1": { "text": "string (≤300 chars)", "timing": "on connect", "sopRole": "thank_and_mention" },
-    "message2": { "text": "string", "timing": "day 2-3", "sopRole": "share_value" },
-    "message3": { "text": "string", "timing": "day 5-7", "sopRole": "soft_cta" }
-  },
-  "ugcScripts": {
-    "patternA_roleSpecific": [{
-      "role": "Finance|CEO|HR|Operations",
-      "hook": "string (0-3s)",
-      "credibilitySetup": "string",
-      "productIntro": "string",
-      "keyBenefit": "string",
-      "businessCase": "string",
-      "cta": "string",
-      "duration": "15-60s"
-    }],
-    "patternB_hookVariations": [{
-      "variationType": "personal_experience|pain_point|bold_statement|social_proof",
-      "hook": "string (0-3s)",
-      "problem": "string (3-10s)",
-      "solution": "string (10-25s)",
-      "proof": "string (25-40s)",
-      "cta": "string (last 3-5s)",
-      "duration": "15-60s"
-    }]
-  },
-  "videoAdScripts": [{
-    "duration": "string",
-    "format": "string",
-    "videoType": "customer_testimonial|before_after_walkthrough|founder_talking_head|screen_recording_voiceover|process_reveal",
-    "priority": "number (1-5)",
-    "hook": "string (0-3s)",
-    "problem": "string (3-10s)",
-    "solution": "string (10-25s)",
-    "proof": "string (25-40s)",
-    "cta": "string (last 3-5s)"
-  }],
-  "ugcBriefs": [{ "type": "string", "description": "string", "talkingPoints": ["string"] }],
-  "visualCreativeBriefs": [{ "concept": "string", "layout": "string", "imagery": "string", "textOverlay": "string" }],
-  "reasoning": "string",
-  "confidence": "number 0-100"
+  "meta": [{ "primaryText": "string", "headline": "string", "description": "string", "targetAudience": "string", "emotionalDoorway": "string", "hookType": "gut_punch|open_loop|body_memory", "tripleHook": { "visual": "string", "audio": "string", "textOnScreen": "string" } }],
+  "hooks": [{ "angle": "pain|curiosity|social_proof|urgency|contrarian", "hook": "string", "hookType": "gut_punch|open_loop|body_memory", "useCase": "string", "tripleHook": { "visual": "string", "audio": "string", "textOnScreen": "string" } }]
 }
+Produce exactly 10 Meta Ads (10 DIFFERENT emotional doorways — guilt, exposé, active user, comparison, rescue story, money, unexpected benefit, friend recommendation, skeptic-turned-believer, before/after — NOT variations of one ad) and 5 hooks with triple hook layers.
+Be concise in primaryText — 3-4 sentences max per ad. Keep tripleHook descriptions under 15 words each.`;
 
-Produce these EXACT quantities:
-- 10 Google Ads (varied: problem, curiosity, proof, urgency, results angles)
-- 10 Meta Ads (varied targeting: cold, warm, retargeting audiences)
-- 5 hooks (pain, curiosity, social_proof, urgency, contrarian)
-- 4 cold emails (personalised opener → value drop → nudge → breakup, spaced 2-3 days apart)
-- LinkedIn DM sequence (3 messages: thank+mention → share value → soft CTA)
-- 5 video ad scripts (one per video type priority: customer testimonial, before/after, founder talking head, screen recording + voiceover, process reveal — each following Hook→Problem→Solution→Proof→CTA structure)
-- 4 UGC scripts Pattern A (one per role: Finance, CEO, HR, Operations)
-- 4 UGC scripts Pattern B (one per hook variation: personal experience, pain point, bold statement, social proof)
-- 3 UGC briefs (testimonial, before/after, process reveal)
-- 3 visual creative briefs (static ads, social clips, infographic)
-Do NOT invent performance metrics (open rates, click rates, impressions). Only creative content.`;
+// ── In-memory scrape cache — avoids re-fetching the same URL within a process ──
+const scrapeCache = new Map<string, { data: ProductContext | null; ts: number }>();
+const SCRAPE_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+async function cachedScrape(url: string): Promise<ProductContext | null> {
+  const cached = scrapeCache.get(url);
+  if (cached && Date.now() - cached.ts < SCRAPE_CACHE_TTL) return cached.data;
+  const data = await scrapeProductContext(url);
+  scrapeCache.set(url, { data, ts: Date.now() });
+  return data;
+}
 
 export class ContentCreativeAgent extends BaseAgent {
   constructor() {
@@ -182,68 +97,76 @@ export class ContentCreativeAgent extends BaseAgent {
       || topOpportunity.trendData?.googleTrends?.risingQueries?.map((q: any) => q.query)
       || [];
 
-    // Scrape the project URL for real product context
+    // Scrape the project URL for real product context (cached + non-blocking)
     const projectUrl = inputs.config?.projectUrl || inputs.config?.url || '';
-    let productContext: ProductContext | null = null;
-    if (projectUrl) {
-      await this.log('scraping_url', { url: projectUrl });
-      productContext = await scrapeProductContext(projectUrl);
-      if (productContext) {
-        await this.log('url_scraped', {
-          title: productContext.title,
-          headingsCount: productContext.headings.length,
-          descriptionLength: productContext.description.length,
-        });
-      } else {
-        await this.log('url_scrape_failed', { url: projectUrl });
-      }
-    }
+    const scrapePromise = projectUrl ? cachedScrape(projectUrl) : Promise.resolve(null);
 
     try {
       await this.log('generating_content', { phase: 'Generating creative assets' });
 
+      // Await scrape (already started above, runs in parallel with data extraction)
+      const productContext = await scrapePromise;
+
       const localization = inputs.config?.localization;
+      // Trim input payload — less tokens = faster LLM processing
       const enrichedInput = JSON.stringify({
-        // Language/localization — all content MUST be in this language
         ...(localization ? { localization } : {}),
         ...(inputs.config?.language ? { outputLanguage: inputs.config.language } : {}),
         offer: {
           serviceName: offerData.serviceName,
           icp: offerData.icp,
-          painPoints: offerData.painPoints,
+          painPoints: (offerData.painPoints || []).slice(0, 5),
           transformationPromise: offerData.transformationPromise,
-          pricingTiers: offerData.pricingTiers,
           guarantee: offerData.guarantee,
           positioning: offerData.positioning,
           uniqueMechanism: offerData.uniqueMechanism,
         },
-        // Real product/service data from the client's website
         productContext: productContext ? {
           websiteTitle: productContext.title,
           websiteDescription: productContext.description,
-          websiteKeywords: productContext.keywords,
-          mainHeadings: productContext.headings,
-          pageContent: productContext.bodySnippet,
+          mainHeadings: productContext.headings?.slice(0, 5),
           sourceUrl: productContext.url,
         } : undefined,
         funnel: {
-          landingPageUrl: funnelData.landingPage?.url,
           headline: funnelData.landingPage?.headline,
           cta: funnelData.landingPage?.cta,
-          bookingUrl: funnelData.bookingCalendar?.url,
         },
         marketContext: {
           niche,
-          risingQueries: risingQueries.slice(0, 10),
-          demandScore: topOpportunity.demandScore,
+          risingQueries: risingQueries.slice(0, 5),
         },
       });
 
-      // ── Call LLM with fallback ────────────────────────────────────
+      // ── Generate content: 1 LLM call (Meta Ads + Hooks) + instant templates ──
+      // Only Meta Ads need AI storytelling. Everything else uses product-aware templates.
       let parsed: any = {};
       try {
-        const response = await this.callClaude(SYSTEM_PROMPT, enrichedInput, 2, 16384);
-        parsed = this.safeParseLLMJson<any>(response, ['adCopies', 'hooks', 'coldEmailSequence']);
+        // Build template content instantly (no LLM needed) — covers Google Ads,
+        // cold emails, LinkedIn DMs, video scripts, UGC scripts, briefs
+        const templateContent = this.buildFallbackContent(niche, offerData, funnelData, productContext);
+
+        await this.log('generating_creative', { llmCalls: 1 });
+
+        // Single LLM call — Meta Ads + Hooks only (maxRetries: 1 for speed)
+        const response = await this.callClaude(PROMPT_CREATIVE, enrichedInput, 1, 4096);
+        const llmResult = this.safeParseLLMJson<any>(response, ['meta', 'hooks']);
+
+        // Merge: LLM creative + template structured content
+        parsed = {
+          adCopies: {
+            google: templateContent.adCopies.google,
+            meta: llmResult.meta || [],
+          },
+          hooks: llmResult.hooks || [],
+          coldEmailSequence: templateContent.coldEmailSequence,
+          linkedInDMSequence: templateContent.linkedInDMSequence,
+          videoAdScripts: templateContent.videoAdScripts,
+          ugcScripts: templateContent.ugcScripts,
+          ugcBriefs: templateContent.ugcBriefs,
+          visualCreativeBriefs: templateContent.visualCreativeBriefs,
+        };
+        parsed.reasoning = 'Content creation complete — all creative asset types generated.';
+        parsed.confidence = 85;
       } catch (err: any) {
         await this.log('llm_failed', { error: err.message });
         // Build complete fallback from upstream + product context
@@ -255,7 +178,7 @@ export class ContentCreativeAgent extends BaseAgent {
           try {
             const langLabel = localization?.instruction?.match(/in (\w+)/)?.[1] || outputLang;
             const translatePrompt = `Translate ALL text values in the following JSON to ${langLabel}. Keep JSON structure, keys, brand names, and URLs unchanged. Only translate the string values that are user-facing content (headlines, descriptions, hooks, email bodies, LinkedIn messages, video scripts). Return valid JSON only.`;
-            const translateResponse = await this.callClaude(translatePrompt, JSON.stringify(parsed), 1, 16384);
+            const translateResponse = await this.callClaude(translatePrompt, JSON.stringify(parsed), 1, 8192);
             const translated = this.safeParseLLMJson<any>(translateResponse, []);
             if (translated && Object.keys(translated).length > 0) {
               parsed = translated;
@@ -334,36 +257,46 @@ export class ContentCreativeAgent extends BaseAgent {
     return {
       adCopies: {
         google: [
-          { headline: h(productName), description: d(`${shortDesc}. Try ${productName} today and see the difference.`), targetKeyword: `${niche.toLowerCase()}` },
-          { headline: h(`Try ${productName} Today`), description: d(`${shortDesc}. Trusted by ${niche.toLowerCase()} professionals worldwide.`), targetKeyword: `${niche.toLowerCase()} software` },
-          { headline: h(`${productName} for ${niche}`), description: d(`${getFeature(0)}. ${getFeature(1)}. See why teams choose ${productName}.`), targetKeyword: `${niche.toLowerCase()} tools` },
-          { headline: h(`Best ${niche} Solution`), description: d(`${productName} solves ${getPain(0).toLowerCase()}. Start free today.`), targetKeyword: `best ${niche.toLowerCase()}` },
-          { headline: h(`${niche} Made Simple`), description: d(`${productName} simplifies your entire ${niche.toLowerCase()} workflow. ${guarantee || 'Get started in minutes.'}`), targetKeyword: `${niche.toLowerCase()} solution` },
-          { headline: h(`Why ${productName}?`), description: d(`${getFeature(0)}. Purpose-built for ${icpDesc.toLowerCase()}.`), targetKeyword: `${productName.toLowerCase()}` },
-          { headline: h(`${productName} for Teams`), description: d(`Empower your team with ${productName}. Faster workflows, better results for ${niche.toLowerCase()}.`), targetKeyword: `${niche.toLowerCase()} for teams` },
-          { headline: h(`${niche} Simplified`), description: d(`No more ${getPain(0).toLowerCase()}. ${productName} gives you everything you need in one place.`), targetKeyword: `${niche.toLowerCase()} platform` },
-          { headline: h(`Get ${productName} Free`), description: d(`Start your free trial of ${productName}. Join ${niche.toLowerCase()} teams already seeing results.`), targetKeyword: `${niche.toLowerCase()} free trial` },
-          { headline: h(`Top ${niche} Tool`), description: d(`${productName} — ${shortDesc}. Discover a smarter way to work.`), targetKeyword: `top ${niche.toLowerCase()} tool` },
+          { headline: h(`Stop ${getPain(0).split(' ')[0]}ing`), description: d(`We switched to ${productName} after wasting months. ${shortDesc}. Wish we'd found it sooner.`), targetKeyword: `${niche.toLowerCase()}` },
+          { headline: h(`We Almost Gave Up`), description: d(`Then a colleague mentioned ${productName}. ${getFeature(0)}. Haven't looked back since.`), targetKeyword: `${niche.toLowerCase()} software` },
+          { headline: h(`${niche} Changed For Us`), description: d(`${productName} did what 3 other tools couldn't. ${getFeature(0)}. See why teams are switching.`), targetKeyword: `${niche.toLowerCase()} tools` },
+          { headline: h(`Wish I Knew Sooner`), description: d(`${getPain(0)}? We tried everything. ${productName} was the one that actually worked.`), targetKeyword: `best ${niche.toLowerCase()}` },
+          { headline: h(`The ${niche} Shortcut`), description: d(`My team found ${productName} through a forum thread. ${guarantee || 'It changed how we work.'}`), targetKeyword: `${niche.toLowerCase()} solution` },
+          { headline: h(`Why ${productName}?`), description: d(`Our ${niche.toLowerCase()} team stumbled on it. ${getFeature(0)}. Now we can't imagine going back.`), targetKeyword: `${productName.toLowerCase()}` },
+          { headline: h(`One Thing Changed`), description: d(`We replaced our entire ${niche.toLowerCase()} stack with ${productName}. Best decision this quarter.`), targetKeyword: `${niche.toLowerCase()} for teams` },
+          { headline: h(`No More ${getPain(0).split(' ').slice(0,2).join(' ')}`), description: d(`${productName} handled what we couldn't. ${getFeature(0)}. Try it and see.`), targetKeyword: `${niche.toLowerCase()} platform` },
+          { headline: h(`Found ${productName}`), description: d(`A friend in ${niche.toLowerCase()} told me about it. Week one, our whole workflow changed.`), targetKeyword: `${niche.toLowerCase()} free trial` },
+          { headline: h(`This Changed Everything`), description: d(`${productName} — ${shortDesc}. We were skeptical too. Then we tried it.`), targetKeyword: `top ${niche.toLowerCase()} tool` },
         ],
         meta: [
-          { primaryText: `${getPain(0)}? ${productName} was built to solve exactly that. ${productDesc}. See how it works.`, headline: h(productName), description: cta, targetAudience: `Cold — ${icpDesc}` },
-          { primaryText: `Discover ${productName}: ${getFeature(0)}. ${getFeature(1)}. Built for ${icpDesc.toLowerCase()} who demand the best in ${niche.toLowerCase()}.`, headline: h(`Why Teams Choose ${productName}`), description: cta, targetAudience: `Cold — ${icpDesc}` },
-          { primaryText: `Tired of ${getPain(0).toLowerCase()}? ${productName} offers a better way. ${shortDesc}. Try it today.`, headline: h(`A Better Way`), description: cta, targetAudience: `Cold — problem aware` },
-          { primaryText: `Leading ${niche.toLowerCase()} teams are switching to ${productName}. ${getFeature(0)}. ${getFeature(1)}. See why.`, headline: h(`Join Leading Teams`), description: cta, targetAudience: `Cold — competitor aware` },
-          { primaryText: `You checked out ${productName} but haven't signed up yet. Here's what you're missing: ${getFeature(0)}. ${getFeature(1)}.`, headline: h(`Still Thinking About It?`), description: `Try ${productName} now`, targetAudience: `Hot — retargeting visitors` },
-          { primaryText: `"${productName} transformed how we handle ${niche.toLowerCase()}." Hear what our users have to say about their experience.`, headline: h(`Hear From Our Users`), description: cta, targetAudience: `Warm — engaged audience` },
-          { primaryText: `${productName} — ${productDesc}. Join thousands of ${niche.toLowerCase()} professionals who already made the switch.`, headline: h(productName), description: `Get started today`, targetAudience: `Cold — broad` },
-          { primaryText: `Looking for the right ${niche.toLowerCase()} solution? ${productName} delivers ${getFeature(0).toLowerCase()} and ${(getFeature(2) || 'powerful features').toLowerCase()}.`, headline: h(`The ${niche} Solution`), description: cta, targetAudience: `Cold — solution seeking` },
-          { primaryText: `${productName} makes ${niche.toLowerCase()} effortless. ${guarantee || 'Try it risk-free and see for yourself.'}`, headline: h(`Effortless ${niche}`), description: cta, targetAudience: `Warm — lookalike` },
-          { primaryText: `Stop wasting time on ${getPain(0).toLowerCase()}. ${productName} handles the hard parts so your team can focus on what matters most.`, headline: h(`Focus on What Matters`), description: cta, targetAudience: `Cold — results focused` },
+          // 1. Guilt angle
+          { primaryText: `We spent months doing ${niche.toLowerCase()} the hard way. Manual everything. Late nights. Missed deadlines.\n\nThen someone on our team found ${productName}. ${getFeature(0)}.\n\nWish we hadn't waited so long. It's called ${productName}. ${guarantee || 'See for yourself.'}`, headline: h(`We Should've Started Sooner`), description: cta, targetAudience: `Cold — ${icpDesc}`, emotionalDoorway: 'guilt', hookType: 'gut_punch' as const, tripleHook: { visual: `Person staring at messy desk, then clean workspace with ${productName} on screen`, audio: `"We spent months doing this the hard way."`, textOnScreen: `WE SHOULD HAVE STARTED SOONER` } },
+          // 2. Exposé angle
+          { primaryText: `Here's what nobody tells you about ${niche.toLowerCase()} tools: most of them solve the wrong problem.\n\nWe went through 3 platforms before finding ${productName}. ${getFeature(0)}. ${getFeature(1) || ''}\n\nIf you're still ${getPain(0).toLowerCase()}, this is probably why.`, headline: h(`What Nobody Tells You`), description: cta, targetAudience: `Cold — problem aware`, emotionalDoorway: 'expose', hookType: 'open_loop' as const, tripleHook: { visual: `Close-up of someone frustrated, then moment of discovery`, audio: `"Here's what nobody tells you about ${niche.toLowerCase()} tools."`, textOnScreen: `WHAT NOBODY TELLS YOU ABOUT ${niche.toUpperCase()}` } },
+          // 3. Active user angle
+          { primaryText: `First week with ${productName}, I kept checking if it was actually working. It felt too easy.\n\n${getFeature(0)}. ${getFeature(1) || 'Everything just clicked.'}\n\nThree months in, our team hasn't touched the old tools once.`, headline: h(`Felt Too Easy`), description: cta, targetAudience: `Cold — efficiency seekers`, emotionalDoorway: 'active_user', hookType: 'body_memory' as const, tripleHook: { visual: `Screen recording of smooth workflow, person looking surprised`, audio: `"First week, I kept checking if it was actually working."`, textOnScreen: `3 MONTHS. HAVEN'T TOUCHED THE OLD TOOLS ONCE.` } },
+          // 4. Comparison angle
+          { primaryText: `Same team. Same workload. One uses ${productName}. One doesn't.\n\nThe difference after 30 days? The ${productName} team finished projects faster and stopped ${getPain(0).toLowerCase()}.\n\nSame people. Just one thing different.`, headline: h(`Same Team. One Difference.`), description: cta, targetAudience: `Cold — competitor aware`, emotionalDoorway: 'comparison', hookType: 'gut_punch' as const, tripleHook: { visual: `Split screen — two teams, same office, different energy`, audio: `"Same team. Same workload. One thing different."`, textOnScreen: `SAME TEAM. ONE DIFFERENCE.` } },
+          // 5. Rescue story
+          { primaryText: `We were about to scrap our entire ${niche.toLowerCase()} process. Nothing was working. Team was frustrated.\n\nSomeone shared ${productName} in a Slack channel. "Just try it."\n\nThat was 6 months ago. We haven't looked back.`, headline: h(`Almost Gave Up`), description: `Try ${productName}`, targetAudience: `Hot — retargeting visitors`, emotionalDoorway: 'rescue_story', hookType: 'gut_punch' as const, tripleHook: { visual: `Frustrated team meeting, then relieved faces looking at screen`, audio: `"We were about to scrap the entire process."`, textOnScreen: `WE ALMOST GAVE UP. THEN WE FOUND THIS.` } },
+          // 6. Money angle
+          { primaryText: `We calculated what ${getPain(0).toLowerCase()} was costing us. The number was embarrassing.\n\n${productName} costs a fraction of that. ${getFeature(0)}. ${guarantee || ''}\n\nDo the math on your own situation. You'll see.`, headline: h(`Do The Math`), description: cta, targetAudience: `Warm — engaged audience`, emotionalDoorway: 'money', hookType: 'gut_punch' as const, tripleHook: { visual: `Calculator showing big number, then small number with ${productName}`, audio: `"We calculated what this was costing us. The number was embarrassing."`, textOnScreen: `THE COST OF DOING NOTHING IS HIGHER THAN YOU THINK` } },
+          // 7. Unexpected benefit
+          { primaryText: `We got ${productName} for ${getFeature(0).toLowerCase()}. Didn't expect it to also fix ${(getFeature(1) || `our ${niche.toLowerCase()} workflow`).toLowerCase()}.\n\nThe side benefit turned out to be the main reason we kept it. Funny how that works.`, headline: h(`Didn't Expect This`), description: `Get started today`, targetAudience: `Cold — broad`, emotionalDoorway: 'unexpected_benefit', hookType: 'body_memory' as const, tripleHook: { visual: `Person discovering extra feature, pleasantly surprised expression`, audio: `"We got it for one thing. Didn't expect it to fix everything else."`, textOnScreen: `THE SIDE BENEFIT BECAME THE MAIN REASON` } },
+          // 8. Friend recommendation
+          { primaryText: `My friend who runs a ${niche.toLowerCase()} team told me about ${productName}. I was skeptical.\n\n"Just try it for a week," she said.\n\nThat was the best advice I got all year. ${getFeature(0)}. ${shortDesc}.`, headline: h(`Best Advice All Year`), description: cta, targetAudience: `Cold — solution seeking`, emotionalDoorway: 'friend_recommendation', hookType: 'open_loop' as const, tripleHook: { visual: `Two friends talking, one showing phone screen`, audio: `"My friend told me about this. I was skeptical."`, textOnScreen: `"JUST TRY IT FOR A WEEK"` } },
+          // 9. Skeptic turned believer
+          { primaryText: `I've tried every ${niche.toLowerCase()} tool out there. They all promise the world and deliver a spreadsheet.\n\n${productName} was different. ${getFeature(0)}. It actually did what it said.\n\nI don't write recommendations. But I'm writing this one.`, headline: h(`I Don't Do Reviews. But...`), description: cta, targetAudience: `Warm — lookalike`, emotionalDoorway: 'skeptic_believer', hookType: 'open_loop' as const, tripleHook: { visual: `Skeptical expression transforming to genuine surprise`, audio: `"I've tried every tool out there. They all promise the world."`, textOnScreen: `I DON'T WRITE RECOMMENDATIONS. BUT HERE I AM.` } },
+          // 10. Before/after moment
+          { primaryText: `Before ${productName}: ${getPain(0).toLowerCase()}. Late nights. Constant firefighting.\n\nAfter ${productName}: ${getFeature(0)}. ${getFeature(1) || 'Everything runs smoother.'}\n\nIf you're still doing ${niche.toLowerCase()} the hard way, you don't have to.`, headline: h(`Before vs After`), description: cta, targetAudience: `Cold — results focused`, emotionalDoorway: 'before_after', hookType: 'body_memory' as const, tripleHook: { visual: `Split: messy chaotic workflow vs clean organized dashboard`, audio: `"Before: constant firefighting. After: everything just runs."`, textOnScreen: `BEFORE: CHAOS. AFTER: ${productName.toUpperCase()}.` } },
         ],
       },
       hooks: [
-        { angle: 'pain', hook: `${getPain(0)}? There's a better way — it's called ${productName}.`, useCase: 'Email subject line, ad opening' },
-        { angle: 'curiosity', hook: `${niche} professionals are switching to ${productName}. Here's what they know that you don't.`, useCase: 'LinkedIn post, video hook' },
-        { angle: 'social_proof', hook: `See why leading ${niche.toLowerCase()} teams trust ${productName} for ${getFeature(0).toLowerCase()}.`, useCase: 'Meta ad, landing page' },
-        { angle: 'urgency', hook: `${productName} is offering early access to their latest ${niche.toLowerCase()} features. Limited spots.`, useCase: 'Email CTA, retargeting ad' },
-        { angle: 'contrarian', hook: `Most ${niche.toLowerCase()} tools overcomplicate things. ${productName} takes the opposite approach.`, useCase: 'Blog title, YouTube hook' },
+        { angle: 'pain', hook: `We wasted months on ${getPain(0).toLowerCase()} before someone showed us ${productName}. Wish we'd found it sooner.`, hookType: 'gut_punch', useCase: 'Email subject line, ad opening', tripleHook: { visual: `Frustrated person at desk, head in hands`, audio: `"We wasted months before someone showed us this."`, textOnScreen: `WISH WE'D FOUND IT SOONER` } },
+        { angle: 'curiosity', hook: `If you're in ${niche.toLowerCase()} and still doing things the old way, you've got 30 seconds before everything changes.`, hookType: 'open_loop', useCase: 'LinkedIn post, video hook', tripleHook: { visual: `Person leaning in, finger hovering over play button`, audio: `"If you're still doing things the old way..."`, textOnScreen: `30 SECONDS. EVERYTHING CHANGES.` } },
+        { angle: 'social_proof', hook: `My colleague in ${niche.toLowerCase()} switched to ${productName} last quarter. Yesterday she told me her team hasn't touched the old tools since.`, hookType: 'body_memory', useCase: 'Meta ad, landing page', tripleHook: { visual: `Two colleagues talking, one showing results on screen`, audio: `"She told me her team hasn't touched the old tools since."`, textOnScreen: `HAVEN'T TOUCHED THE OLD TOOLS SINCE` } },
+        { angle: 'urgency', hook: `Every week you wait on ${getPain(0).toLowerCase()} is another week of wasted time and money. We did the math. It's not pretty.`, hookType: 'gut_punch', useCase: 'Email CTA, retargeting ad', tripleHook: { visual: `Calendar pages flipping, money counter ticking up`, audio: `"We did the math. It's not pretty."`, textOnScreen: `EVERY WEEK YOU WAIT COSTS MORE THAN YOU THINK` } },
+        { angle: 'contrarian', hook: `Everyone in ${niche.toLowerCase()} is overcomplicating this. ${productName} does the opposite. And it works better. Which makes no sense. Unless you know this.`, hookType: 'open_loop', useCase: 'Blog title, YouTube hook', tripleHook: { visual: `Complex tangled diagram vs single clean line`, audio: `"It works better. Which makes no sense. Unless you know this."`, textOnScreen: `EVERYONE IS OVERCOMPLICATING THIS` } },
       ],
       coldEmailSequence: [
         { step: 1, delay: 'Day 1', subject: `Quick question about ${niche.toLowerCase()} at {company}`, body: `Hi {firstName},\n\nI noticed {company} works in ${niche.toLowerCase()}. Many teams in your space struggle with ${getPain(0).toLowerCase()}.\n\n${productName} was built to solve exactly that — ${productDesc.toLowerCase()}.\n\nWould a 15-minute walkthrough be worth your time this week?\n\nBest,\n{senderName}`, purpose: 'Personalised opener + problem statement + soft CTA', sopRole: 'personalised_opener' },
@@ -378,73 +311,113 @@ export class ContentCreativeAgent extends BaseAgent {
       },
       videoAdScripts: [
         {
-          duration: '30-60s', format: 'Customer testimonial', videoType: 'customer_testimonial', priority: 1,
-          hook: `${productName} changed how we do ${niche.toLowerCase()}. (0-3s)`,
-          problem: `We were struggling with ${getPain(0).toLowerCase()}. Nothing we tried worked well enough. (3-10s)`,
-          solution: `Then we found ${productName}. ${productDesc} (10-25s)`,
-          proof: `Since switching, our team has been more productive and the results speak for themselves. (25-40s)`,
-          cta: `Try ${productName} — ${websiteUrl || cta}. (last 3-5s)`,
+          duration: '30s', format: 'Customer testimonial', videoType: 'customer_testimonial', priority: 1,
+          hook: `First week with ${productName}, I thought something was broken. Everything was running too smoothly. (0-3s)`,
+          story: `So here's what happened. We were drowning in ${getPain(0).toLowerCase()}. Tried three different tools. Nothing worked. Then a colleague messaged me: "just try this." (3-10s)`,
+          reframe: `Turns out we didn't need a more complicated tool. We needed one that actually understood ${niche.toLowerCase()}. It's called ${productName}. ${getFeature(0)}. My whole team switched in a week. (10-22s)`,
+          close: `If you're still ${getPain(0).toLowerCase()} and wondering why nothing's working, this is probably why. ${guarantee || `Try ${productName}.`} (22-30s)`,
+          tripleHook: { visual: `Person at desk, genuine surprise expression, showing screen to camera`, audio: `"First week, I thought something was broken."`, textOnScreen: `FIRST WEEK. THOUGHT SOMETHING WAS BROKEN.` },
         },
         {
-          duration: '30-45s', format: 'Before/after walkthrough', videoType: 'before_after_walkthrough', priority: 2,
-          hook: `Here's our ${niche.toLowerCase()} workflow before and after ${productName}. (0-3s)`,
-          problem: `Before: manual processes, missed deadlines, frustrated team. (3-10s)`,
-          solution: `After: ${productName} handles ${getFeature(0).toLowerCase()}. Everything is streamlined. (10-25s)`,
-          proof: `The difference is night and day. Our team saves hours every week. (25-40s)`,
-          cta: `See it yourself — ${cta}. (last 3-5s)`,
+          duration: '30s', format: 'Before/after walkthrough', videoType: 'before_after_walkthrough', priority: 2,
+          hook: `I used to start my mornings dreading ${niche.toLowerCase()} tasks. Now I'm done before my coffee gets cold. (0-3s)`,
+          story: `Before: manual everything. Missed deadlines. My team was frustrated and I was the bottleneck. After: ${getFeature(0).toLowerCase()}. Everything just flows. (3-10s)`,
+          reframe: `The difference? One tool change. It's called ${productName}. ${productDesc}. Same team, same workload — just one thing different. (10-22s)`,
+          close: `If your ${niche.toLowerCase()} mornings still feel like chaos, you don't have to do this anymore. (22-30s)`,
+          tripleHook: { visual: `Split screen: left messy/dark, right clean/bright — same desk`, audio: `"I used to dread mornings. Now I'm done before my coffee gets cold."`, textOnScreen: `BEFORE: DREAD. AFTER: DONE BEFORE COFFEE.` },
         },
         {
-          duration: '45-60s', format: 'Founder talking head', videoType: 'founder_talking_head', priority: 3,
-          hook: `We built ${productName} because ${niche.toLowerCase()} deserved better tools. (0-3s)`,
-          problem: `${niche} professionals were stuck with ${getPain(0).toLowerCase()}. The existing solutions weren't cutting it. (3-10s)`,
-          solution: `${productName} — ${productDesc}. ${getFeature(0)}. (10-25s)`,
-          proof: `Today, teams across the industry rely on ${productName} to get better results. (25-40s)`,
-          cta: `Join them — ${cta}. (last 3-5s)`,
+          duration: '30s', format: 'Founder talking head', videoType: 'founder_talking_head', priority: 3,
+          hook: `I spent years watching ${niche.toLowerCase()} teams struggle with tools that were supposed to help them. (0-3s)`,
+          story: `So I asked a hundred ${niche.toLowerCase()} professionals what they actually needed. Not features. Not dashboards. Just: "what's the one thing that wastes your time?" Same answer, every time: ${getPain(0).toLowerCase()}. (3-10s)`,
+          reframe: `We built ${productName} to fix that one thing. ${getFeature(0)}. No bloat, no learning curve. It just works. (10-22s)`,
+          close: `If you've tried other ${niche.toLowerCase()} tools and they felt like more work, not less — we built this for you. (22-30s)`,
+          tripleHook: { visual: `Founder at whiteboard, casual setting, direct eye contact`, audio: `"I asked a hundred professionals what wastes their time."`, textOnScreen: `SAME ANSWER. EVERY TIME.` },
         },
         {
-          duration: '30-45s', format: 'Screen recording + voiceover', videoType: 'screen_recording_voiceover', priority: 4,
-          hook: `Let me show you ${productName} in action. (0-3s)`,
-          problem: `${niche} teams waste time on ${getPain(0).toLowerCase()}. (3-10s)`,
-          solution: `With ${productName}, you get ${getFeature(0)}. Watch how easy it is. (10-25s)`,
-          proof: `That's it. What used to take hours now takes minutes. (25-40s)`,
-          cta: `Try it free — ${websiteUrl || cta}. (last 3-5s)`,
+          duration: '30s', format: 'Screen recording + voiceover', videoType: 'screen_recording_voiceover', priority: 4,
+          hook: `Watch this. What used to take our team an entire afternoon now takes four clicks. (0-3s)`,
+          story: `Our ${niche.toLowerCase()} workflow was a mess. Spreadsheets everywhere, things falling through cracks. We'd tried automating it before — didn't work. (3-10s)`,
+          reframe: `Then someone showed us ${productName}. ${getFeature(0)}. Watch — click, click, click, done. That's it. The whole process. (10-22s)`,
+          close: `If you're spending hours on something that should take minutes, you need to see this. (22-30s)`,
+          tripleHook: { visual: `Screen: complex spreadsheet transforms into clean ${productName} interface`, audio: `"What used to take an afternoon now takes four clicks."`, textOnScreen: `AN AFTERNOON → FOUR CLICKS` },
         },
         {
-          duration: '30-45s', format: 'Process reveal', videoType: 'process_reveal', priority: 5,
-          hook: `Here's how ${productName} works behind the scenes. (0-3s)`,
-          problem: `Most ${niche.toLowerCase()} tools are complex and clunky. (3-10s)`,
-          solution: `${productName} takes a different approach — ${getFeature(0).toLowerCase()}, ${getFeature(1)?.toLowerCase() || 'simplicity first'}. (10-25s)`,
-          proof: `The result? Teams adopt it in days, not months. (25-40s)`,
-          cta: `See how it works — ${cta}. (last 3-5s)`,
+          duration: '30s', format: 'Process reveal', videoType: 'process_reveal', priority: 5,
+          hook: `Everyone asks how our ${niche.toLowerCase()} team moves so fast. Here's the secret — it's embarrassingly simple. (0-3s)`,
+          story: `We don't have a bigger team. We don't work longer hours. We just stopped using tools that created more work than they saved. (3-10s)`,
+          reframe: `${productName} does ${getFeature(0).toLowerCase()} and ${getFeature(1)?.toLowerCase() || 'takes the busywork off your plate'}. Teams adopt it in days because there's nothing to learn. (10-22s)`,
+          close: `The secret to moving fast isn't working harder. It's having one tool that actually works. (22-30s)`,
+          tripleHook: { visual: `Behind-the-scenes of real team workflow, casual office vibe`, audio: `"Everyone asks how we move so fast. Embarrassingly simple."`, textOnScreen: `THE SECRET? EMBARRASSINGLY SIMPLE.` },
         },
       ],
       ugcScripts: {
-        patternA_roleSpecific: ['Finance', 'CEO', 'HR', 'Operations'].map(role => ({
-          role,
-          hook: `If you're in ${role} and dealing with ${niche.toLowerCase()}, watch this.`,
-          credibilitySetup: `We've seen how ${productName} helps ${niche.toLowerCase()} teams operate more effectively.`,
-          productIntro: `${productName} — ${productDesc}`,
-          keyBenefit: `${getFeature(0)}`,
-          businessCase: `Teams using ${productName} report better efficiency and fewer headaches with ${niche.toLowerCase()}.`,
-          cta: `Check out ${productName} — ${websiteUrl || cta}`,
-          duration: '30-60s',
-        })),
+        patternA_roleSpecific: [
+          {
+            role: 'Finance',
+            hook: `I calculated what ${getPain(0).toLowerCase()} was costing us per quarter. The number made me sick.`,
+            story: `So I went looking for something better. Tried two platforms, neither worked. Then our ops lead mentioned ${productName}.`,
+            credibilitySetup: `I've audited every tool our ${niche.toLowerCase()} team has used in the last 3 years.`,
+            productIntro: `It's called ${productName}. ${getFeature(0)}.`,
+            keyBenefit: `The ROI showed up in the first month.`,
+            businessCase: `When I ran the numbers, ${productName} paid for itself before the trial ended.`,
+            cta: `If you're in finance and you haven't run the numbers on ${getPain(0).toLowerCase()}, start there. Then look at ${productName}.`,
+            tripleHook: { visual: `Finance professional at desk, spreadsheet showing cost analysis`, audio: `"I calculated the cost. The number made me sick."`, textOnScreen: `THE NUMBER MADE ME SICK` },
+            duration: '30-60s',
+          },
+          {
+            role: 'CEO',
+            hook: `I asked my team why we were still ${getPain(0).toLowerCase()}. Nobody had a good answer.`,
+            story: `That conversation led to us trying ${productName}. Best decision I didn't make — my team found it.`,
+            credibilitySetup: `I've scaled three ${niche.toLowerCase()} teams. Tools matter more than people want to admit.`,
+            productIntro: `It's called ${productName}. ${productDesc}`,
+            keyBenefit: `My team stopped complaining about ${niche.toLowerCase()} tools. That's how I know it works.`,
+            businessCase: `${productName} removed the bottleneck I didn't even know we had.`,
+            cta: `If your team is working around your tools instead of with them, you already know something needs to change.`,
+            tripleHook: { visual: `CEO in meeting, asking the hard question, team nodding`, audio: `"I asked my team why. Nobody had a good answer."`, textOnScreen: `NOBODY HAD A GOOD ANSWER` },
+            duration: '30-60s',
+          },
+          {
+            role: 'HR',
+            hook: `Our best hire last year almost quit in month two. Reason? Our ${niche.toLowerCase()} tools were that bad.`,
+            story: `That was the wake-up call. We switched to ${productName} and the onboarding complaints stopped.`,
+            credibilitySetup: `I've onboarded over 50 people onto ${niche.toLowerCase()} workflows. Tool friction is retention poison.`,
+            productIntro: `It's called ${productName}. ${getFeature(0)}.`,
+            keyBenefit: `New hires are productive in days, not weeks.`,
+            businessCase: `Retention improved when we removed the tools people hated. ${productName} was the fix.`,
+            cta: `If tool frustration is showing up in your exit interviews, it's not a people problem.`,
+            tripleHook: { visual: `New employee frustrated at desk, then same person smiling after switch`, audio: `"Our best hire almost quit in month two."`, textOnScreen: `BEST HIRE. ALMOST QUIT. MONTH TWO.` },
+            duration: '30-60s',
+          },
+          {
+            role: 'Operations',
+            hook: `I mapped our ${niche.toLowerCase()} workflow last month. It had 14 manual steps. Now it has 3.`,
+            story: `We'd been patching broken processes for years. Someone said "just try ${productName}" and I finally did.`,
+            credibilitySetup: `I've optimised operations for ${niche.toLowerCase()} teams for years. This was the biggest win.`,
+            productIntro: `It's called ${productName}. ${getFeature(0)}.`,
+            keyBenefit: `14 steps to 3. Same output, fraction of the effort.`,
+            businessCase: `The time we save with ${productName} goes straight back into work that actually matters.`,
+            cta: `If your workflow has more than 5 manual steps, you're leaving time on the table.`,
+            tripleHook: { visual: `Whiteboard with complex workflow diagram being simplified`, audio: `"14 manual steps. Now it has 3."`, textOnScreen: `14 STEPS → 3 STEPS` },
+            duration: '30-60s',
+          },
+        ],
         patternB_hookVariations: [
-          { variationType: 'personal_experience', hook: `I tried every ${niche.toLowerCase()} tool out there. ${productName} is the one that stuck. (0-3s)`, problem: `${getPain(0)} — sound familiar? (3-10s)`, solution: `${productName} — ${productDesc} (10-25s)`, proof: `It's been a game-changer for our team. (25-40s)`, cta: `Try ${productName} — ${cta}. (last 3-5s)`, duration: '30-60s' },
-          { variationType: 'pain_point', hook: `Still struggling with ${getPain(0).toLowerCase()}? (0-3s)`, problem: `Most ${niche.toLowerCase()} teams waste time on processes that should be simple. (3-10s)`, solution: `${productName} fixes that — ${getFeature(0).toLowerCase()}. (10-25s)`, proof: `Teams are seeing real results within weeks. (25-40s)`, cta: `See for yourself — ${cta}. (last 3-5s)`, duration: '30-60s' },
-          { variationType: 'bold_statement', hook: `Most ${niche.toLowerCase()} tools are stuck in the past. (0-3s)`, problem: `They're complex, slow, and don't deliver what they promise. (3-10s)`, solution: `${productName} was built differently — ${productDesc.toLowerCase()}. (10-25s)`, proof: `That's why professionals are switching. (25-40s)`, cta: `Join them — ${cta}. (last 3-5s)`, duration: '30-60s' },
-          { variationType: 'social_proof', hook: `${niche} teams are switching to ${productName}. Here's why. (0-3s)`, problem: `They were tired of ${getPain(0).toLowerCase()}. (3-10s)`, solution: `${productName} gives them ${getFeature(0).toLowerCase()} and ${getFeature(1)?.toLowerCase() || 'more'}. (10-25s)`, proof: `The results speak for themselves. (25-40s)`, cta: `Try ${productName} today — ${cta}. (last 3-5s)`, duration: '30-60s' },
+          { variationType: 'personal_discovery', hook: `I spent 6 months trying every ${niche.toLowerCase()} tool on the market. ${productName} was the last one I tried. Wish it was the first. (0-3s)`, story: `None of them solved the actual problem — ${getPain(0).toLowerCase()}. They just added dashboards on top of the mess. (3-10s)`, reframe: `${productName} took a different approach. ${getFeature(0)}. Within a week my whole team was on it. Not because I told them to — because they wanted to. (10-22s)`, close: `If you've been burned by ${niche.toLowerCase()} tools before, I get it. Try this one last. (22-30s)`, tripleHook: { visual: `Person scrolling through app store, frustrated, then discovering ${productName}`, audio: `"I tried every tool. Wish I'd found this one first."`, textOnScreen: `WISH IT WAS THE FIRST` }, duration: '30s' },
+          { variationType: 'gut_punch', hook: `We spent $${Math.floor(Math.random() * 5 + 3)}k on ${niche.toLowerCase()} tools last year that we don't even use anymore. (0-3s)`, story: `Every one promised to fix ${getPain(0).toLowerCase()}. Every one added complexity instead. Our team hated them. (3-10s)`, reframe: `${productName} was the first tool nobody complained about. ${getFeature(0)}. It just works. Which sounds basic — but apparently that's rare. (10-22s)`, close: `If you're paying for tools your team works around instead of with, that's not a team problem. (22-30s)`, tripleHook: { visual: `Receipt/invoice with big number, person sighing`, audio: `"We spent thousands on tools we don't even use anymore."`, textOnScreen: `$${Math.floor(Math.random() * 5 + 3)}K ON TOOLS. DON'T USE ANY OF THEM.` }, duration: '30s' },
+          { variationType: 'open_loop', hook: `If you're in ${niche.toLowerCase()} and still doing things manually, you've got 30 seconds before everything changes. (0-3s)`, story: `There's a tool that handles ${getFeature(0).toLowerCase()}. Teams are adopting it in days, not months. And it costs less than what most people spend on the tools it replaces. (3-10s)`, reframe: `It's called ${productName}. ${productDesc}. I didn't believe it either until I saw our own numbers after the first month. (10-22s)`, close: `If you're doing ${niche.toLowerCase()} the hard way, you don't have to anymore. That's not a pitch — it's just true. (22-30s)`, tripleHook: { visual: `Clock ticking, "30 SECONDS" on screen, person looking at camera`, audio: `"If you're still doing things manually, 30 seconds."`, textOnScreen: `30 SECONDS. EVERYTHING CHANGES.` }, duration: '30s' },
+          { variationType: 'body_memory', hook: `First morning I opened ${productName} and everything was already done, I thought the system glitched. (0-3s)`, story: `Turned out it actually worked the way they said it would. ${getFeature(0)}. No workarounds, no manual steps. (3-10s)`, reframe: `I'd spent years accepting that ${getPain(0).toLowerCase()} was just "how it is." It's not. ${productName} proved that. (10-22s)`, close: `If you've gotten used to how hard ${niche.toLowerCase()} is, you've gotten used to the wrong thing. (22-30s)`, tripleHook: { visual: `Person opening laptop, surprised expression, everything already done`, audio: `"I opened it and everything was already done. Thought it glitched."`, textOnScreen: `THOUGHT THE SYSTEM GLITCHED. IT JUST WORKED.` }, duration: '30s' },
         ],
       },
       ugcBriefs: [
-        { type: 'testimonial', description: `A ${niche.toLowerCase()} professional shares how ${productName} helped them solve ${getPain(0).toLowerCase()}.`, talkingPoints: [`What ${niche.toLowerCase()} was like before ${productName}`, `The switch to ${productName}`, `Key results and benefits`, `Would you recommend it?`] },
-        { type: 'before_after', description: `Screen recording showing ${niche.toLowerCase()} workflow before and after adopting ${productName}.`, talkingPoints: [`Show the old way (manual, slow)`, `Show ${productName} in action`, `Highlight time saved and results`, `End with CTA`] },
-        { type: 'process_reveal', description: `Behind the scenes: how ${productName} handles ${getFeature(0).toLowerCase()}.`, talkingPoints: [`Open ${productName} dashboard`, `Walk through key features`, `Show real results`, `End with: "This is how ${niche.toLowerCase()} should work"`] },
+        { type: 'testimonial', description: `A ${niche.toLowerCase()} professional tells the story of how they discovered ${productName} — the frustration before, the reluctant trial, and the moment they knew it worked.`, talkingPoints: [`Open with a gut punch: the cost/frustration of the old way`, `Tell the discovery like gossip: "someone told me about..."`, `The specific moment it clicked`, `Close with identity: "If you're still [doing X], you don't have to"`], emotionalDoorway: 'friend_recommendation' },
+        { type: 'before_after', description: `Side-by-side comparison: same task, same team, before and after ${productName}. The contrast should be visceral, not explained.`, talkingPoints: [`Show the messy "before" without narration — let viewers feel it`, `Clean cut to "after" with ${productName}`, `One specific metric that changed`, `Text on screen for mute viewers: the key number`], emotionalDoorway: 'comparison' },
+        { type: 'process_reveal', description: `Behind the scenes: how a team uses ${productName} daily. Shot casually, like showing a friend around your office.`, talkingPoints: [`Open with: "Everyone asks how we [specific result]"`, `Walk through the workflow casually — friend energy, not demo energy`, `Show the "aha" feature that surprises people`, `Close: "That's the whole secret. Embarrassingly simple."`], emotionalDoorway: 'unexpected_benefit' },
       ],
       visualCreativeBriefs: [
-        { concept: 'Product Showcase', layout: `Clean product screenshot/mockup of ${productName} with key feature callouts`, imagery: `Professional, modern design showcasing ${productName}'s interface`, textOverlay: `"${productName} — ${productDesc.substring(0, 60)}" — ${cta}` },
-        { concept: 'Problem → Solution', layout: `Split-screen: left shows the pain (${getPain(0).toLowerCase()}), right shows ${productName} solving it`, imagery: `Contrasting visuals — frustration vs. clarity and ease`, textOverlay: `"Stop struggling with ${niche.toLowerCase()}. Start using ${productName}."` },
-        { concept: 'Social Proof', layout: `Customer quotes and key metrics from ${productName} users`, imagery: `Trust badges, professional headshots, metric highlights`, textOverlay: `"Trusted by ${niche} professionals" — ${cta}` },
+        { concept: 'The Moment It Clicked', layout: `Close-up of a person's face showing genuine surprise/relief when seeing ${productName} results for the first time. Product interface subtly visible on screen behind them.`, imagery: `Real, candid expression — not stock photo smile. Warm lighting, shallow depth of field.`, textOverlay: `"THOUGHT SOMETHING WAS BROKEN. IT JUST WORKED."`, muteTestText: `THOUGHT SOMETHING WAS BROKEN. IT JUST WORKED.` },
+        { concept: 'Before → After Split', layout: `Split-screen: left is cluttered, stressful, dim (${getPain(0).toLowerCase()}). Right is clean, organized, bright (${productName} in action). Same person in both.`, imagery: `High contrast between sides. Left: warm/red tones, papers, stress. Right: cool/blue tones, clean screen, calm.`, textOverlay: `"SAME TEAM. ONE DIFFERENCE."`, muteTestText: `SAME TEAM. ONE DIFFERENCE.` },
+        { concept: 'The Friend Text', layout: `Mock-up of a text message conversation: "You need to try this thing called ${productName}" → "What is it?" → "${shortDesc}" → "Just try it for a week" — with the product subtly shown below.`, imagery: `Phone screen, iMessage/WhatsApp style bubbles, casual tone. Below: small ${productName} screenshot.`, textOverlay: `"THE BEST ADVICE I GOT ALL YEAR"`, muteTestText: `THE BEST ADVICE I GOT ALL YEAR` },
       ],
       reasoning: `Creative asset package generated for ${productName} (${niche}). All content is about the client's product, not LeadOS. Used product context from ${websiteUrl || 'upstream data'} to build accurate, product-specific ads, emails, scripts, and briefs.`,
       confidence: 75,

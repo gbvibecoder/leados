@@ -24,17 +24,28 @@ interface AdCopy {
   targetKeyword?: string;
 }
 
+interface TripleHook {
+  visual?: string;
+  audio?: string;
+  textOnScreen?: string;
+}
+
 interface MetaAd {
   primaryText: string;
   headline: string;
   description: string;
   targetAudience: string;
+  emotionalDoorway?: string;
+  hookType?: string;
+  tripleHook?: TripleHook;
 }
 
 interface Hook {
   angle: string;
   hook: string;
   useCase: string;
+  hookType?: string;
+  tripleHook?: TripleHook;
 }
 
 interface EmailStep {
@@ -49,14 +60,19 @@ interface VideoScript {
   duration: string;
   format: string;
   hook: string;
-  body: string;
-  cta: string;
+  body?: string;
+  cta?: string;
+  story?: string;
+  reframe?: string;
+  close?: string;
+  tripleHook?: TripleHook;
 }
 
 interface UGCBrief {
   type: string;
   description: string;
   talkingPoints: string[];
+  emotionalDoorway?: string;
 }
 
 interface VisualBrief {
@@ -64,6 +80,7 @@ interface VisualBrief {
   layout: string;
   imagery: string;
   textOverlay: string;
+  muteTestText?: string;
 }
 
 interface ContentData {
@@ -287,10 +304,44 @@ export function ContentCreativeOutput({ data }: Props) {
                     <div className="mt-2 p-2 bg-background/50 rounded text-xs whitespace-pre-line leading-relaxed max-h-32 overflow-y-auto">
                       {ad.primaryText}
                     </div>
-                    <div className="mt-2 flex items-center gap-1">
-                      <Eye className="w-3 h-3 text-muted-foreground" />
-                      <span className="text-[10px] text-muted-foreground">{ad.targetAudience}</span>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        <Eye className="w-3 h-3 text-muted-foreground" />
+                        <span className="text-[10px] text-muted-foreground">{ad.targetAudience}</span>
+                      </div>
+                      {ad.emotionalDoorway && (
+                        <span className="text-[10px] px-1.5 py-0.5 bg-pink-500/10 text-pink-400 rounded border border-pink-500/20">
+                          {ad.emotionalDoorway.replace(/_/g, ' ')}
+                        </span>
+                      )}
+                      {ad.hookType && (
+                        <span className="text-[10px] px-1.5 py-0.5 bg-purple-500/10 text-purple-400 rounded border border-purple-500/20">
+                          {ad.hookType.replace(/_/g, ' ')}
+                        </span>
+                      )}
                     </div>
+                    {ad.tripleHook && (
+                      <div className="mt-2 grid grid-cols-3 gap-1.5">
+                        {ad.tripleHook.visual && (
+                          <div className="p-1.5 bg-blue-500/5 rounded text-[10px]">
+                            <span className="font-medium text-blue-400">Visual:</span>{' '}
+                            <span className="text-muted-foreground">{ad.tripleHook.visual}</span>
+                          </div>
+                        )}
+                        {ad.tripleHook.audio && (
+                          <div className="p-1.5 bg-green-500/5 rounded text-[10px]">
+                            <span className="font-medium text-green-400">Audio:</span>{' '}
+                            <span className="text-muted-foreground">{ad.tripleHook.audio}</span>
+                          </div>
+                        )}
+                        {ad.tripleHook.textOnScreen && (
+                          <div className="p-1.5 bg-yellow-500/5 rounded text-[10px]">
+                            <span className="font-medium text-yellow-400">Mute Text:</span>{' '}
+                            <span className="text-muted-foreground font-bold">{ad.tripleHook.textOnScreen}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -312,14 +363,43 @@ export function ContentCreativeOutput({ data }: Props) {
               <div key={idx} className="p-3 bg-muted/30 rounded-lg border border-border/50">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <span className={`inline-block px-2 py-0.5 text-[10px] rounded-full border mb-1.5 ${ANGLE_COLORS[hook.angle] || 'bg-muted text-muted-foreground'}`}>
-                      {hook.angle.toUpperCase()}
-                    </span>
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <span className={`inline-block px-2 py-0.5 text-[10px] rounded-full border ${ANGLE_COLORS[hook.angle] || 'bg-muted text-muted-foreground'}`}>
+                        {hook.angle.toUpperCase()}
+                      </span>
+                      {hook.hookType && (
+                        <span className="inline-block px-2 py-0.5 text-[10px] rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                          {hook.hookType.replace(/_/g, ' ')}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm font-medium leading-relaxed break-words">{hook.hook}</p>
                   </div>
                   <CopyButton text={hook.hook} />
                 </div>
                 <div className="mt-2 text-[10px] text-muted-foreground">Use: {hook.useCase}</div>
+                {hook.tripleHook && (
+                  <div className="mt-2 grid grid-cols-3 gap-1.5">
+                    {hook.tripleHook.visual && (
+                      <div className="p-1.5 bg-blue-500/5 rounded text-[10px]">
+                        <span className="font-medium text-blue-400">Visual:</span>{' '}
+                        <span className="text-muted-foreground">{hook.tripleHook.visual}</span>
+                      </div>
+                    )}
+                    {hook.tripleHook.audio && (
+                      <div className="p-1.5 bg-green-500/5 rounded text-[10px]">
+                        <span className="font-medium text-green-400">Audio:</span>{' '}
+                        <span className="text-muted-foreground">{hook.tripleHook.audio}</span>
+                      </div>
+                    )}
+                    {hook.tripleHook.textOnScreen && (
+                      <div className="p-1.5 bg-yellow-500/5 rounded text-[10px]">
+                        <span className="font-medium text-yellow-400">Mute Text:</span>{' '}
+                        <span className="text-muted-foreground font-bold">{hook.tripleHook.textOnScreen}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -405,31 +485,89 @@ export function ContentCreativeOutput({ data }: Props) {
           badgeColor="bg-red-500/20 text-red-400"
         >
           <div className="space-y-3 pt-3">
-            {displayData.videoAdScripts.map((script, idx) => (
-              <div key={idx} className="p-3 bg-muted/30 rounded-lg border border-border/50 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 text-[10px] bg-red-500/20 text-red-400 rounded">{script.duration}</span>
-                    <span className="text-xs text-muted-foreground">{script.format}</span>
+            {displayData.videoAdScripts.map((script, idx) => {
+              // Support both old format (hook/body/cta) and new storytelling format (hook/story/reframe/close)
+              const isNewFormat = !!(script.story || script.reframe || script.close);
+              const copyText = isNewFormat
+                ? `HOOK: ${script.hook}\n\nSTORY: ${script.story || ''}\n\nREFRAME + PRODUCT: ${script.reframe || ''}\n\nCLOSE: ${script.close || ''}`
+                : `HOOK: ${script.hook}\n\nBODY: ${script.body || ''}\n\nCTA: ${script.cta || ''}`;
+              return (
+                <div key={idx} className="p-3 bg-muted/30 rounded-lg border border-border/50 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 text-[10px] bg-red-500/20 text-red-400 rounded">{script.duration}</span>
+                      <span className="text-xs text-muted-foreground">{script.format}</span>
+                    </div>
+                    <CopyButton text={copyText} />
                   </div>
-                  <CopyButton text={`HOOK: ${script.hook}\n\nBODY: ${script.body}\n\nCTA: ${script.cta}`} />
+                  <div className="space-y-1.5">
+                    <div className="p-2 bg-red-500/5 rounded border-l-2 border-red-500/50">
+                      <div className="text-[10px] font-medium text-red-400 mb-0.5">HOOK (0-3s)</div>
+                      <p className="text-xs leading-relaxed break-words">{script.hook}</p>
+                    </div>
+                    {isNewFormat ? (
+                      <>
+                        {script.story && (
+                          <div className="p-2 bg-purple-500/5 rounded border-l-2 border-purple-500/50">
+                            <div className="text-[10px] font-medium text-purple-400 mb-0.5">STORY (3-10s)</div>
+                            <p className="text-xs leading-relaxed break-words">{script.story}</p>
+                          </div>
+                        )}
+                        {script.reframe && (
+                          <div className="p-2 bg-blue-500/5 rounded border-l-2 border-blue-500/50">
+                            <div className="text-[10px] font-medium text-blue-400 mb-0.5">REFRAME + PRODUCT (10-22s)</div>
+                            <p className="text-xs leading-relaxed break-words">{script.reframe}</p>
+                          </div>
+                        )}
+                        {script.close && (
+                          <div className="p-2 bg-green-500/5 rounded border-l-2 border-green-500/50">
+                            <div className="text-[10px] font-medium text-green-400 mb-0.5">IDENTITY CLOSE (22-30s)</div>
+                            <p className="text-xs leading-relaxed break-words">{script.close}</p>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        {script.body && (
+                          <div className="p-2 bg-muted/20 rounded border-l-2 border-border">
+                            <div className="text-[10px] font-medium text-muted-foreground mb-0.5">BODY</div>
+                            <p className="text-xs leading-relaxed break-words">{script.body}</p>
+                          </div>
+                        )}
+                        {script.cta && (
+                          <div className="p-2 bg-green-500/5 rounded border-l-2 border-green-500/50">
+                            <div className="text-[10px] font-medium text-green-400 mb-0.5">CTA</div>
+                            <p className="text-xs leading-relaxed break-words">{script.cta}</p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  {script.tripleHook && (
+                    <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-border/30">
+                      {script.tripleHook.visual && (
+                        <div className="p-1.5 bg-blue-500/5 rounded text-[10px]">
+                          <span className="font-medium text-blue-400">Visual:</span>{' '}
+                          <span className="text-muted-foreground">{script.tripleHook.visual}</span>
+                        </div>
+                      )}
+                      {script.tripleHook.audio && (
+                        <div className="p-1.5 bg-green-500/5 rounded text-[10px]">
+                          <span className="font-medium text-green-400">Audio:</span>{' '}
+                          <span className="text-muted-foreground">{script.tripleHook.audio}</span>
+                        </div>
+                      )}
+                      {script.tripleHook.textOnScreen && (
+                        <div className="p-1.5 bg-yellow-500/5 rounded text-[10px]">
+                          <span className="font-medium text-yellow-400">Mute Text:</span>{' '}
+                          <span className="text-muted-foreground font-bold">{script.tripleHook.textOnScreen}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <div className="space-y-1.5">
-                  <div className="p-2 bg-red-500/5 rounded border-l-2 border-red-500/50">
-                    <div className="text-[10px] font-medium text-red-400 mb-0.5">HOOK</div>
-                    <p className="text-xs leading-relaxed break-words">{script.hook}</p>
-                  </div>
-                  <div className="p-2 bg-muted/20 rounded border-l-2 border-border">
-                    <div className="text-[10px] font-medium text-muted-foreground mb-0.5">BODY</div>
-                    <p className="text-xs leading-relaxed break-words">{script.body}</p>
-                  </div>
-                  <div className="p-2 bg-green-500/5 rounded border-l-2 border-green-500/50">
-                    <div className="text-[10px] font-medium text-green-400 mb-0.5">CTA</div>
-                    <p className="text-xs leading-relaxed break-words">{script.cta}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Section>
       )}
@@ -447,6 +585,11 @@ export function ContentCreativeOutput({ data }: Props) {
               <div key={idx} className="p-3 bg-muted/30 rounded-lg border border-border/50">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="px-2 py-0.5 text-[10px] bg-yellow-500/20 text-yellow-400 rounded">{brief.type}</span>
+                  {brief.emotionalDoorway && (
+                    <span className="px-2 py-0.5 text-[10px] bg-pink-500/10 text-pink-400 rounded border border-pink-500/20">
+                      {brief.emotionalDoorway.replace(/_/g, ' ')}
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground mb-2 break-words">{brief.description}</p>
                 <div className="space-y-1">
@@ -489,6 +632,12 @@ export function ContentCreativeOutput({ data }: Props) {
                     <p className="text-muted-foreground break-words">{brief.textOverlay}</p>
                   </div>
                 </div>
+                {brief.muteTestText && (
+                  <div className="mt-2 p-2 bg-yellow-500/5 rounded border border-yellow-500/20">
+                    <div className="text-[10px] font-medium text-yellow-400 mb-0.5">Mute Test Text</div>
+                    <p className="text-xs font-bold text-foreground">{brief.muteTestText}</p>
+                  </div>
+                )}
               </div>
             ))}
           </div>

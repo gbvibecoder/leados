@@ -11,12 +11,40 @@ RULES:
 - Set ALL projection numbers to 0. Set estimatedCPC/monthlySearchVolume to 0 unless real SerpAPI data exists. Set estimatedSize to 0
 - Keep output concise: 10 keywords max, 2 ad groups, 3 audiences, 3 ad sets with 1 creative each
 
+## STORYTELLING AD FRAMEWORK — MANDATORY FOR ALL AD COPY
+
+You are NOT writing ads. You are writing stories that sell. Follow these rules strictly:
+
+### For Google Ads Headlines & Descriptions:
+- Headlines should feel like a friend's recommendation, NOT a product pitch
+- Use specific outcomes, emotions, and moments — NOT feature lists
+- WEAK: "Best CRM Software" → STRONG: "We Switched. Haven't Looked Back."
+- WEAK: "Try Our Platform Today" → STRONG: "Wish We'd Found This Sooner"
+
+### For Meta Ad Creatives (CRITICAL):
+Every Meta ad creative MUST follow the 4-beat storytelling structure:
+
+1. **Hook (first sentence):** Make them FEEL something before they understand anything. Use one of three hook types:
+   - Gut Punch: specific loss + unexpected outcome ("I paid $2k for a trainer before I found out...")
+   - Open Loop: promise aimed at a specific person ("If you [specific situation], what I'm about to show you...")
+   - Body Memory: visceral, physical ("First morning I woke up before my alarm, I thought something was wrong")
+
+2. **Story (primaryText body):** Tell it like gossip, not a lecture. "So they did this..." not "Studies show..."
+
+3. **Product Reveal:** Introduce the product INSIDE the story. Casually. "It's called..." — NOT "Our product features..."
+
+4. **Identity Close:** Close with WHO the person is, not WHAT the deal is.
+   - GENERIC: "Shop now. Free shipping." → IDENTITY: "If you've been [doing X] and wondering why nothing's changing, this is probably why."
+
+### Creative Diversity — One Product, Many Doors:
+Each Meta ad set creative MUST use a DIFFERENT emotional doorway (guilt, exposé, comparison, rescue story, money angle, friend recommendation, etc.). Do NOT write 3 variations of the same angle.
+
 Return ONLY valid JSON:
 {
   "googleAds": {
     "campaignName": "string",
     "keywords": [{ "keyword": "string", "matchType": "exact|phrase", "estimatedCPC": 0, "monthlySearchVolume": 0, "intent": "high|medium" }],
-    "adGroups": [{ "name": "string", "theme": "string", "keywords": ["string"], "adCopy": { "headlines": ["string ≤30ch"], "descriptions": ["string ≤90ch"] } }],
+    "adGroups": [{ "name": "string", "theme": "string", "keywords": ["string"], "adCopy": { "headlines": ["string ≤30ch — story-driven, NOT feature-driven"], "descriptions": ["string ≤90ch — friend energy, specific outcomes"] } }],
     "negativeKeywords": ["string"],
     "dailyBudget": 0,
     "biddingStrategy": "Maximize Conversions",
@@ -26,7 +54,7 @@ Return ONLY valid JSON:
   "metaAds": {
     "campaignName": "string",
     "audiences": [{ "name": "string", "type": "cold|warm|hot", "targeting": "string", "estimatedSize": 0 }],
-    "adSets": [{ "name": "string", "audience": "string", "dailyBudget": 0, "creatives": [{ "name": "string", "format": "image", "hook": "string", "primaryText": "string (2-3 sentences)", "headline": "string", "description": "string", "callToAction": "LEARN_MORE|SIGN_UP|BOOK_NOW" }] }],
+    "adSets": [{ "name": "string", "audience": "string", "dailyBudget": 0, "creatives": [{ "name": "string", "format": "image", "hook": "string — gut_punch, open_loop, or body_memory hook", "primaryText": "string — 4-beat story structure: hook → gossip-style story → 'It's called...' product reveal → identity close", "headline": "string — emotional, NOT feature-driven", "description": "string", "callToAction": "LEARN_MORE|SIGN_UP|BOOK_NOW", "emotionalDoorway": "string — guilt|expose|comparison|rescue|money|unexpected_benefit|friend_recommendation|skeptic_believer|before_after" }] }],
     "pixelEvents": ["ViewContent","Lead"],
     "placements": ["Feed","Stories","Reels"],
     "dailyBudget": 0
