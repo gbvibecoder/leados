@@ -504,31 +504,33 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning: isR
                   exit={{ opacity: 0, y: -8 }}
                   transition={{ duration: 0.3, ease: [0.25, 0.4, 0.25, 1] }}
                 >
-                  <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-gray-300">
-                    <FileJson className="h-4 w-4" />
-                    Output
-                  </h4>
-                  <div className="rounded-lg rounded-xl p-4 overflow-x-auto">
-                    <AgentOutput
-                      agentId={agentId}
-                      agentName={agentName}
-                      data={selectedRun.outputsJson || selectedRun.outputs || {}}
-                      isLive={agentId === 'service-research'}
-                      agentRunId={selectedRun.id}
-                      onResolved={onResolved}
-                    />
-                  </div>
-
-                  {selectedRun.error && (
-                    <div className="mt-3">
+                  {selectedRun.status === 'error' || selectedRun.error ? (
+                    <div>
                       <h4 className="mb-2 flex items-center gap-2 text-sm font-medium text-red-400">
-                        <Terminal className="h-4 w-4" />
-                        Error
+                        <AlertCircle className="h-4 w-4" />
+                        Agent Failed
                       </h4>
-                      <div className="rounded-lg border border-red-800/50 bg-red-950/20 p-3 overflow-x-auto">
-                        <pre className="text-xs text-red-300 whitespace-pre-wrap break-words">{selectedRun.error}</pre>
+                      <div className="rounded-lg border border-red-800/50 bg-red-950/20 p-4">
+                        <pre className="text-sm text-red-300 whitespace-pre-wrap break-words">{selectedRun.error || 'Agent execution failed. Check your API credits and try again.'}</pre>
                       </div>
                     </div>
+                  ) : (
+                    <>
+                      <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-gray-300">
+                        <FileJson className="h-4 w-4" />
+                        Output
+                      </h4>
+                      <div className="rounded-lg rounded-xl p-4 overflow-x-auto">
+                        <AgentOutput
+                          agentId={agentId}
+                          agentName={agentName}
+                          data={selectedRun.outputsJson || selectedRun.outputs || {}}
+                          isLive={agentId === 'service-research'}
+                          agentRunId={selectedRun.id}
+                          onResolved={onResolved}
+                        />
+                      </div>
+                    </>
                   )}
                 </motion.div>
               )}

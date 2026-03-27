@@ -8,6 +8,13 @@ import { useAppStore, DISCOVERY_AGENT_IDS, LEADOS_AGENTS, SUPPORTED_LANGUAGES } 
 import { pipelines as pipelinesApi, agents as agentsApi, apiFetch } from '@/lib/api';
 import { ErrorBoundary } from '@/components/layout/error-boundary';
 import { preTranslateAgent } from '@/components/agents/AgentOutput';
+
+/** Strip JSON objects/arrays from error strings so users see clean messages */
+function cleanErrorMsg(raw: string): string {
+  if (!raw) return 'Agent failed';
+  const cleaned = raw.replace(/\s*\{[\s\S]*\}\s*/g, '').replace(/\s*\[[\s\S]*\]\s*/g, '').trim();
+  return cleaned || 'Agent failed — check your API keys in Settings.';
+}
 import {
   Building2, Pause, Play, RotateCcw, ChevronDown, ChevronUp, ChevronRight,
   Bot, Check, Loader2, AlertCircle, ArrowDown, Settings2,
@@ -131,11 +138,14 @@ export default function LeadOSPage() {
             outputPreview: typeof run.outputsJson?.reasoning === 'string'
               ? run.outputsJson.reasoning.slice(0, 120)
               : run.status === 'done' ? 'Completed successfully' : undefined,
-            error: run.status === 'error' ? (run.error || 'Agent failed') : undefined,
+            error: run.status === 'error' ? cleanErrorMsg(run.error || 'Agent failed') : undefined,
           });
           restoredCount++;
-          if (run.outputsJson) {
+          if (run.status === 'done' && run.outputsJson) {
             restoredOutputs[run.agentId] = run.outputsJson;
+          } else if (run.status === 'error') {
+            // Clear any stale output from a previous successful run
+            delete restoredOutputs[run.agentId];
           }
         }
       }
@@ -188,8 +198,9 @@ export default function LeadOSPage() {
     const prevId = prevProjectIdRef.current;
     prevProjectIdRef.current = selectedProjectId;
 
-    // Close any open agent detail panel — it shows project-specific data
+    // Close any open agent detail panel and clear errors — they are project-specific
     setSelectedAgent(null);
+    setPipelineError(null);
 
     // Cache outgoing project's agentOutputs into the store cache
     // (pipeline state is already cached by store.selectProject)
@@ -204,7 +215,14 @@ export default function LeadOSPage() {
       const cacheHasOutputs = cached && Object.keys(cached.agentOutputs).length > 0;
       const cacheHasStatuses = cached && cached.pipeline.agents.some(a => a.status === 'done' || a.status === 'error');
       if (cached && (cacheHasOutputs || cacheHasStatuses)) {
-        setAgentOutputs(cached.agentOutputs);
+        // Filter out outputs for agents that errored — prevent showing stale data
+        const cleanOutputs = { ...cached.agentOutputs };
+        for (const agent of cached.pipeline.agents) {
+          if (agent.status === 'error') {
+            delete cleanOutputs[agent.id];
+          }
+        }
+        setAgentOutputs(cleanOutputs);
         setElapsedTimes(cached.elapsedTimes);
         // If cache has statuses but no outputs, load outputs from DB in background
         if (cacheHasStatuses && !cacheHasOutputs) {
@@ -548,7 +566,7 @@ export default function LeadOSPage() {
             break;
           }
           stopAgentTimer(agentId);
-          const errMsg = agentErr.message || 'Agent failed';
+          const errMsg = cleanErrorMsg(agentErr.message || 'Agent failed');
           updateAgentStatus(agentId, { status: 'error', error: errMsg });
           addActivity({ type: 'agent_error', agentId, agentName, message: `${agentName} failed: ${errMsg}` });
 
@@ -585,7 +603,7 @@ export default function LeadOSPage() {
       }
 
     } catch (err: any) {
-      const errorMsg = err.message || 'Failed to start pipeline';
+      const errorMsg = cleanErrorMsg(err.message || 'Failed to start pipeline');
       setPipelineError(errorMsg);
       updatePipelineStatus('error');
       addActivity({
@@ -693,7 +711,7 @@ export default function LeadOSPage() {
       await pollForCompletion();
     } catch (err: any) {
       stopAgentTimer(agentId);
-      const errorMsg = err.message || 'Agent execution failed';
+      const errorMsg = cleanErrorMsg(err.message || 'Agent execution failed');
 
       updateAgentStatus(agentId, {
         status: 'error',
@@ -780,7 +798,7 @@ export default function LeadOSPage() {
         }
       } catch (err: any) {
         stopAgentTimer(agentId);
-        updateAgentStatus(agentId, { status: 'error', error: err.message || 'Re-run failed' });
+        updateAgentStatus(agentId, { status: 'error', error: cleanErrorMsg(err.message || 'Re-run failed') });
         addActivity({ type: 'agent_error', agentId, agentName, message: `${agentName} re-run failed: ${err.message}` });
       }
     }
