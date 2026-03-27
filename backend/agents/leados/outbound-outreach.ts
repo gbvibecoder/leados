@@ -1,6 +1,9 @@
 import { BaseAgent, AgentInput, AgentOutput } from '../base-agent';
 import * as apollo from '../../integrations/apollo';
 import * as instantly from '../../integrations/instantly';
+import * as smartlead from '../../integrations/smartlead';
+import * as phantombuster from '../../integrations/phantombuster';
+import * as hubspot from '../../integrations/hubspot';
 import { filterBlacklisted } from '../../utils/blacklist';
 
 const SYSTEM_PROMPT = `You are the Outbound Outreach Agent for LeadOS — the Service Acquisition Machine. You operate two internal sub-agents to execute cold email campaigns and LinkedIn DM automation at scale.
@@ -180,34 +183,76 @@ export class OutboundOutreachAgent extends BaseAgent {
         icpTitles = ['VP of Marketing', 'Head of Growth', 'CMO', 'CEO'];
       }
 
+      // Extract ICP targeting details
+      const icpIndustries = offerData.icp?.industries || offerData.idealCustomerProfile?.industries || [];
+      const icpCompanySize = offerData.icp?.companySize || offerData.idealCustomerProfile?.companySize || '10-500 employees';
+      const icpGeography = offerData.icp?.geography || offerData.idealCustomerProfile?.geography || 'United States';
+
       // Extract niche for campaign naming
       const niche = inputs.config?.niche || inputs.config?.serviceNiche || inputs.config?.focus || 'B2B SaaS Lead Generation';
 
-      // ── Fetch real prospect data from Apollo + create Instantly campaign IN PARALLEL ──
+      // Determine email platform preference
+      const emailPlatform = inputs.config?.emailPlatform || (smartlead.isSmartLeadAvailable() ? 'smartlead' : 'instantly');
+
+      // ══════════════════════════════════════════════════════════════
+      // PHASE 1: Parallel data fetching — Apollo + Email Campaign + LinkedIn Profiles
+      // ══════════════════════════════════════════════════════════════
       let realProspects: any[] = [];
       let realCampaign: any = null;
+      let linkedInProfiles: phantombuster.LinkedInProfile[] = [];
 
-      const [apolloResult, instantlyResult] = await Promise.allSettled([
+      const phase1Promises: Promise<any>[] = [
+        // Apollo prospect search
         apollo.isApolloAvailable()
-          ? apollo.searchProspects({ jobTitles: icpTitles, limit: 25 })
+          ? apollo.searchProspects({
+              jobTitles: icpTitles,
+              industries: icpIndustries.length > 0 ? icpIndustries : undefined,
+              locations: [icpGeography],
+              limit: 25,
+            })
           : Promise.resolve([]),
-        instantly.isInstantlyAvailable()
-          ? instantly.createCampaign({ name: `LeadOS — ${niche} ICP` })
-          : Promise.resolve(null),
-      ]);
+        // Email campaign creation (Instantly or SmartLead)
+        emailPlatform === 'smartlead' && smartlead.isSmartLeadAvailable()
+          ? smartlead.createCampaign({ name: `LeadOS — ${niche} ICP` })
+          : instantly.isInstantlyAvailable()
+            ? instantly.createCampaign({ name: `LeadOS — ${niche} ICP`, dailyLimit: 50 })
+            : Promise.resolve(null),
+        // LinkedIn profile search via Phantombuster
+        phantombuster.isSearchAvailable()
+          ? phantombuster.searchProfiles({
+              jobTitles: icpTitles,
+              industries: icpIndustries.length > 0 ? icpIndustries : undefined,
+              geography: icpGeography,
+              limit: 25,
+            })
+          : Promise.resolve([]),
+      ];
+
+      const [apolloResult, campaignResult, linkedInResult] = await Promise.allSettled(phase1Promises);
 
       if (apolloResult.status === 'fulfilled') {
         realProspects = apolloResult.value;
-        if (realProspects.length > 0) await this.log('apollo_prospects_fetched', { count: realProspects.length, titles: icpTitles });
+        if (realProspects.length > 0) {
+          await this.log('apollo_prospects_fetched', { count: realProspects.length, titles: icpTitles });
+        }
       } else {
         await this.log('apollo_error', { error: apolloResult.reason?.message });
       }
 
-      if (instantlyResult.status === 'fulfilled' && instantlyResult.value) {
-        realCampaign = instantlyResult.value;
-        await this.log('instantly_campaign_created', { campaignId: realCampaign.id });
-      } else if (instantlyResult.status === 'rejected') {
-        await this.log('instantly_error', { error: instantlyResult.reason?.message });
+      if (campaignResult.status === 'fulfilled' && campaignResult.value) {
+        realCampaign = campaignResult.value;
+        await this.log('campaign_created', { platform: emailPlatform, campaignId: realCampaign.id });
+      } else if (campaignResult.status === 'rejected') {
+        await this.log('campaign_error', { platform: emailPlatform, error: campaignResult.reason?.message });
+      }
+
+      if (linkedInResult.status === 'fulfilled') {
+        linkedInProfiles = linkedInResult.value;
+        if (linkedInProfiles.length > 0) {
+          await this.log('linkedin_profiles_fetched', { count: linkedInProfiles.length });
+        }
+      } else {
+        await this.log('phantombuster_error', { error: linkedInResult.reason?.message });
       }
 
       // ── Build user message for LLM ────────────────────────────────
@@ -225,7 +270,9 @@ export class OutboundOutreachAgent extends BaseAgent {
         },
         realData: {
           apolloProspects: realProspects.length > 0 ? realProspects : null,
-          instantlyCampaignId: realCampaign?.id || null,
+          linkedInProfiles: linkedInProfiles.length > 0 ? linkedInProfiles : null,
+          campaignId: realCampaign?.id || null,
+          emailPlatform,
           dataSource: realProspects.length > 0 ? 'live_apollo' : 'llm_generated',
         },
         IMPORTANT_INSTRUCTION: realProspects.length > 0
@@ -242,14 +289,16 @@ CRITICAL: For projectedMetrics, set ALL numeric values to 0. Do NOT fabricate me
         parsed = this.safeParseLLMJson<any>(response, ['coldEmail', 'linkedIn']);
       } catch (err: any) {
         await this.log('llm_or_parse_error', { error: err.message });
-        // Build structured fallback from upstream data instead of returning empty
         parsed = this.buildFallbackOutput(niche, offerData, contentData, icpTitles);
       }
 
       // ── BUILD CLEAN OUTPUT — DO NOT trust ANY metric from LLM ──────
+      const sequences = parsed.coldEmail?.sequences || [];
+      const linkedInSequences = parsed.linkedIn?.sequences || [];
+
       const cleanOutput: any = {
         coldEmail: {
-          platform: parsed.coldEmail?.platform || 'instantly',
+          platform: emailPlatform,
           campaignName: parsed.coldEmail?.campaignName || `${niche} — Cold Email Campaign`,
           prospectCriteria: parsed.coldEmail?.prospectCriteria || {
             icpMatch: offerData.icp?.description || `Decision-makers in ${niche}`,
@@ -262,7 +311,7 @@ CRITICAL: For projectedMetrics, set ALL numeric values to 0. Do NOT fabricate me
             warmupStatus: '14-day warmup in progress',
             dailyRampSchedule: '10/day → 20/day → 30/day → 50/day',
           },
-          sequences: parsed.coldEmail?.sequences || [],
+          sequences,
           personalizationFields: parsed.coldEmail?.personalizationFields || ['{firstName}', '{company}', '{industry}', '{painPoint}'],
           sendingSchedule: parsed.coldEmail?.sendingSchedule || {
             days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday'],
@@ -281,9 +330,9 @@ CRITICAL: For projectedMetrics, set ALL numeric values to 0. Do NOT fabricate me
           abTests: parsed.coldEmail?.abTests || [],
         },
         linkedIn: {
-          targetProfiles: 0,
+          targetProfiles: linkedInProfiles.length || parsed.linkedIn?.targetProfiles || icpTitles.length * 25,
           connectionStrategy: parsed.linkedIn?.connectionStrategy || 'Personalized connection requests referencing mutual interests, company activity, or shared industry challenges',
-          sequences: parsed.linkedIn?.sequences || [],
+          sequences: linkedInSequences,
           dailyLimits: {
             connectionRequests: parsed.linkedIn?.dailyLimits?.connectionRequests || 25,
             messages: parsed.linkedIn?.dailyLimits?.messages || 50,
@@ -291,9 +340,9 @@ CRITICAL: For projectedMetrics, set ALL numeric values to 0. Do NOT fabricate me
           },
           targetingCriteria: parsed.linkedIn?.targetingCriteria || {
             jobTitles: icpTitles,
-            companySize: offerData.icp?.companySize || '10-500 employees',
-            industries: offerData.icp?.industries || [niche],
-            geography: 'United States',
+            companySize: icpCompanySize,
+            industries: icpIndustries.length > 0 ? icpIndustries : [niche],
+            geography: icpGeography,
             additionalFilters: ['Active on LinkedIn in last 30 days'],
           },
           profileOptimization: parsed.linkedIn?.profileOptimization || {
@@ -318,7 +367,13 @@ CRITICAL: For projectedMetrics, set ALL numeric values to 0. Do NOT fabricate me
         },
         linkedInConversations: { connectionsSent: 0, connectionsAccepted: 0, conversationsStarted: 0, meetingsFromLinkedIn: 0 },
         crmBookings: { totalMeetingsBooked: 0, calendarIntegration: 'Calendly' },
-        dataSource: { prospects: 'none', campaign: 'none', apolloProspectsCount: 0 },
+        // Execution tracking — filled by real API calls below
+        execution: {
+          coldEmail: { leadsAdded: 0, sequencesConfigured: 0, campaignLaunched: false },
+          linkedIn: { profilesFound: 0, connectionsSent: 0, messagesSent: 0 },
+          crmSync: { contactsSynced: 0 },
+        },
+        dataSource: { prospects: 'none', campaign: 'none', linkedin: 'none', apolloProspectsCount: 0 },
         reasoning: parsed.reasoning || 'Dual-channel outbound campaign configured with cold email sequences and LinkedIn DM automation.',
         confidence: parsed.confidence || 85,
       };
@@ -341,7 +396,6 @@ CRITICAL: For projectedMetrics, set ALL numeric values to 0. Do NOT fabricate me
         }
       } catch (err: any) {
         await this.log('blacklist_check_error', { error: err.message });
-        // Continue without blacklist filtering — don't crash the agent
       }
 
       // ── If we have real prospects from Apollo, use them ────────────
@@ -355,10 +409,11 @@ CRITICAL: For projectedMetrics, set ALL numeric values to 0. Do NOT fabricate me
           industry: p.industry,
           companySize: p.companySize,
           linkedInUrl: p.linkedInUrl,
+          phone: p.phone || '',
           personalizationNote: `${p.jobTitle} at ${p.company}`,
         }));
 
-        // Filter blacklisted from real prospects too
+        // Filter blacklisted from real prospects
         try {
           const { allowed, blocked } = await filterBlacklisted(prospects);
           if (blocked.length > 0) {
@@ -370,26 +425,60 @@ CRITICAL: For projectedMetrics, set ALL numeric values to 0. Do NOT fabricate me
         cleanOutput.prospectList = prospects;
       }
 
-      // ── Update prospect-related counts from real data ──────────────
+      // ── Filter blacklisted from LinkedIn profiles ────────────────
+      if (linkedInProfiles.length > 0) {
+        try {
+          const liProspects = linkedInProfiles.map((p) => ({
+            ...p,
+            company: p.company,
+          }));
+          const { allowed, blocked } = await filterBlacklisted(liProspects);
+          if (blocked.length > 0) {
+            await this.log('blacklist_filtered_linkedin', { removed: blocked.length });
+          }
+          linkedInProfiles = allowed as any;
+        } catch { /* continue */ }
+      }
+
+      // ══════════════════════════════════════════════════════════════
+      // PHASE 2: Wire real data — Add leads to campaigns, launch, send LinkedIn requests
+      // ══════════════════════════════════════════════════════════════
       const prospectCount = cleanOutput.prospectList.length;
       cleanOutput.coldEmail.prospectCount = prospectCount;
       cleanOutput.contactedProspects.prospectListSize = prospectCount;
 
-      // ── Add real campaign ID if available ──────────────────────────
-      if (realCampaign?.id) {
-        cleanOutput.coldEmail.campaignId = realCampaign.id;
-        cleanOutput.coldEmail.dataSource = 'live_instantly';
-        cleanOutput.instantlyCampaignId = realCampaign.id;
+      // ── Cold Email: Add leads + sequences to campaign, then launch ──
+      if (realCampaign?.id && prospectCount > 0) {
+        await this.executeColdEmailPipeline(cleanOutput, realCampaign, emailPlatform, sequences);
+      }
+
+      // ── LinkedIn: Send connection requests via Phantombuster ──────
+      if (linkedInProfiles.length > 0 && linkedInSequences.length > 0) {
+        await this.executeLinkedInPipeline(cleanOutput, linkedInProfiles, linkedInSequences);
+      }
+
+      // ── CRM Sync: Push prospects to HubSpot ──────────────────────
+      if (cleanOutput.prospectList.length > 0) {
+        await this.syncToHubSpot(cleanOutput);
       }
 
       // ── Set data source info ──────────────────────────────────────
       cleanOutput.dataSource = {
         prospects: realProspects.length > 0 ? 'live_apollo' : 'none',
-        campaign: realCampaign?.id ? 'live_instantly' : 'none',
+        campaign: realCampaign?.id ? `live_${emailPlatform}` : 'none',
+        linkedin: linkedInProfiles.length > 0 ? 'live_phantombuster' : 'none',
         apolloProspectsCount: realProspects.length,
-        instantlyCampaignId: realCampaign?.id || null,
+        linkedInProfilesCount: linkedInProfiles.length,
+        campaignId: realCampaign?.id || null,
       };
       cleanOutput.contactedProspects.dataSource = realProspects.length > 0 ? 'live_apollo' : 'none';
+
+      // ── Update real metrics from execution ────────────────────────
+      const exec = cleanOutput.execution;
+      cleanOutput.contactedProspects.total = exec.coldEmail.leadsAdded + exec.linkedIn.connectionsSent;
+      cleanOutput.contactedProspects.emailContacted = exec.coldEmail.leadsAdded;
+      cleanOutput.contactedProspects.linkedInContacted = exec.linkedIn.connectionsSent;
+      cleanOutput.linkedInConversations.connectionsSent = exec.linkedIn.connectionsSent;
 
       this.status = 'done';
       await this.log('run_completed', { output: cleanOutput });
@@ -409,6 +498,248 @@ CRITICAL: For projectedMetrics, set ALL numeric values to 0. Do NOT fabricate me
         confidence: 0,
       };
     }
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // COLD EMAIL EXECUTION — Add leads, configure sequences, launch
+  // ══════════════════════════════════════════════════════════════════
+  private async executeColdEmailPipeline(
+    output: any,
+    campaign: any,
+    platform: string,
+    sequences: any[]
+  ): Promise<void> {
+    const prospects = output.prospectList;
+    const campaignId = campaign.id;
+
+    try {
+      if (platform === 'smartlead' && smartlead.isSmartLeadAvailable()) {
+        // ── SmartLead: Add leads → Add sequences → Set schedule → Launch ──
+        const [leadsResult, seqResult] = await Promise.allSettled([
+          smartlead.addLeadsToCampaign(
+            campaignId,
+            prospects.map((p: any) => ({
+              email: p.email,
+              firstName: p.firstName,
+              lastName: p.lastName,
+              company: p.company,
+              variables: {
+                industry: p.industry || '',
+                painPoint: p.personalizationNote || '',
+                companySize: p.companySize || '',
+                jobTitle: p.jobTitle || '',
+              },
+            }))
+          ),
+          sequences.length > 0
+            ? smartlead.addSequenceSteps(
+                campaignId,
+                sequences.map((s: any) => ({
+                  subject: s.subject,
+                  body: s.template,
+                  waitDays: parseInt(String(s.delay).replace(/\D/g, '')) || 2,
+                }))
+              )
+            : Promise.resolve({ stepsAdded: 0 }),
+        ]);
+
+        if (leadsResult.status === 'fulfilled') {
+          output.execution.coldEmail.leadsAdded = leadsResult.value.added;
+          await this.log('smartlead_leads_added', { added: leadsResult.value.added, campaignId });
+        } else {
+          await this.log('smartlead_leads_error', { error: leadsResult.reason?.message });
+        }
+
+        if (seqResult.status === 'fulfilled') {
+          output.execution.coldEmail.sequencesConfigured = seqResult.value.stepsAdded;
+          await this.log('smartlead_sequences_configured', { steps: seqResult.value.stepsAdded });
+        }
+
+        // Set schedule
+        try {
+          await smartlead.setCampaignSchedule(campaignId, {
+            timezone: 'America/New_York',
+            days: [1, 2, 3, 4], // Mon-Thu
+            startHour: '08:00',
+            endHour: '11:00',
+            dailyLimit: 50,
+          });
+        } catch (err: any) {
+          await this.log('smartlead_schedule_error', { error: err.message });
+        }
+
+        // Launch campaign
+        try {
+          await smartlead.launchCampaign(campaignId);
+          output.execution.coldEmail.campaignLaunched = true;
+          output.coldEmail.campaignStatus = 'active';
+          await this.log('smartlead_campaign_launched', { campaignId });
+        } catch (err: any) {
+          output.coldEmail.campaignStatus = 'draft';
+          await this.log('smartlead_launch_error', { error: err.message });
+        }
+      } else if (instantly.isInstantlyAvailable()) {
+        // ── Instantly: Add leads → Launch ──
+        try {
+          const leadsResult = await instantly.addLeadsToCampaign(
+            campaignId,
+            prospects.map((p: any) => ({
+              email: p.email,
+              firstName: p.firstName,
+              lastName: p.lastName,
+              company: p.company,
+              variables: {
+                industry: p.industry || '',
+                painPoint: p.personalizationNote || '',
+                companySize: p.companySize || '',
+                jobTitle: p.jobTitle || '',
+              },
+            }))
+          );
+          output.execution.coldEmail.leadsAdded = leadsResult.added;
+          output.coldEmail.campaignId = campaignId;
+          await this.log('instantly_leads_added', { added: leadsResult.added, campaignId });
+        } catch (err: any) {
+          await this.log('instantly_leads_error', { error: err.message });
+        }
+
+        // Launch campaign
+        try {
+          await instantly.launchCampaign(campaignId);
+          output.execution.coldEmail.campaignLaunched = true;
+          output.coldEmail.campaignStatus = 'active';
+          output.coldEmail.campaignId = campaignId;
+          await this.log('instantly_campaign_launched', { campaignId });
+        } catch (err: any) {
+          output.coldEmail.campaignStatus = 'draft';
+          await this.log('instantly_launch_error', { error: err.message });
+        }
+      }
+
+      output.execution.coldEmail.sequencesConfigured = sequences.length;
+    } catch (err: any) {
+      await this.log('cold_email_pipeline_error', { error: err.message });
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // LINKEDIN EXECUTION — Send connection requests + DMs
+  // ══════════════════════════════════════════════════════════════════
+  private async executeLinkedInPipeline(
+    output: any,
+    profiles: phantombuster.LinkedInProfile[],
+    sequences: any[]
+  ): Promise<void> {
+    output.execution.linkedIn.profilesFound = profiles.length;
+
+    // Get the connection request message (step 1)
+    const connectionStep = sequences.find((s: any) => s.type === 'connection_request');
+    if (!connectionStep || !phantombuster.isConnectAvailable()) {
+      await this.log('linkedin_skip_connections', {
+        reason: !connectionStep ? 'no connection_request step' : 'PHANTOMBUSTER_CONNECT_PHANTOM_ID not set',
+      });
+      return;
+    }
+
+    // Respect daily limit — cap at 25
+    const dailyLimit = output.linkedIn.dailyLimits.connectionRequests || 25;
+    const profilesToConnect = profiles.slice(0, dailyLimit);
+
+    try {
+      // Send personalized connection requests
+      const connectionResult = await phantombuster.sendConnectionRequests(
+        profilesToConnect.map((p) => ({
+          linkedInUrl: p.linkedInUrl,
+          message: connectionStep.message
+            .replace(/\{firstName\}/g, p.firstName)
+            .replace(/\{company\}/g, p.company)
+            .replace(/\{jobTitle\}/g, p.jobTitle),
+        }))
+      );
+
+      output.execution.linkedIn.connectionsSent = connectionResult.sent;
+      output.linkedIn.connectionResults = {
+        sent: connectionResult.sent,
+        failed: connectionResult.failed,
+        alreadyConnected: connectionResult.profiles.filter((p) => p.status === 'already_connected').length,
+      };
+      await this.log('linkedin_connections_sent', {
+        sent: connectionResult.sent,
+        failed: connectionResult.failed,
+      });
+
+      // Send DMs to already-connected profiles
+      const alreadyConnected = connectionResult.profiles
+        .filter((p) => p.status === 'already_connected')
+        .map((p) => p.linkedInUrl);
+
+      if (alreadyConnected.length > 0 && phantombuster.isMessageAvailable()) {
+        const valueStep = sequences.find((s: any) => s.type === 'value_message') || sequences[1];
+        if (valueStep) {
+          const matchedProfiles = profiles.filter((p) => alreadyConnected.includes(p.linkedInUrl));
+          try {
+            const msgResult = await phantombuster.sendMessages(
+              matchedProfiles.slice(0, output.linkedIn.dailyLimits.messages || 50).map((p) => ({
+                linkedInUrl: p.linkedInUrl,
+                message: valueStep.message
+                  .replace(/\{firstName\}/g, p.firstName)
+                  .replace(/\{company\}/g, p.company)
+                  .replace(/\{jobTitle\}/g, p.jobTitle),
+              }))
+            );
+
+            output.execution.linkedIn.messagesSent = msgResult.sent;
+            output.linkedInConversations.conversationsStarted = msgResult.sent;
+            await this.log('linkedin_messages_sent', { sent: msgResult.sent, failed: msgResult.failed });
+          } catch (err: any) {
+            await this.log('linkedin_message_error', { error: err.message });
+          }
+        }
+      }
+    } catch (err: any) {
+      await this.log('linkedin_connection_error', { error: err.message });
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // CRM SYNC — Push prospects to HubSpot
+  // ══════════════════════════════════════════════════════════════════
+  private async syncToHubSpot(output: any): Promise<void> {
+    if (!hubspot.isHubSpotAvailable()) {
+      await this.log('hubspot_skip', { reason: 'HUBSPOT_API_KEY not configured' });
+      return;
+    }
+
+    const prospects = output.prospectList;
+    let synced = 0;
+
+    // Batch upsert in parallel (groups of 5 to avoid rate limits)
+    const BATCH = 5;
+    for (let i = 0; i < prospects.length; i += BATCH) {
+      const batch = prospects.slice(i, i + BATCH);
+      const results = await Promise.allSettled(
+        batch.map((p: any) =>
+          hubspot.upsertContact({
+            email: p.email,
+            firstName: p.firstName,
+            lastName: p.lastName,
+            company: p.company,
+            phone: p.phone || '',
+            properties: {
+              jobtitle: p.jobTitle || '',
+              lifecyclestage: 'lead',
+            },
+          })
+        )
+      );
+
+      for (const r of results) {
+        if (r.status === 'fulfilled') synced++;
+      }
+    }
+
+    output.execution.crmSync.contactsSynced = synced;
+    await this.log('hubspot_synced', { synced, total: prospects.length });
   }
 
   /**
@@ -442,35 +773,35 @@ CRITICAL: For projectedMetrics, set ALL numeric values to 0. Do NOT fabricate me
             step: 1, delay: 'Day 1',
             subject: `Quick question about ${niche}`,
             subjectLineB: `Idea for {company}`,
-            template: `Hi {firstName},\n\nI noticed {company} is in the ${niche} space and thought this might be relevant.\n\nWe help companies like yours solve ${mainPain} — without the usual headaches.\n\nWould it make sense to chat for 15 minutes this week?\n\nBest,\n{senderName}`,
+            template: `Hi {firstName},\n\nI noticed {company} is in the ${niche} space and thought this might be relevant.\n\nWe help companies like yours solve ${mainPain} — without the usual headaches.\n\nWould it make sense to chat for 15 minutes this week?\n\nBest,\n{senderName}\n\n---\nIf you'd prefer not to hear from us, unsubscribe here: {unsubscribe_link}`,
             purpose: 'Soft intro — establish relevance and plant curiosity',
           },
           {
             step: 2, delay: 'Day 3',
             subject: `How {company} could solve ${mainPain}`,
             subjectLineB: `Case study: ${niche} results`,
-            template: `Hi {firstName},\n\nFollowing up on my last email. Wanted to share a quick case study:\n\nOne of our clients in ${niche} was struggling with ${mainPain}. Within 30 days, they saw measurable improvement using our ${serviceName} approach.\n\nHappy to walk you through exactly how it works.\n\nBest,\n{senderName}`,
+            template: `Hi {firstName},\n\nFollowing up on my last email. Wanted to share a quick case study:\n\nOne of our clients in ${niche} was struggling with ${mainPain}. Within 30 days, they saw measurable improvement using our ${serviceName} approach.\n\nHappy to walk you through exactly how it works.\n\nBest,\n{senderName}\n\n---\nIf you'd prefer not to hear from us, unsubscribe here: {unsubscribe_link}`,
             purpose: 'Value delivery — share relevant case study with hard metrics',
           },
           {
             step: 3, delay: 'Day 5',
             subject: `The math behind ${serviceName}`,
             subjectLineB: `ROI breakdown for {company}`,
-            template: `Hi {firstName},\n\nI know you're busy so I'll keep this short.\n\nHere's the ROI math: ${priceStr ? `For ${priceStr}/month, ` : ''}our clients typically see 3-5x return within the first 60 days.${guarantee ? `\n\nPlus, ${guarantee}` : ''}\n\nWorth a quick call?\n\nBest,\n{senderName}`,
+            template: `Hi {firstName},\n\nI know you're busy so I'll keep this short.\n\nHere's the ROI math: ${priceStr ? `For ${priceStr}/month, ` : ''}our clients typically see 3-5x return within the first 60 days.${guarantee ? `\n\nPlus, ${guarantee}` : ''}\n\nWorth a quick call?\n\nBest,\n{senderName}\n\n---\nIf you'd prefer not to hear from us, unsubscribe here: {unsubscribe_link}`,
             purpose: 'ROI math — make financial case undeniable',
           },
           {
             step: 4, delay: 'Day 8',
             subject: `Last chance: ${serviceName} for {company}`,
             subjectLineB: `Spots filling up for ${niche}`,
-            template: `Hi {firstName},\n\nWe're onboarding a few more ${niche} companies this month and I wanted to reach out one more time.\n\nIf ${mainPain} is still a challenge, I'd love to show you how we solve it — takes 15 minutes.\n\nBook a time here: {bookingLink}\n\nBest,\n{senderName}`,
+            template: `Hi {firstName},\n\nWe're onboarding a few more ${niche} companies this month and I wanted to reach out one more time.\n\nIf ${mainPain} is still a challenge, I'd love to show you how we solve it — takes 15 minutes.\n\nBook a time here: {bookingLink}\n\nBest,\n{senderName}\n\n---\nIf you'd prefer not to hear from us, unsubscribe here: {unsubscribe_link}`,
             purpose: 'Urgency — create scarcity with clear next step',
           },
           {
             step: 5, delay: 'Day 12',
             subject: `Closing the loop`,
             subjectLineB: `Should I close your file?`,
-            template: `Hi {firstName},\n\nI've reached out a few times and haven't heard back — totally understand if the timing isn't right.\n\nI'll close your file for now, but if ${mainPain} becomes a priority, feel free to reply to this email anytime.\n\nWishing you and {company} the best.\n\n{senderName}`,
+            template: `Hi {firstName},\n\nI've reached out a few times and haven't heard back — totally understand if the timing isn't right.\n\nI'll close your file for now, but if ${mainPain} becomes a priority, feel free to reply to this email anytime.\n\nWishing you and {company} the best.\n\n{senderName}\n\n---\nIf you'd prefer not to hear from us, unsubscribe here: {unsubscribe_link}`,
             purpose: 'Breakup — graceful exit that triggers loss aversion',
           },
         ];

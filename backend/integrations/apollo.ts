@@ -80,14 +80,47 @@ export async function searchProspects(params: ApolloPersonSearchParams): Promise
   };
 
   if (params.industries?.length) {
-    body.organization_industry_tag_ids = params.industries;
+    // Use keyword tags for text-based industry search (not tag IDs which require numeric values)
+    body.q_organization_keyword_tags = params.industries;
   }
 
   const data = await apolloFetch('/mixed_people/api_search', body);
   const searchResults = data.people || [];
 
-  // Search returns obfuscated data — enrich each person via people/match to reveal emails/phones
-  // Run enrichment in parallel (batches of 5 to avoid rate limits)
+  if (searchResults.length === 0) return [];
+
+  // ── Try enrichment on first person to check if plan supports it ──
+  let enrichmentAvailable = false;
+  try {
+    const testMatch = await apolloFetch('/people/match', { id: searchResults[0].id });
+    enrichmentAvailable = !!(testMatch.person?.email || testMatch.person?.last_name);
+  } catch {
+    // Enrichment not available on this plan (422 or 403) — use search data only
+    enrichmentAvailable = false;
+  }
+
+  if (!enrichmentAvailable) {
+    // Map search results directly — obfuscated last names, no emails
+    return searchResults.map((person: any) => {
+      const org = person.organization || {};
+      const lastNameObf = person.last_name_obfuscated || person.last_name || '';
+      return {
+        firstName: person.first_name || '',
+        lastName: lastNameObf,
+        email: person.email || '',
+        company: org.name || '',
+        jobTitle: person.title || '',
+        industry: org.industry || '',
+        companySize: org.estimated_num_employees
+          ? `${org.estimated_num_employees} employees`
+          : (org.has_employee_count ? 'Available with enrichment' : 'Unknown'),
+        linkedInUrl: person.linkedin_url || '',
+        phone: '',
+      } as ApolloPerson;
+    });
+  }
+
+  // ── Enrichment available — reveal emails, phones, LinkedIn URLs ──
   const enriched: ApolloPerson[] = [];
   const BATCH_SIZE = 5;
 
@@ -119,11 +152,10 @@ export async function searchProspects(params: ApolloPersonSearchParams): Promise
       if (result.status === 'fulfilled') {
         enriched.push(result.value);
       } else {
-        // If enrich fails, use whatever search returned
         const person = batch[j];
         enriched.push({
           firstName: person.first_name || '',
-          lastName: '',
+          lastName: person.last_name_obfuscated || '',
           email: '',
           company: person.organization?.name || '',
           jobTitle: person.title || '',

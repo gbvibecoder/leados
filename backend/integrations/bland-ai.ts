@@ -68,8 +68,8 @@ export async function makeCall(params: BlandCallRequest): Promise<BlandCallResul
       transfer_phone_number: params.transferPhoneNumber || undefined,
       metadata: params.metadata || {},
       ...(params.webhook ? { webhook: params.webhook } : {}),
-      // 'from' is required for international calls — set BLANDAI_FROM_NUMBER in env
-      ...(params.from ? { from: params.from } : {}),
+      // 'from' is required for international calls — uses BLANDAI_FROM_NUMBER env var
+      from: params.from || process.env.BLANDAI_FROM_NUMBER || undefined,
     },
   });
 

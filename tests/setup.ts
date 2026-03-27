@@ -45,5 +45,6 @@ class MockEventSource {
 
 (globalThis as any).EventSource = MockEventSource;
 
-// Mock fetch
+// Mock fetch — save original for live integration tests
+(globalThis as any).__REAL_FETCH__ = globalThis.fetch;
 globalThis.fetch = vi.fn();
