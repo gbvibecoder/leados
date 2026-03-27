@@ -302,7 +302,7 @@ export class SalesRoutingAgent extends BaseAgent {
       const routedLeads: any[] = [];
 
       // Route leads from AI Qualification results (user-scoped, real call outcomes)
-      for (const result of scopedCallResults) {
+      for (const result of scopedCallResults as any[]) {
         if (!result.leadName && !result.leadEmail) continue;
         const outcome = result.outcome || 'pending_call';
         // Check for explicit budget confirmation from qualification call data
