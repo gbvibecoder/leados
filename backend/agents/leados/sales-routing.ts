@@ -254,7 +254,7 @@ export class SalesRoutingAgent extends BaseAgent {
       const upstreamByEmail = new Map(upstreamCallResults.map((r: any) => [r.leadEmail, r]));
 
       const scopedCallResults = dbQualifiedLeads.map((dbLead: any) => {
-        const upstream = upstreamByEmail.get(dbLead.email) || {};
+        const upstream: any = upstreamByEmail.get(dbLead.email) || {};
         return {
           leadName: dbLead.name,
           leadEmail: dbLead.email,
