@@ -61,7 +61,7 @@ That is a complete, compelling offer.
 Return ONLY valid JSON (no markdown, no explanation outside JSON) with this structure:
 {
   "offer": {
-    "serviceName": "string — branded name for the service",
+    "serviceName": "string — a SHORT, memorable, industry-standard product name (2-4 words max, like 'PipelineOS', 'LeadFlow Pro', 'GrowthEngine AI'). Must sound like a real SaaS product. Do NOT include long descriptions or dashes — just the brand name. This name will be used consistently across all marketing materials, landing pages, CRM, and communications.",
     "icp": {
       "description": "string — one-paragraph ICP summary",
       "companySize": "string — employee range",
@@ -331,8 +331,13 @@ export class OfferEngineeringAgent extends BaseAgent {
       companySize = targetAudience;
     }
 
-    const slug = niche.replace(/[^a-zA-Z0-9]+/g, ' ').trim().split(' ').slice(0, 3).join(' ');
-    const serviceName = `LeadFlow AI — ${slug} Engine`;
+    // Generate a short, memorable product name (2-4 words, SaaS-style)
+    const nicheWords = niche.replace(/[^a-zA-Z0-9]+/g, ' ').trim().split(' ').filter((w: string) => w.length > 2);
+    const coreWord = nicheWords[0] || 'Lead';
+    // Build a clean brand name like "LeadFlow AI", "PipelineOS", "GrowthHQ Pro"
+    const brandSuffixes = ['OS', 'AI', 'HQ', 'Pro', 'Flow'];
+    const suffix = brandSuffixes[Math.floor(coreWord.length % brandSuffixes.length)];
+    const serviceName = `${coreWord.charAt(0).toUpperCase() + coreWord.slice(1)}${suffix}`;
 
     return {
       offer: {
