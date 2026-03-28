@@ -258,7 +258,7 @@ function LeadsPageInner() {
 
       {/* ══════ HEADER ══════ */}
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-        className="relative rounded-2xl overflow-hidden p-6"
+        className="relative rounded-2xl p-6"
         style={{ background: 'linear-gradient(135deg, rgba(0,242,255,0.03), rgba(139,92,246,0.02), rgba(2,2,5,0.8))', border: '1px solid rgba(0,242,255,0.08)' }}>
         {/* Mini orbit */}
         <div className="absolute top-1/2 right-8 -translate-y-1/2 w-20 h-20 pointer-events-none hidden md:block opacity-20">
