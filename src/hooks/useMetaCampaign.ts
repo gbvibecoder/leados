@@ -18,23 +18,38 @@ interface UseCampaignState {
   formData: CampaignFormData | null;
 }
 
-export function useMetaCampaign() {
-  const [state, setState] = useState<UseCampaignState>({
-    step: 'idle',
-    ids: {},
-    error: null,
-    isLoading: false,
-    insights: null,
-    formData: null,
-  });
+// Module-level cache — persists campaign state across component remounts
+// so reopening the panel after launching still shows "live"
+let persistedState: { projectKey: string; state: UseCampaignState } | null = null;
+
+const defaultState: UseCampaignState = {
+  step: 'idle',
+  ids: {},
+  error: null,
+  isLoading: false,
+  insights: null,
+  formData: null,
+};
+
+export function useMetaCampaign(projectKey = '') {
+  const [state, setState] = useState<UseCampaignState>(
+    () => (persistedState && persistedState.projectKey === projectKey) ? persistedState.state : defaultState
+  );
 
   const setStep = (step: CampaignStep, extra?: Partial<UseCampaignState>) => {
-    setState((prev) => ({
-      ...prev,
-      step,
-      isLoading: !['idle', 'ready_to_activate', 'live', 'failed'].includes(step),
-      ...extra,
-    }));
+    setState((prev) => {
+      const next = {
+        ...prev,
+        step,
+        isLoading: !['idle', 'ready_to_activate', 'live', 'failed'].includes(step),
+        ...extra,
+      };
+      // Persist terminal states so reopening the panel remembers launch status
+      if (step === 'live' || step === 'ready_to_activate') {
+        persistedState = { projectKey, state: next };
+      }
+      return next;
+    });
   };
 
   const fail = (error: string) => {
@@ -190,6 +205,10 @@ export function useMetaCampaign() {
       });
 
       setStep('live', { error: null });
+      // Signal pipeline to auto-resume after successful Meta ad launch
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('leados:ads-launched'));
+      }
     } catch (err: any) {
       fail(err.message || 'Activation failed');
     }
@@ -245,14 +264,8 @@ export function useMetaCampaign() {
   }, [state.ids]);
 
   const reset = useCallback(() => {
-    setState({
-      step: 'idle',
-      ids: {},
-      error: null,
-      isLoading: false,
-      insights: null,
-      formData: null,
-    });
+    persistedState = null;
+    setState(defaultState);
   }, []);
 
   return {

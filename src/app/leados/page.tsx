@@ -1013,6 +1013,17 @@ export default function LeadOSPage() {
     && (agentStatuses['paid-traffic'] === 'done')
     && !!pausedPipelineRef.current;
 
+  // Auto-resume pipeline when ads are launched (fired from PaidTrafficOutput or useMetaCampaign)
+  useEffect(() => {
+    const onAdsLaunched = () => {
+      if (useAppStore.getState().pipeline.status === 'paused' && pausedPipelineRef.current) {
+        handleResumePipeline();
+      }
+    };
+    window.addEventListener('leados:ads-launched', onAdsLaunched);
+    return () => window.removeEventListener('leados:ads-launched', onAdsLaunched);
+  }, [handleResumePipeline]);
+
   const togglePhase = (phaseId: string) => {
     setExpandedPhases(prev => {
       const next = new Set(prev);
@@ -1706,11 +1717,11 @@ export default function LeadOSPage() {
                               Your ad campaigns (Google Ads & Meta Ads) have been generated. Please review the targeting, budgets, and creatives before they go live.
                             </p>
 
-                            {/* Action buttons */}
+                            {/* Action button */}
                             <div className="flex items-center gap-2">
                               <button
                                 onClick={() => setSelectedAgent('paid-traffic')}
-                                className="flex-1 flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-medium transition-all"
+                                className="w-full flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-medium transition-all"
                                 style={{
                                   background: 'rgba(245,158,11,0.08)',
                                   border: '1px solid rgba(245,158,11,0.2)',
@@ -1719,17 +1730,6 @@ export default function LeadOSPage() {
                               >
                                 <Eye className="w-3.5 h-3.5" />
                                 Review Ads
-                              </button>
-                              <button
-                                onClick={handleResumePipeline}
-                                className="flex-1 flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-medium text-black transition-all hover:brightness-110"
-                                style={{
-                                  background: 'linear-gradient(135deg, #f59e0b, #f97316)',
-                                  boxShadow: '0 0 20px rgba(245,158,11,0.2)',
-                                }}
-                              >
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                Approve & Continue
                               </button>
                             </div>
                           </div>
