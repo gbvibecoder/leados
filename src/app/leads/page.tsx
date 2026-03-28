@@ -237,15 +237,15 @@ function LeadsPageInner() {
   const fetchLeads = () => {
     setLoading(true);
     const params: Record<string, string> = {};
-    if (stageFilter) params.stage = stageFilter;
     if (sourceFilter) params.source = sourceFilter;
     if (selectedProjectId) params.projectId = selectedProjectId;
     leados.getLeads(params).then(setLeads).catch(() => setLeads([])).finally(() => setLoading(false));
   };
 
-  useEffect(() => { fetchLeads(); }, [stageFilter, sourceFilter, selectedProjectId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchLeads(); }, [sourceFilter, selectedProjectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = leads.filter(l => {
+    if (stageFilter && l.stage !== stageFilter) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     return l.name?.toLowerCase().includes(q) || l.company?.toLowerCase().includes(q) || l.email?.toLowerCase().includes(q);
