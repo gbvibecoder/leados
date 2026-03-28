@@ -17,6 +17,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  console.log(`[META /api/meta/creative] Creating creative:`, {
+    messageLength: message.length,
+    link: link.slice(0, 60),
+    cta_type,
+    hasImage: !!image_url,
+    imageUrl: image_url ? image_url.slice(0, 100) : '(none)',
+  });
+
   const result = await createAdCreative({ message, link, cta_type, image_url });
 
   if (!result.success) {

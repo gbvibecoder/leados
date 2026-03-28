@@ -25,6 +25,8 @@ interface AgentDetailPanelProps {
   isPipelinePaused?: boolean;
   /** Filter runs to only this project (pass null/undefined for all) */
   projectId?: string | null;
+  /** Fallback agent output from frontend state (used when DB runs are empty) */
+  fallbackOutput?: any;
   onClose: () => void;
   onRun: () => void;
   onPause?: () => void;
@@ -38,7 +40,7 @@ function formatElapsed(seconds: number): string {
   return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
-function AgentDetailPanelInner({ agentId, agentName, description, isRunning: isRunningProp, elapsedTime, agentStatus: agentStatusProp, agentError, prerequisiteAgent, isPipelineRunning, isPipelinePaused, projectId, onClose, onRun, onPause, onReset, onResolved }: AgentDetailPanelProps) {
+function AgentDetailPanelInner({ agentId, agentName, description, isRunning: isRunningProp, elapsedTime, agentStatus: agentStatusProp, agentError, prerequisiteAgent, isPipelineRunning, isPipelinePaused, projectId, fallbackOutput, onClose, onRun, onPause, onReset, onResolved }: AgentDetailPanelProps) {
   // If pipeline is paused, this agent cannot be running — override stale state
   const isRunning = isPipelinePaused ? false : isRunningProp;
   const agentStatus = isPipelinePaused && agentStatusProp === 'running' ? 'idle' : agentStatusProp;
@@ -53,11 +55,47 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning: isR
     agentsApi.runs(agentId, projectId)
       .then((data) => {
         const runsList = Array.isArray(data) ? data : [];
-        setRuns(runsList);
-        if (runsList.length > 0) setSelectedRun(runsList[0]);
-        else setSelectedRun(null);
+        if (runsList.length > 0) {
+          setRuns(runsList);
+          setSelectedRun(runsList[0]);
+        } else if (fallbackOutput && (agentStatus === 'done' || agentStatus === 'error')) {
+          // DB returned no runs but frontend has output — use it as fallback
+          const syntheticRun = {
+            id: `fallback-${agentId}`,
+            agentId,
+            agentName,
+            status: fallbackOutput.success === false ? 'error' : 'done',
+            outputsJson: fallbackOutput,
+            error: fallbackOutput.success === false ? (fallbackOutput.error || fallbackOutput.reasoning || 'Agent failed') : null,
+            startedAt: new Date().toISOString(),
+            completedAt: new Date().toISOString(),
+          };
+          setRuns([syntheticRun]);
+          setSelectedRun(syntheticRun);
+        } else {
+          setRuns([]);
+          setSelectedRun(null);
+        }
       })
-      .catch(() => setRuns([]))
+      .catch(() => {
+        // DB unavailable — try fallback output
+        if (fallbackOutput && (agentStatus === 'done' || agentStatus === 'error')) {
+          const syntheticRun = {
+            id: `fallback-${agentId}`,
+            agentId,
+            agentName,
+            status: fallbackOutput.success === false ? 'error' : 'done',
+            outputsJson: fallbackOutput,
+            error: fallbackOutput.success === false ? (fallbackOutput.error || fallbackOutput.reasoning || 'Agent failed') : null,
+            startedAt: new Date().toISOString(),
+            completedAt: new Date().toISOString(),
+          };
+          setRuns([syntheticRun]);
+          setSelectedRun(syntheticRun);
+        } else {
+          setRuns([]);
+        }
+      })
       .finally(() => setLoading(false));
   };
 

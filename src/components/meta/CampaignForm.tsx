@@ -5,7 +5,7 @@ import {
   Megaphone, IndianRupee, Globe, Users, Type, Link, MousePointerClick,
   Calendar, Target, LayoutGrid, CreditCard, MapPin, X, Search,
 } from 'lucide-react';
-import type { CampaignFormData, CampaignObjective, CallToAction, Gender, Placement, BillingEvent, CityTarget } from '@/types/meta';
+import type { CampaignFormData, CampaignObjective, CallToAction, Gender, Placement, BillingEvent, CityTarget, AdCreativeData } from '@/types/meta';
 
 const OBJECTIVES: { value: CampaignObjective; label: string; desc: string }[] = [
   { value: 'OUTCOME_LEADS', label: 'Lead Generation', desc: 'Collect leads via forms' },
@@ -178,8 +178,14 @@ export default function CampaignForm({ onSubmit, isLoading, initialData, submitL
     const e: Record<string, string> = {};
     if (!form.campaignName.trim()) e.campaignName = 'Campaign name is required';
     if (!form.dailyBudget || form.dailyBudget < 100) e.dailyBudget = 'Minimum budget is 100 paise (₹1)';
-    if (!form.adHeadline.trim()) e.adHeadline = 'Headline is required';
-    if (!form.adBody.trim()) e.adBody = 'Body text is required';
+    // Validate creatives — if multi-creative mode, check those; else check legacy fields
+    if (form.adCreatives && form.adCreatives.length > 0) {
+      const emptyCreative = form.adCreatives.find((c) => !c.headline.trim() || !c.body.trim());
+      if (emptyCreative) e.adCreatives = 'All ad creatives need a headline and body';
+    } else {
+      if (!form.adHeadline.trim()) e.adHeadline = 'Headline is required';
+      if (!form.adBody.trim()) e.adBody = 'Body text is required';
+    }
     try {
       new URL(form.destinationUrl);
     } catch {
@@ -543,37 +549,105 @@ export default function CampaignForm({ onSubmit, isLoading, initialData, submitL
         </div>
       </div>
 
-      {/* ── Section 6: Ad Creative ── */}
+      {/* ── Section 6: Ad Creatives (all 3 ads) ── */}
       <div className={sectionCls}>
         <h3 className="text-xs font-semibold text-gray-300 uppercase tracking-wider flex items-center gap-2">
-          <Type className="w-3.5 h-3.5 text-yellow-400" /> Ad Creative
+          <Type className="w-3.5 h-3.5 text-yellow-400" /> Ad Creatives ({form.adCreatives?.length || 1})
         </h3>
-        <div className="space-y-4">
-          <div>
-            <label className={labelCls}>
-              <span className="flex items-center gap-1"><Type className="w-3 h-3" /> Ad Headline</span>
-            </label>
-            <input
-              className={inputCls}
-              value={form.adHeadline}
-              onChange={(e) => set('adHeadline', e.target.value)}
-              placeholder="Your ad headline"
-              disabled={isLoading}
-            />
-            {errors.adHeadline && <p className={errorCls}>{errors.adHeadline}</p>}
+
+        {/* Show all ad creatives with image previews */}
+        {(form.adCreatives && form.adCreatives.length > 0) ? (
+          <div className="space-y-4">
+            {form.adCreatives.map((creative, idx) => (
+              <div key={idx} className="rounded-lg border border-zinc-700/50 bg-zinc-800/50 overflow-hidden">
+                {/* Creative header */}
+                <div className="px-3 py-2 border-b border-zinc-700/50 flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-zinc-300">
+                    Ad {idx + 1}{creative.audienceLabel ? ` — ${creative.audienceLabel}` : ''}
+                  </span>
+                </div>
+
+                <div className="flex gap-3 p-3">
+                  {/* Image preview */}
+                  {creative.imageUrl && (
+                    <div className="w-24 h-24 rounded-lg overflow-hidden flex-shrink-0 bg-zinc-900">
+                      <img src={creative.imageUrl} alt={`Ad ${idx + 1}`}
+                        className="w-full h-full object-cover" />
+                    </div>
+                  )}
+
+                  {/* Editable fields */}
+                  <div className="flex-1 space-y-2 min-w-0">
+                    <input
+                      className="w-full px-2 py-1.5 bg-zinc-900/80 border border-zinc-700 rounded text-xs text-zinc-100 placeholder:text-zinc-500 focus:border-blue-500 focus:outline-none"
+                      value={creative.headline}
+                      onChange={(e) => {
+                        const updated = [...(form.adCreatives || [])];
+                        updated[idx] = { ...updated[idx], headline: e.target.value };
+                        setForm((prev) => ({ ...prev, adCreatives: updated }));
+                      }}
+                      placeholder="Headline"
+                      disabled={isLoading}
+                    />
+                    <textarea
+                      className="w-full px-2 py-1.5 bg-zinc-900/80 border border-zinc-700 rounded text-xs text-zinc-100 placeholder:text-zinc-500 focus:border-blue-500 focus:outline-none resize-none min-h-[48px]"
+                      value={creative.body}
+                      onChange={(e) => {
+                        const updated = [...(form.adCreatives || [])];
+                        updated[idx] = { ...updated[idx], body: e.target.value };
+                        setForm((prev) => ({ ...prev, adCreatives: updated }));
+                      }}
+                      placeholder="Body text"
+                      disabled={isLoading}
+                    />
+                    <select
+                      className="w-full px-2 py-1.5 bg-zinc-900/80 border border-zinc-700 rounded text-xs text-zinc-100 focus:border-blue-500 focus:outline-none"
+                      value={creative.callToAction}
+                      onChange={(e) => {
+                        const updated = [...(form.adCreatives || [])];
+                        updated[idx] = { ...updated[idx], callToAction: e.target.value as CallToAction };
+                        setForm((prev) => ({ ...prev, adCreatives: updated }));
+                      }}
+                      disabled={isLoading}
+                    >
+                      {CTA_OPTIONS.map((c) => (
+                        <option key={c.value} value={c.value}>{c.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
-          <div>
-            <label className={labelCls}>Ad Body Text</label>
-            <textarea
-              className={`${inputCls} min-h-[80px] resize-none`}
-              value={form.adBody}
-              onChange={(e) => set('adBody', e.target.value)}
-              placeholder="Describe your offer..."
-              disabled={isLoading}
-            />
-            {errors.adBody && <p className={errorCls}>{errors.adBody}</p>}
+        ) : (
+          /* Fallback: single creative (legacy) */
+          <div className="space-y-4">
+            <div>
+              <label className={labelCls}>
+                <span className="flex items-center gap-1"><Type className="w-3 h-3" /> Ad Headline</span>
+              </label>
+              <input
+                className={inputCls}
+                value={form.adHeadline}
+                onChange={(e) => set('adHeadline', e.target.value)}
+                placeholder="Your ad headline"
+                disabled={isLoading}
+              />
+              {errors.adHeadline && <p className={errorCls}>{errors.adHeadline}</p>}
+            </div>
+            <div>
+              <label className={labelCls}>Ad Body Text</label>
+              <textarea
+                className={`${inputCls} min-h-[80px] resize-none`}
+                value={form.adBody}
+                onChange={(e) => set('adBody', e.target.value)}
+                placeholder="Describe your offer..."
+                disabled={isLoading}
+              />
+              {errors.adBody && <p className={errorCls}>{errors.adBody}</p>}
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>

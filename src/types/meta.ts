@@ -113,6 +113,16 @@ export interface CampaignInsights {
   date_stop: string;
 }
 
+// ── Ad Creative (one per ad set) ───────────────────────────────────────────
+
+export interface AdCreativeData {
+  headline: string;
+  body: string;
+  callToAction: CallToAction;
+  imageUrl?: string; // FAL/DALL-E generated image URL
+  audienceLabel?: string; // e.g. "Cold — Developers Germany"
+}
+
 // ── Campaign Form Data (from UI) ────────────────────────────────────────────
 
 export interface CampaignFormData {
@@ -133,6 +143,8 @@ export interface CampaignFormData {
   adBody: string;
   destinationUrl: string;
   callToAction: CallToAction;
+  /** Multiple ad creatives — one per ad set (up to 3) */
+  adCreatives?: AdCreativeData[];
 }
 
 // ── Hook State ──────────────────────────────────────────────────────────────

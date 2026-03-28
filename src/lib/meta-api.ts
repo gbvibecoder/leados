@@ -527,39 +527,44 @@ export async function createAdCreative(params: {
   }
   console.log(`[META-API] Using page_id for creative: ${pageId}`);
 
-  // Use provided image URL or a reliable public placeholder
-  // Pollinations.ai URLs are generated on-the-fly and Meta's crawlers can't download them
-  // Use a high-quality public stock image as fallback
-  const adImageUrl = params.image_url
-    || 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1200&h=628&fit=crop&q=80';
+  // Use provided image URL (FAL AI or DALL-E generated)
+  const adImageUrl = params.image_url && params.image_url.startsWith('http') ? params.image_url : '';
+  console.log(`[META-API] Creating creative with image: ${adImageUrl ? adImageUrl.slice(0, 80) + '...' : '(no image)'}`);
 
   // Step 1: Create a post directly on the Facebook Page
   // This bypasses the "app in development mode" restriction because
   // the post is created as a page post, not through the app's object_story_spec
   const postText = `${params.message}\n\n${params.link}`;
-  const postResult = await metaFetch<{ id: string }>(`/${pageId}/feed`, 'POST', {
+  const postPayload: Record<string, any> = {
     message: postText,
     link: params.link,
-    picture: adImageUrl,
     published: false, // unpublished "dark post" — only used as ad
-  });
+  };
+  // Only include picture if we have a valid URL — empty string breaks Meta API
+  if (adImageUrl) {
+    postPayload.picture = adImageUrl;
+  }
+  const postResult = await metaFetch<{ id: string }>(`/${pageId}/feed`, 'POST', postPayload);
 
   if (!postResult.success || !postResult.data?.id) {
     // Fallback: try object_story_spec anyway (works if app is Live)
     console.log('[META-API] Page post failed, falling back to object_story_spec');
+    const linkData: Record<string, any> = {
+      message: params.message,
+      link: params.link,
+      call_to_action: {
+        type: params.cta_type,
+        value: { link: params.link },
+      },
+    };
+    if (adImageUrl) {
+      linkData.picture = adImageUrl;
+    }
     return metaFetch(`/act_${AD_ACCOUNT_ID()}/adcreatives`, 'POST', {
       name: 'LeadOS Ad Creative',
       object_story_spec: {
         page_id: pageId,
-        link_data: {
-          message: params.message,
-          link: params.link,
-          picture: adImageUrl,
-          call_to_action: {
-            type: params.cta_type,
-            value: { link: params.link },
-          },
-        },
+        link_data: linkData,
       },
     });
   }

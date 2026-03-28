@@ -512,6 +512,29 @@ export default function LeadOSPage() {
             break;
           }
 
+          // Check if agent returned success: false (e.g. JSON parse failure)
+          if (agentResult.output && agentResult.output.success === false) {
+            stopAgentTimer(agentId);
+            const errMsg = cleanErrorMsg(agentResult.output.error || agentResult.output.reasoning || 'Agent failed');
+            updateAgentStatus(agentId, { status: 'error', error: errMsg });
+            setAgentOutputs(prev => ({ ...prev, [agentId]: agentResult.output }));
+            addActivity({ type: 'agent_error', agentId, agentName, message: `${agentName} failed: ${errMsg}` });
+
+            // Stop pipeline on error
+            setPipelineError(`${agentName} failed: ${errMsg}`);
+            updatePipelineStatus('error');
+            setRunningAgentId(null);
+            activePipelineCtxRef.current = null;
+
+            try {
+              await apiFetch(`/api/pipelines/${created.id}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ status: 'error' }),
+              });
+            } catch { /* ignore */ }
+            break;
+          }
+
           // Store output for chaining to next agent
           if (agentResult.output?.success) {
             previousOutputs[agentId] = agentResult.output.data;
@@ -664,9 +687,23 @@ export default function LeadOSPage() {
               const output = latestRun.outputsJson || latestRun;
               setAgentOutputs(prev => ({ ...prev, [agentId]: output }));
 
+              // Check if agent returned success: false (e.g. JSON parse failure)
+              if (output && output.success === false) {
+                const errMsg = cleanErrorMsg(output.error || output.reasoning || 'Agent failed');
+                updateAgentStatus(agentId, { status: 'error', error: errMsg });
+                addActivity({
+                  type: 'agent_error',
+                  agentId,
+                  agentName: LEADOS_AGENTS.find(a => a.id === agentId)?.name || agentId,
+                  message: `${LEADOS_AGENTS.find(a => a.id === agentId)?.name || agentId} failed: ${errMsg}`,
+                });
+                setRunningAgentId(null);
+                return;
+              }
+
               const preview = output?.reasoning
                 || output?.data?.reasoning
-                || (output?.success ? 'Completed successfully with live data' : 'Completed');
+                || 'Completed successfully with live data';
 
               updateAgentStatus(agentId, {
                 status: 'done',
@@ -1725,6 +1762,7 @@ export default function LeadOSPage() {
               isPipelineRunning={isRunning || (!!runningAgentId && runningAgentId !== selectedAgent)}
               isPipelinePaused={pipeline.status === 'paused'}
               projectId={selectedProjectId}
+              fallbackOutput={agentOutputs[selectedAgent]}
               onClose={() => setSelectedAgent(null)}
               onRun={() => handleRunAgent(selectedAgent)}
               onPause={() => handlePauseAgent(selectedAgent)}

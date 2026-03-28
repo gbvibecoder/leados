@@ -6,6 +6,7 @@ import type {
   CampaignIds,
   CampaignFormData,
   CampaignInsights,
+  AdCreativeData,
 } from '@/types/meta';
 
 interface UseCampaignState {
@@ -100,33 +101,66 @@ export function useMetaCampaign() {
       );
       ids.adset_id = adsetRes.adset_id;
 
-      // Step 4: Create ad creative
+      // Step 4: Create ad creatives (one per ad creative, or single legacy)
       setStep('creating_creative', { ids });
-      const creativeRes = await apiCall<{ creative_id: string }>(
-        '/api/meta/creative',
-        {
+
+      // Build the list of creatives — use adCreatives array (with images) or legacy single creative
+      const creatives: AdCreativeData[] = form.adCreatives && form.adCreatives.length > 0
+        ? form.adCreatives
+        : [{
+            headline: form.adHeadline,
+            body: form.adBody,
+            callToAction: form.callToAction,
+          }];
+
+      const creativeIds: string[] = [];
+      for (let i = 0; i < creatives.length; i++) {
+        const creative = creatives[i];
+        const imgUrl = creative.imageUrl && creative.imageUrl.startsWith('http') ? creative.imageUrl : '';
+
+        console.log(`[META] Creating creative ${i + 1}/${creatives.length}:`, {
+          headline: creative.headline?.slice(0, 40),
+          hasImage: !!imgUrl,
+          imageUrl: imgUrl ? imgUrl.slice(0, 100) : '(none)',
+        });
+
+        const payload: Record<string, string> = {
+          message: `${creative.headline}\n\n${creative.body}`,
+          link: form.destinationUrl,
+          cta_type: creative.callToAction || form.callToAction,
+        };
+        // CRITICAL: attach image_url only when it's a valid URL
+        if (imgUrl) {
+          payload.image_url = imgUrl;
+        }
+
+        const creativeRes = await apiCall<{ creative_id: string }>(
+          '/api/meta/creative',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          }
+        );
+        creativeIds.push(creativeRes.creative_id);
+      }
+      ids.creative_id = creativeIds[0]; // primary creative ID for progress display
+
+      // Step 5: Create ads (one per creative)
+      setStep('creating_ad', { ids });
+      const adIds: string[] = [];
+      for (const creativeId of creativeIds) {
+        const adRes = await apiCall<{ ad_id: string }>('/api/meta/ad', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            message: `${form.adHeadline}\n\n${form.adBody}`,
-            link: form.destinationUrl,
-            cta_type: form.callToAction,
+            adset_id: ids.adset_id,
+            creative_id: creativeId,
           }),
-        }
-      );
-      ids.creative_id = creativeRes.creative_id;
-
-      // Step 5: Create ad
-      setStep('creating_ad', { ids });
-      const adRes = await apiCall<{ ad_id: string }>('/api/meta/ad', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          adset_id: ids.adset_id,
-          creative_id: ids.creative_id,
-        }),
-      });
-      ids.ad_id = adRes.ad_id;
+        });
+        adIds.push(adRes.ad_id);
+      }
+      ids.ad_id = adIds[0]; // primary ad ID for progress display
 
       // Step 6: Ready for review
       setStep('ready_to_activate', { ids, error: null });

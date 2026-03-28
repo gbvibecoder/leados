@@ -359,7 +359,14 @@ export class PaidTrafficAgent extends BaseAgent {
         parsed = this.safeParseLLMJson<any>(response, ['googleAds', 'metaAds']);
       } catch (parseErr: any) {
         await this.log('llm_json_parse_error', { error: parseErr.message });
-        parsed = { reasoning: `LLM JSON parse failed: ${parseErr.message}`, confidence: 0 };
+        this.status = 'done';
+        return {
+          success: false,
+          data: { error: parseErr.message, agentId: this.id },
+          reasoning: `Failed to parse campaign data from AI response. Please try running the agent again.`,
+          confidence: 0,
+          error: `LLM JSON parse failed: ${parseErr.message}`,
+        };
       }
 
       // ── BUILD CLEAN OUTPUT — DO NOT trust ANY metric from LLM ──────────
@@ -392,22 +399,28 @@ export class PaidTrafficAgent extends BaseAgent {
           adSets: (parsed.metaAds?.adSets || []).map((adSet: any, setIdx: number) => ({
             ...adSet,
             creatives: (adSet.creatives || []).map((cr: any, crIdx: number) => {
-              // Generate a project-aware image prompt for each creative
+              // Visual scene prompts — the text (headline, CTA, brand) is added
+              // separately by the /api/ads/generate-image endpoint for clean rendering
               const pName = productContext?.title || offerData.serviceName || inputs.config?.projectName || 'Product';
               const pDesc = productContext?.description || offerData.transformationPromise || cr.description || '';
-              const audience = adSet.audience || adSet.type || '';
-              const promptStyles = [
-                `Professional social media ad for "${pName}". Smartphone or laptop showing the "${pName}" app dashboard with realistic UI. Dark navy-blue background, subtle orange accent lighting. ${pDesc ? `Product: ${pDesc}.` : ''} Photorealistic marketing photography, no text overlay, sharp details.`,
-                `Professional person using "${pName}" on a laptop in a modern office. Screen shows product dashboard. ${pDesc ? `Context: ${pDesc}.` : ''} Warm natural lighting, shallow depth of field, corporate photography, no text overlay.`,
-                `Split-screen ad concept. Left: cluttered desk with papers, stress, dim lighting. Right: clean workspace with laptop showing "${pName}" dashboard, organized, bright. ${pDesc ? `Product solves: ${pDesc}.` : ''} Professional photography, high contrast, no text overlay.`,
-                `Hero image for "${pName}" showing floating holographic dashboard with charts, maps, notifications. Dark blue-black background, glowing orange and white UI elements. ${pDesc ? `Dashboard: ${pDesc}.` : ''} Cinematic 3D render, no text overlay.`,
-                `Business professionals in conference room viewing "${pName}" analytics on large screen. ${pDesc ? `Product: ${pDesc}.` : ''} Warm lighting, glass walls, modern office. Corporate photography, no text overlay.`,
-                `Close-up product shot of smartphone displaying "${pName}" app with notification alerts. Phone floating at angle against dark gradient background with subtle orange glow. ${pDesc ? `App: ${pDesc}.` : ''} Premium product photography, no text overlay.`,
+              const keywords = productContext?.keywords?.slice(0, 3)?.join(', ') || '';
+
+              const AD_SCENES = [
+                // Scene 0: Product hero — devices centered
+                `MIDDLE SECTION: A photorealistic MacBook laptop and iPhone side by side, both showing the "${pName}" app. The laptop displays a dark-themed dashboard with a city map, orange location pins, data cards, and a notification popup. The phone shows a push notification alert. Floating semi-transparent icons (bell, checkmark, map pin) in orange glow around the devices.${pDesc ? ` Context: ${pDesc}.` : ''}${keywords ? ` Tags visible on screen: ${keywords}.` : ''}`,
+
+                // Scene 1: Before/after split
+                `MIDDLE SECTION: Split composition. LEFT: Frustrated person at messy desk with printed documents, open browser tabs, sticky notes — dim cold lighting. RIGHT: Sleek MacBook showing "${pName}" dashboard with organized data, map view, alert notifications — bright warm lighting with orange glow.${pDesc ? ` Product solves: ${pDesc}.` : ''}`,
+
+                // Scene 2: Professional workspace
+                `MIDDLE SECTION: Over-the-shoulder view of professional at clean modern desk. MacBook screen shows "${pName}" dashboard with regional map, filter tags, real-time data cards. Smartphone beside laptop shows push notification. Coffee cup on desk. Subtle floating orange location pins and document icons above screen.${pDesc ? ` Product: ${pDesc}.` : ''}`,
               ];
-              const idx = (setIdx * 3 + crIdx) % promptStyles.length;
+
+              const imagePrompt = AD_SCENES[setIdx % AD_SCENES.length];
+
               return {
                 ...cr,
-                imagePrompt: cr.imagePrompt || promptStyles[idx],
+                imagePrompt: cr.imagePrompt || imagePrompt,
               };
             }),
           })),
