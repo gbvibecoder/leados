@@ -52,6 +52,15 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning: isR
   const prevRunningRef = useRef(isRunning);
 
   const fetchRuns = () => {
+    // When no project is selected and agent hasn't been run, skip fetching —
+    // otherwise the API returns runs from ALL projects, leaking stale data
+    if (!projectId && agentStatus === 'idle') {
+      setRuns([]);
+      setSelectedRun(null);
+      setLoading(false);
+      return;
+    }
+
     agentsApi.runs(agentId, projectId)
       .then((data) => {
         const runsList = Array.isArray(data) ? data : [];
@@ -105,7 +114,7 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning: isR
     setPrompt('');
     setHistoryExpanded(false);
     fetchRuns();
-  }, [agentId]);
+  }, [agentId, projectId]);
 
   // Clear runs immediately when agent status resets to idle (e.g. pipeline reset)
   // This prevents showing stale data while the DB delete is still in-flight
@@ -360,8 +369,8 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning: isR
                 </div>
               )}
 
-              {/* Dependency Warning Popup */}
-              {!isRunning && agentStatus !== 'running' && prerequisiteAgent && (
+              {/* Dependency Warning Popup — hide when agent already completed or errored */}
+              {!isRunning && agentStatus !== 'running' && agentStatus !== 'done' && agentStatus !== 'error' && prerequisiteAgent && (
                 <div className="flex items-start gap-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
                   <AlertTriangle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
                   <div>
@@ -390,10 +399,10 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning: isR
               {!isRunning && agentStatus !== 'running' && (
                 <button
                   onClick={handleRunWithPrompt}
-                  disabled={!!prerequisiteAgent || !!isPipelineRunning}
+                  disabled={(!!prerequisiteAgent && agentStatus !== 'done' && agentStatus !== 'error') || !!isPipelineRunning}
                   className={cn(
                     'flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all',
-                    (prerequisiteAgent || isPipelineRunning)
+                    ((prerequisiteAgent && agentStatus !== 'done' && agentStatus !== 'error') || isPipelineRunning)
                       ? 'bg-white/5 border border-white/[0.08] text-gray-500 cursor-not-allowed'
                       : 'bg-cyan-600 text-white hover:bg-cyan-500'
                   )}

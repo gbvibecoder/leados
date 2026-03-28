@@ -113,20 +113,18 @@ export default function LeadOSPage() {
   const isInternal = selectedProject?.type === 'internal';
 
   // Load agent run statuses from DB for a project that was run previously
+  /** Fetch runs from DB for a project and apply them to the current pipeline + page state */
   const loadProjectRunsFromDB = useCallback(async (projectId: string) => {
     try {
-      // Fetch latest pipeline for this project
       const allPipelines = await apiFetch('/api/pipelines').then(r => r.json());
       if (!Array.isArray(allPipelines)) return;
 
-      // Find the most recent pipeline for this project
       const projectPipeline = allPipelines.find((p: any) => p.projectId === projectId);
       if (!projectPipeline || !projectPipeline.agentRuns?.length) return;
 
       // Bail if user already switched away while we were fetching
       if (useAppStore.getState().selectedProjectId !== projectId) return;
 
-      // Update agent statuses in the store pipeline
       const restoredOutputs: Record<string, any> = {};
       let restoredCount = 0;
       for (const run of projectPipeline.agentRuns) {
@@ -144,18 +142,15 @@ export default function LeadOSPage() {
           if (run.status === 'done' && run.outputsJson) {
             restoredOutputs[run.agentId] = run.outputsJson;
           } else if (run.status === 'error') {
-            // Clear any stale output from a previous successful run
             delete restoredOutputs[run.agentId];
           }
         }
       }
 
-      // Update page-level outputs
       if (Object.keys(restoredOutputs).length > 0) {
         setAgentOutputs(restoredOutputs);
       }
 
-      // Update pipeline status to reflect the DB state
       if (restoredCount > 0) {
         if (projectPipeline.status === 'completed') {
           updatePipelineStatus('completed');
@@ -166,8 +161,6 @@ export default function LeadOSPage() {
         }
       }
 
-      // Cache the restored state so future switches are instant (no re-fetch)
-      // Defer slightly so updateAgentStatus calls have propagated to the store
       requestAnimationFrame(() => {
         if (useAppStore.getState().selectedProjectId === projectId) {
           cacheProjectPipeline(projectId, restoredOutputs, {});
@@ -178,6 +171,92 @@ export default function LeadOSPage() {
     }
   }, [updateAgentStatus, updatePipelineStatus, cacheProjectPipeline]);
 
+  /**
+   * Pre-fetch project runs from DB and populate the pipeline cache BEFORE
+   * selectProject runs, so the switch is instant with no idle flash.
+   */
+  const prefetchProjectPipeline = useCallback(async (projectId: string) => {
+    try {
+      const allPipelines = await apiFetch('/api/pipelines').then(r => r.json());
+      if (!Array.isArray(allPipelines)) return;
+
+      const projectPipeline = allPipelines.find((p: any) => p.projectId === projectId);
+      if (!projectPipeline || !projectPipeline.agentRuns?.length) return;
+
+      // Build agent states from DB runs
+      const state = useAppStore.getState();
+      const project = state.projects.find(p => p.id === projectId);
+      const baseAgents = LEADOS_AGENTS.map(a => ({
+        ...a,
+        status: 'idle' as const,
+        lastRunTime: undefined as string | undefined,
+        outputPreview: undefined as string | undefined,
+        progress: undefined as number | undefined,
+        error: undefined as string | undefined,
+      }));
+
+      const restoredOutputs: Record<string, any> = {};
+      let restoredCount = 0;
+
+      for (const run of projectPipeline.agentRuns) {
+        if (run.status === 'done' || run.status === 'error') {
+          const agent = baseAgents.find(a => a.id === run.agentId);
+          if (agent) {
+            agent.status = run.status;
+            agent.progress = run.status === 'done' ? 100 : 0;
+            agent.lastRunTime = run.completedAt || run.startedAt;
+            agent.outputPreview = typeof run.outputsJson?.reasoning === 'string'
+              ? run.outputsJson.reasoning.slice(0, 120)
+              : run.status === 'done' ? 'Completed successfully' : undefined;
+            agent.error = run.status === 'error' ? cleanErrorMsg(run.error || 'Agent failed') : undefined;
+          }
+          restoredCount++;
+          if (run.status === 'done' && run.outputsJson) {
+            restoredOutputs[run.agentId] = run.outputsJson;
+          }
+        }
+      }
+
+      if (restoredCount > 0) {
+        // Filter agents for the project type (internal projects skip discovery)
+        const enabledIds = project?.config?.enabledAgentIds;
+        const isInternal = project?.type === 'internal';
+        let filteredAgents = baseAgents;
+        if (enabledIds) {
+          const enabledSet = new Set(enabledIds);
+          filteredAgents = baseAgents.filter(a => enabledSet.has(a.id));
+        } else if (isInternal) {
+          const discoveryIds = new Set(['service-research', 'offer-engineering', 'validation', 'funnel-builder']);
+          filteredAgents = baseAgents.filter(a => !discoveryIds.has(a.id));
+        }
+
+        const pipelineStatus = projectPipeline.status === 'completed' ? 'completed'
+          : projectPipeline.status === 'error' ? 'error'
+          : projectPipeline.status === 'paused' ? 'paused' : 'idle';
+
+        cacheProjectPipeline(projectId, restoredOutputs, {});
+        // Also cache the pipeline state directly in the store
+        useAppStore.setState((prev) => ({
+          projectPipelineCache: {
+            ...prev.projectPipelineCache,
+            [projectId]: {
+              pipeline: {
+                id: projectPipeline.id,
+                status: pipelineStatus as any,
+                agents: filteredAgents,
+                currentAgentIndex: 0,
+              },
+              agentOutputs: restoredOutputs,
+              elapsedTimes: {},
+            },
+          },
+        }));
+      }
+    } catch {
+      // DB unavailable — will fall back to idle pipeline
+    }
+  }, [cacheProjectPipeline]);
+
   // Keep a ref to agentOutputs/elapsedTimes so the project-switch effect
   // can cache them without stale closures
   const agentOutputsRef = useRef(agentOutputs);
@@ -185,70 +264,68 @@ export default function LeadOSPage() {
   const elapsedTimesRef = useRef(elapsedTimes);
   elapsedTimesRef.current = elapsedTimes;
 
-  // React to selectedProjectId changes — works whether triggered from page or navbar
+  // React to selectedProjectId changes — works on mount AND when triggered from page or navbar
   const prevProjectIdRef = useRef<string | null | undefined>(undefined);
   useEffect(() => {
-    // Skip first mount
-    if (prevProjectIdRef.current === undefined) {
-      prevProjectIdRef.current = selectedProjectId;
-      return;
-    }
-    if (prevProjectIdRef.current === selectedProjectId) return;
+    const isMount = prevProjectIdRef.current === undefined;
+    if (!isMount && prevProjectIdRef.current === selectedProjectId) return;
 
     const prevId = prevProjectIdRef.current;
     prevProjectIdRef.current = selectedProjectId;
 
-    // Close any open agent detail panel and clear errors — they are project-specific
-    setSelectedAgent(null);
-    setPipelineError(null);
-
-    // Cache outgoing project's agentOutputs into the store cache
-    // (pipeline state is already cached by store.selectProject)
-    if (prevId) {
-      cacheProjectPipeline(prevId, agentOutputsRef.current, elapsedTimesRef.current);
+    // On project switch (not mount), close panels and clear stale context
+    if (!isMount) {
+      setSelectedAgent(null);
+      setPipelineError(null);
+      pausedPipelineRef.current = null;
+      activePipelineCtxRef.current = null;
     }
 
-    // Restore incoming project's cached outputs, or load from DB
-    if (selectedProjectId) {
-      const cached = getProjectPipelineCache(selectedProjectId);
-      // Cache is valid if it has agentOutputs OR if the pipeline has agents with done/error status
-      const cacheHasOutputs = cached && Object.keys(cached.agentOutputs).length > 0;
-      const cacheHasStatuses = cached && cached.pipeline.agents.some(a => a.status === 'done' || a.status === 'error');
-      if (cached && (cacheHasOutputs || cacheHasStatuses)) {
-        // Filter out outputs for agents that errored — prevent showing stale data
-        const cleanOutputs = { ...cached.agentOutputs };
-        for (const agent of cached.pipeline.agents) {
-          if (agent.status === 'error') {
-            delete cleanOutputs[agent.id];
-          }
+    // Cache outgoing project/default agentOutputs (skip on mount — nothing to cache yet)
+    if (!isMount && prevId !== undefined) {
+      cacheProjectPipeline(prevId || '__default__', agentOutputsRef.current, elapsedTimesRef.current);
+    }
+
+    // Restore incoming project/default cached outputs, or load from DB
+    const cacheKey = selectedProjectId || '__default__';
+    const cached = getProjectPipelineCache(cacheKey);
+    const cacheHasOutputs = cached && Object.keys(cached.agentOutputs).length > 0;
+    const cacheHasStatuses = cached && cached.pipeline.agents.some(a => a.status === 'done' || a.status === 'error');
+    if (cached && (cacheHasOutputs || cacheHasStatuses)) {
+      const cleanOutputs = { ...cached.agentOutputs };
+      for (const agent of cached.pipeline.agents) {
+        if (agent.status === 'error') {
+          delete cleanOutputs[agent.id];
         }
-        setAgentOutputs(cleanOutputs);
-        setElapsedTimes(cached.elapsedTimes);
-        // If cache has statuses but no outputs, load outputs from DB in background
-        if (cacheHasStatuses && !cacheHasOutputs) {
-          loadProjectRunsFromDB(selectedProjectId);
-        }
-      } else {
-        setAgentOutputs({});
-        setElapsedTimes({});
+      }
+      setAgentOutputs(cleanOutputs);
+      setElapsedTimes(cached.elapsedTimes);
+      if (cacheHasStatuses && !cacheHasOutputs && selectedProjectId) {
         loadProjectRunsFromDB(selectedProjectId);
       }
     } else {
-      setAgentOutputs({});
-      setElapsedTimes({});
+      if (!isMount) {
+        setAgentOutputs({});
+        setElapsedTimes({});
+      }
+      if (selectedProjectId) {
+        loadProjectRunsFromDB(selectedProjectId);
+      }
     }
   }, [selectedProjectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Wraps selectProject to cache outgoing agentOutputs BEFORE the store replaces pipeline
-  const handleSelectProject = useCallback((projectId: string | null) => {
+  const handleSelectProject = useCallback(async (projectId: string | null) => {
     const currentProjectId = useAppStore.getState().selectedProjectId;
     if (currentProjectId === projectId) return;
-    // Cache agentOutputs for outgoing project before store.selectProject caches pipeline
-    if (currentProjectId) {
-      cacheProjectPipeline(currentProjectId, agentOutputs, elapsedTimes);
+    // Cache agentOutputs for outgoing project/default before store.selectProject caches pipeline
+    cacheProjectPipeline(currentProjectId || '__default__', agentOutputs, elapsedTimes);
+    // Pre-fetch target project's runs from DB if no cache exists — prevents idle flash
+    if (projectId && !getProjectPipelineCache(projectId)) {
+      await prefetchProjectPipeline(projectId);
     }
     selectProject(projectId);
-  }, [selectProject, cacheProjectPipeline, agentOutputs, elapsedTimes]);
+  }, [selectProject, cacheProjectPipeline, getProjectPipelineCache, prefetchProjectPipeline, agentOutputs, elapsedTimes]);
 
   /** Build projectConfig with language/localization from the selected project */
   const buildProjectConfig = useCallback((): Record<string, any> => {
