@@ -20,9 +20,17 @@ interface PipelineState {
   currentAgentIndex: number;
 }
 
+export interface MetaAdConfig {
+  appId?: string;
+  appSecret?: string;
+  accessToken?: string;
+  adAccountId?: string;
+}
+
 export interface ProjectConfig {
   enabledAgentIds?: string[];
   startFromAgentId?: string;
+  metaAdConfig?: MetaAdConfig;
 }
 
 export interface Project {
@@ -120,8 +128,8 @@ interface AppState {
   selectedProjectId: string | null;
   setProjects: (projects: Project[]) => void;
   addProject: (project: Project) => void;
-  createProject: (data: { name: string; description?: string; url?: string; language?: string; type: 'internal' | 'external'; enabledAgentIds?: string[] }) => Project;
-  createProjectAsync: (data: { name: string; description?: string; url?: string; language?: string; type: 'internal' | 'external'; enabledAgentIds?: string[] }) => Promise<Project>;
+  createProject: (data: { name: string; description?: string; url?: string; language?: string; type: 'internal' | 'external'; enabledAgentIds?: string[]; metaAdConfig?: MetaAdConfig }) => Project;
+  createProjectAsync: (data: { name: string; description?: string; url?: string; language?: string; type: 'internal' | 'external'; enabledAgentIds?: string[]; metaAdConfig?: MetaAdConfig }) => Promise<Project>;
   updateProject: (projectId: string, updates: Partial<Project>) => void;
   updateProjectConfig: (projectId: string, config: ProjectConfig) => void;
   removeProject: (projectId: string) => void;
@@ -445,6 +453,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
         config: {
           ...(data.url ? { url: data.url } : {}),
           ...(data.enabledAgentIds ? { enabledAgentIds: data.enabledAgentIds } : {}),
+          ...(data.metaAdConfig ? { metaAdConfig: data.metaAdConfig } : {}),
         },
       }),
     });
@@ -452,6 +461,12 @@ export const useAppStore = create<AppState>()((set, get) => ({
     if (!res.ok || !dbProject?.id) {
       throw new Error(dbProject?.error || 'Failed to create project');
     }
+
+    const configObj: ProjectConfig | null = (data.url || data.enabledAgentIds || data.metaAdConfig) ? {
+      ...(data.url ? { url: data.url } : {}),
+      ...(data.enabledAgentIds ? { enabledAgentIds: data.enabledAgentIds } : {}),
+      ...(data.metaAdConfig ? { metaAdConfig: data.metaAdConfig } : {}),
+    } : null;
 
     const project: Project = {
       id: dbProject.id,
@@ -461,10 +476,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
       language: data.language,
       type: dbProject.type,
       status: dbProject.status || 'active',
-      config: (data.url || data.enabledAgentIds) ? {
-        ...(data.url ? { url: data.url } : {}),
-        ...(data.enabledAgentIds ? { enabledAgentIds: data.enabledAgentIds } : {}),
-      } : null,
+      config: configObj,
       createdAt: dbProject.createdAt,
       updatedAt: dbProject.updatedAt,
     };

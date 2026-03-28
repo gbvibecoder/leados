@@ -5,10 +5,11 @@ import { useRouter } from 'next/navigation';
 import {
   Plus, Building2, Globe, ArrowRight, Trash2, AlertTriangle, X,
   ChevronDown, Check, Link2, Bot, Pencil, Zap, Rocket, Sparkles, Languages,
+  Megaphone, Key, Eye, EyeOff, ChevronRight, SkipForward,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppStore, DISCOVERY_AGENT_IDS, LEADOS_AGENTS, SUPPORTED_LANGUAGES } from '@/lib/store';
-import type { Project } from '@/lib/store';
+import type { Project, MetaAdConfig } from '@/lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
 import { apiFetch } from '@/lib/api';
 
@@ -19,6 +20,7 @@ export default function ProjectsPage() {
   const router = useRouter();
   const { projects, selectProject, createProjectAsync, removeProject, updateProject, loadProjects } = useAppStore();
   const [showCreate, setShowCreate] = useState(false);
+  const [createStep, setCreateStep] = useState<1 | 2>(1);
   const [newName, setNewName] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newUrl, setNewUrl] = useState('');
@@ -31,6 +33,13 @@ export default function ProjectsPage() {
   const [showAgentDropdown, setShowAgentDropdown] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [urlError, setUrlError] = useState('');
+  // Meta Ad config (step 2)
+  const [metaAppId, setMetaAppId] = useState('');
+  const [metaAppSecret, setMetaAppSecret] = useState('');
+  const [metaAccessToken, setMetaAccessToken] = useState('');
+  const [metaAdAccountId, setMetaAdAccountId] = useState('');
+  const [showMetaSecret, setShowMetaSecret] = useState(false);
+  const [showMetaToken, setShowMetaToken] = useState(false);
   const [editProject, setEditProject] = useState<Project | null>(null);
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
@@ -85,20 +94,39 @@ export default function ProjectsPage() {
     try { const parsed = new URL(url); return parsed.protocol === 'http:' || parsed.protocol === 'https:'; } catch { return false; }
   };
 
-  const handleCreate = async () => {
+  const handleStep1Continue = () => {
     if (!newName.trim()) return;
     const trimmedUrl = newUrl.trim();
     if (trimmedUrl && !isValidUrl(trimmedUrl)) { setUrlError('Please enter a valid URL (e.g. https://example.com)'); return; }
     setUrlError('');
-    try {
-      await createProjectAsync({ name: newName.trim(), description: newDescription.trim() || undefined, url: trimmedUrl || undefined, language: newLanguage, type: newType, enabledAgentIds: [...selectedAgents] });
-    } catch (err: any) {
-      const msg = err?.message || '';
-      if (msg.toLowerCase().includes('url')) setUrlError(msg);
-      return;
-    }
+    setCreateStep(2);
+  };
+
+  const resetCreateForm = () => {
     setNewName(''); setNewDescription(''); setNewUrl(''); setNewLanguage('en'); setUrlError(''); setNewType('internal');
     setSelectedAgents(new Set(LEADOS_AGENTS.filter(a => !DISCOVERY_AGENT_IDS.includes(a.id)).map(a => a.id)));
+    setMetaAppId(''); setMetaAppSecret(''); setMetaAccessToken(''); setMetaAdAccountId('');
+    setShowMetaSecret(false); setShowMetaToken(false);
+    setCreateStep(1);
+  };
+
+  const handleCreate = async (skipMeta = false) => {
+    if (!newName.trim()) return;
+    const trimmedUrl = newUrl.trim();
+    setUrlError('');
+
+    const metaAdConfig: MetaAdConfig | undefined = (!skipMeta && (metaAppId || metaAppSecret || metaAccessToken || metaAdAccountId))
+      ? { appId: metaAppId.trim() || undefined, appSecret: metaAppSecret.trim() || undefined, accessToken: metaAccessToken.trim() || undefined, adAccountId: metaAdAccountId.trim() || undefined }
+      : undefined;
+
+    try {
+      await createProjectAsync({ name: newName.trim(), description: newDescription.trim() || undefined, url: trimmedUrl || undefined, language: newLanguage, type: newType, enabledAgentIds: [...selectedAgents], metaAdConfig });
+    } catch (err: any) {
+      const msg = err?.message || '';
+      if (msg.toLowerCase().includes('url')) { setUrlError(msg); setCreateStep(1); }
+      return;
+    }
+    resetCreateForm();
     setShowCreate(false);
   };
 
@@ -151,201 +179,327 @@ export default function ProjectsPage() {
         </motion.button>
       </motion.div>
 
-      {/* ══════ CREATE FORM ══════ */}
+      {/* ══════ CREATE MODAL ══════ */}
       <AnimatePresence>
       {showCreate && (
-        <motion.div initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
-          animate={{ opacity: 1, height: 'auto', overflow: 'visible', transitionEnd: { overflow: 'visible' } }}
-          exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
-          transition={{ duration: 0.3 }} className="mb-8">
-          <div className="relative rounded-2xl p-6"
-            style={{ background: 'rgba(2,2,5,0.7)', border: '1px solid rgba(0,242,255,0.08)', backdropFilter: 'blur(20px)' }}>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md"
+          onClick={() => { resetCreateForm(); setShowCreate(false); }}>
+          <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }} transition={{ duration: 0.25 }}
+            className="relative mx-4 w-full max-w-2xl rounded-2xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
+            style={{ background: 'rgba(2,2,5,0.95)', border: '1px solid rgba(0,242,255,0.08)', backdropFilter: 'blur(20px)' }}
+            onClick={(e) => e.stopPropagation()}>
+
             {/* Decorative wave */}
-            <svg className="absolute bottom-0 left-0 right-0 h-20 pointer-events-none opacity-10" preserveAspectRatio="none" viewBox="0 0 100 40">
+            <svg className="absolute bottom-0 left-0 right-0 h-20 pointer-events-none opacity-10 rounded-b-2xl" preserveAspectRatio="none" viewBox="0 0 100 40">
               <path fill="rgba(0,242,255,0.3)" d="M0,28 Q20,15 40,25 T80,20 T100,28 V40 H0 Z">
                 <animate attributeName="d" dur="8s" repeatCount="indefinite"
                   values="M0,28 Q20,15 40,25 T80,20 T100,28 V40 H0 Z;M0,22 Q25,32 50,18 T85,26 T100,22 V40 H0 Z;M0,28 Q20,15 40,25 T80,20 T100,28 V40 H0 Z" />
               </path>
             </svg>
 
-            <div className="relative" style={{ zIndex: 1 }}>
-              <div className="flex items-center gap-2 mb-5">
-                <Rocket className="h-5 w-5 text-cyan-400" />
-                <h3 className="text-lg font-medium text-white">Create New Mission</h3>
+            {/* Step indicator */}
+            <div className="flex items-center gap-3 mb-6">
+              <div className="flex items-center gap-2">
+                <div className={cn('flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium transition-colors',
+                  createStep === 1 ? 'bg-cyan-500 text-white' : 'bg-cyan-500/20 text-cyan-400')}>1</div>
+                <span className={cn('text-xs transition-colors', createStep === 1 ? 'text-white' : 'text-gray-500')}>Mission Details</span>
               </div>
+              <div className="h-px w-8 bg-gray-700" />
+              <div className="flex items-center gap-2">
+                <div className={cn('flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium transition-colors',
+                  createStep === 2 ? 'bg-cyan-500 text-white' : 'bg-white/5 text-gray-600')}>2</div>
+                <span className={cn('text-xs transition-colors', createStep === 2 ? 'text-white' : 'text-gray-500')}>Ad Platforms</span>
+              </div>
+              <div className="ml-auto">
+                <button onClick={() => { resetCreateForm(); setShowCreate(false); }} className="rounded-lg p-1.5 text-gray-400 hover:text-white hover:bg-white/5 transition-colors">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
 
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="mono-ui text-[8px] text-gray-500 block mb-1.5">Project Name</label>
-                    <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)}
-                      placeholder="e.g., AI SaaS Lead Gen" autoFocus
-                      className="w-full rounded-xl px-4 py-2.5 text-sm cosmic-input" />
+            <div className="relative" style={{ zIndex: 1 }}>
+              <AnimatePresence mode="wait">
+              {/* ── STEP 1: Mission Details ── */}
+              {createStep === 1 && (
+                <motion.div key="step1" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }}>
+                  <div className="flex items-center gap-2 mb-5">
+                    <Rocket className="h-5 w-5 text-cyan-400" />
+                    <h3 className="text-lg font-medium text-white">Create New Mission</h3>
                   </div>
-                  <div>
-                    <label className="mono-ui text-[8px] text-gray-500 block mb-1.5">Description</label>
-                    <input type="text" value={newDescription} onChange={(e) => setNewDescription(e.target.value)}
-                      placeholder="Brief description (optional)"
-                      className="w-full rounded-xl px-4 py-2.5 text-sm cosmic-input" />
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="mono-ui text-[8px] text-gray-500 block mb-1.5">URL</label>
-                    <div className="relative">
-                      <Link2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-600" />
-                      <input type="url" value={newUrl} onChange={(e) => { setNewUrl(e.target.value); setUrlError(''); }}
-                        placeholder="https://example.com"
-                        className={cn("w-full rounded-xl pl-10 pr-4 py-2.5 text-sm cosmic-input", urlError && "!border-red-500")} />
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="mono-ui text-[8px] text-gray-500 block mb-1.5">Project Name</label>
+                        <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)}
+                          placeholder="e.g., AI SaaS Lead Gen" autoFocus
+                          className="w-full rounded-xl px-4 py-2.5 text-sm cosmic-input" />
+                      </div>
+                      <div>
+                        <label className="mono-ui text-[8px] text-gray-500 block mb-1.5">Description</label>
+                        <input type="text" value={newDescription} onChange={(e) => setNewDescription(e.target.value)}
+                          placeholder="Brief description (optional)"
+                          className="w-full rounded-xl px-4 py-2.5 text-sm cosmic-input" />
+                      </div>
                     </div>
-                    {urlError && <p className="mt-1 text-xs text-red-400">{urlError}</p>}
-                  </div>
 
-                  {/* Agent dropdown */}
-                  <div className="relative" ref={dropdownRef}>
-                    <label className="mono-ui text-[8px] text-gray-500 block mb-1.5">Agents</label>
-                    <button type="button" onClick={() => setShowAgentDropdown(!showAgentDropdown)}
-                      className={cn('flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm transition-all w-full',
-                        showAgentDropdown ? 'text-white' : 'text-gray-300')}
-                      style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${showAgentDropdown ? 'rgba(0,242,255,0.3)' : 'rgba(255,255,255,0.1)'}` }}>
-                      <Bot className="h-4 w-4 text-cyan-400 shrink-0" />
-                      <span className="flex-1 text-left truncate">
-                        {selectedAgents.size === visibleAgents.length ? 'All agents selected'
-                          : selectedAgents.size === 0 ? 'No agents selected'
-                          : `${selectedAgents.size} of ${visibleAgents.length} agents`}
-                      </span>
-                      <ChevronDown className={cn('h-4 w-4 text-gray-500 transition-transform', showAgentDropdown && 'rotate-180')} />
-                    </button>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="mono-ui text-[8px] text-gray-500 block mb-1.5">URL</label>
+                        <div className="relative">
+                          <Link2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-600" />
+                          <input type="url" value={newUrl} onChange={(e) => { setNewUrl(e.target.value); setUrlError(''); }}
+                            placeholder="https://example.com"
+                            className={cn("w-full rounded-xl pl-10 pr-4 py-2.5 text-sm cosmic-input", urlError && "!border-red-500")} />
+                        </div>
+                        {urlError && <p className="mt-1 text-xs text-red-400">{urlError}</p>}
+                      </div>
 
-                    {showAgentDropdown && (
-                      <div className="absolute right-0 z-50 mt-1 w-[340px] rounded-xl shadow-2xl overflow-hidden"
-                        style={{ background: 'rgba(2,2,5,0.97)', border: '1px solid rgba(0,242,255,0.1)', backdropFilter: 'blur(20px)' }}>
-                        <div className="flex items-center justify-between px-4 py-2.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                          <span className="mono-ui text-[8px] text-gray-500">{selectedAgents.size} selected</span>
-                          <div className="flex gap-2">
-                            <button onClick={selectAllAgents} className="text-[10px] font-medium text-cyan-400 hover:text-cyan-300">Select All</button>
-                            <span className="text-gray-700">|</span>
-                            <button onClick={deselectAllAgents} className="text-[10px] font-medium text-gray-500 hover:text-gray-400">Clear</button>
+                      {/* Agent dropdown */}
+                      <div className="relative" ref={dropdownRef}>
+                        <label className="mono-ui text-[8px] text-gray-500 block mb-1.5">Agents</label>
+                        <button type="button" onClick={() => setShowAgentDropdown(!showAgentDropdown)}
+                          className={cn('flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm transition-all w-full',
+                            showAgentDropdown ? 'text-white' : 'text-gray-300')}
+                          style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${showAgentDropdown ? 'rgba(0,242,255,0.3)' : 'rgba(255,255,255,0.1)'}` }}>
+                          <Bot className="h-4 w-4 text-cyan-400 shrink-0" />
+                          <span className="flex-1 text-left truncate">
+                            {selectedAgents.size === visibleAgents.length ? 'All agents selected'
+                              : selectedAgents.size === 0 ? 'No agents selected'
+                              : `${selectedAgents.size} of ${visibleAgents.length} agents`}
+                          </span>
+                          <ChevronDown className={cn('h-4 w-4 text-gray-500 transition-transform', showAgentDropdown && 'rotate-180')} />
+                        </button>
+
+                        {showAgentDropdown && (
+                          <div className="absolute right-0 z-50 mt-1 w-[340px] rounded-xl shadow-2xl overflow-hidden"
+                            style={{ background: 'rgba(2,2,5,0.97)', border: '1px solid rgba(0,242,255,0.1)', backdropFilter: 'blur(20px)' }}>
+                            <div className="flex items-center justify-between px-4 py-2.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                              <span className="mono-ui text-[8px] text-gray-500">{selectedAgents.size} selected</span>
+                              <div className="flex gap-2">
+                                <button onClick={selectAllAgents} className="text-[10px] font-medium text-cyan-400 hover:text-cyan-300">Select All</button>
+                                <span className="text-gray-700">|</span>
+                                <button onClick={deselectAllAgents} className="text-[10px] font-medium text-gray-500 hover:text-gray-400">Clear</button>
+                              </div>
+                            </div>
+                            <div className="max-h-[300px] overflow-y-auto py-1">
+                              {visibleAgents.map((agent) => {
+                                const isSelected = selectedAgents.has(agent.id);
+                                return (
+                                  <button key={agent.id} onClick={() => toggleAgentSelection(agent.id)}
+                                    className={cn('flex w-full items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-white/5', isSelected && 'bg-cyan-500/5')}>
+                                    <div className={cn('flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors',
+                                      isSelected ? 'border-cyan-500 bg-cyan-600' : 'border-gray-700 bg-white/5')}>
+                                      {isSelected && <Check className="h-3 w-3 text-white" />}
+                                    </div>
+                                    <span className={cn('text-xs', isSelected ? 'text-gray-200' : 'text-gray-400')}>{agent.name}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Language selector */}
+                    <div className="relative" ref={languageDropdownRef}>
+                      <label className="mono-ui text-[8px] text-gray-500 block mb-1.5">Language</label>
+                      <button type="button" onClick={() => setShowLanguageDropdown(!showLanguageDropdown)}
+                        className={cn('flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm transition-all w-full md:w-1/2',
+                          showLanguageDropdown ? 'text-white' : 'text-gray-300')}
+                        style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${showLanguageDropdown ? 'rgba(0,242,255,0.3)' : 'rgba(255,255,255,0.1)'}` }}>
+                        <Languages className="h-4 w-4 text-cyan-400 shrink-0" />
+                        <span className="flex-1 text-left truncate">
+                          {SUPPORTED_LANGUAGES.find(l => l.code === newLanguage)?.label || 'English'}
+                        </span>
+                        <ChevronDown className={cn('h-4 w-4 text-gray-500 transition-transform', showLanguageDropdown && 'rotate-180')} />
+                      </button>
+
+                      {showLanguageDropdown && (
+                        <div className="absolute z-50 mt-1 w-full md:w-1/2 rounded-xl shadow-2xl overflow-hidden"
+                          style={{ background: 'rgba(2,2,5,0.97)', border: '1px solid rgba(0,242,255,0.1)', backdropFilter: 'blur(20px)' }}>
+                          <div className="max-h-[250px] overflow-y-auto py-1">
+                            {SUPPORTED_LANGUAGES.map((lang) => {
+                              const isSelected = newLanguage === lang.code;
+                              return (
+                                <button key={lang.code}
+                                  onClick={() => { setNewLanguage(lang.code); setShowLanguageDropdown(false); }}
+                                  className={cn('flex w-full items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-white/5', isSelected && 'bg-cyan-500/5')}>
+                                  <div className={cn('flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors',
+                                    isSelected ? 'border-cyan-500 bg-cyan-600' : 'border-gray-700 bg-white/5')}>
+                                    {isSelected && <Check className="h-3 w-3 text-white" />}
+                                  </div>
+                                  <span className={cn('text-xs', isSelected ? 'text-gray-200' : 'text-gray-400')}>{lang.label}</span>
+                                  <span className="text-[10px] text-gray-600 ml-auto">{lang.code.toUpperCase()}</span>
+                                </button>
+                              );
+                            })}
                           </div>
                         </div>
-                        <div className="max-h-[300px] overflow-y-auto py-1">
-                          {visibleAgents.map((agent) => {
-                            const isSelected = selectedAgents.has(agent.id);
-                            return (
-                              <button key={agent.id} onClick={() => toggleAgentSelection(agent.id)}
-                                className={cn('flex w-full items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-white/5', isSelected && 'bg-cyan-500/5')}>
-                                <div className={cn('flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors',
-                                  isSelected ? 'border-cyan-500 bg-cyan-600' : 'border-gray-700 bg-white/5')}>
-                                  {isSelected && <Check className="h-3 w-3 text-white" />}
-                                </div>
-                                <span className={cn('text-xs', isSelected ? 'text-gray-200' : 'text-gray-400')}>{agent.name}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                      )}
+                    </div>
 
-                {/* Language selector */}
-                <div className="relative" ref={languageDropdownRef}>
-                  <label className="mono-ui text-[8px] text-gray-500 block mb-1.5">Language</label>
-                  <button type="button" onClick={() => setShowLanguageDropdown(!showLanguageDropdown)}
-                    className={cn('flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm transition-all w-full md:w-1/2',
-                      showLanguageDropdown ? 'text-white' : 'text-gray-300')}
-                    style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${showLanguageDropdown ? 'rgba(0,242,255,0.3)' : 'rgba(255,255,255,0.1)'}` }}>
-                    <Languages className="h-4 w-4 text-cyan-400 shrink-0" />
-                    <span className="flex-1 text-left truncate">
-                      {SUPPORTED_LANGUAGES.find(l => l.code === newLanguage)?.label || 'English'}
-                    </span>
-                    <ChevronDown className={cn('h-4 w-4 text-gray-500 transition-transform', showLanguageDropdown && 'rotate-180')} />
-                  </button>
-
-                  {showLanguageDropdown && (
-                    <div className="absolute z-50 mt-1 w-full md:w-1/2 rounded-xl shadow-2xl overflow-hidden"
-                      style={{ background: 'rgba(2,2,5,0.97)', border: '1px solid rgba(0,242,255,0.1)', backdropFilter: 'blur(20px)' }}>
-                      <div className="max-h-[250px] overflow-y-auto py-1">
-                        {SUPPORTED_LANGUAGES.map((lang) => {
-                          const isSelected = newLanguage === lang.code;
+                    {/* Type selector */}
+                    <div>
+                      <label className="mono-ui text-[8px] text-gray-500 block mb-2">Mission Type</label>
+                      <div className="grid grid-cols-2 gap-4">
+                        {[
+                          { type: 'internal' as const, icon: Building2, color: '#f59e0b', label: 'Internal', desc: 'Skips discovery. Use for existing offers.', agents: '9 agents' },
+                          { type: 'external' as const, icon: Globe, color: '#00f2ff', label: 'External', desc: 'Full pipeline with all 13 agents.', agents: '13 agents' },
+                        ].map(opt => {
+                          const Icon = opt.icon;
+                          const isActive = newType === opt.type;
                           return (
-                            <button key={lang.code}
-                              onClick={() => { setNewLanguage(lang.code); setShowLanguageDropdown(false); }}
-                              className={cn('flex w-full items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-white/5', isSelected && 'bg-cyan-500/5')}>
-                              <div className={cn('flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors',
-                                isSelected ? 'border-cyan-500 bg-cyan-600' : 'border-gray-700 bg-white/5')}>
-                                {isSelected && <Check className="h-3 w-3 text-white" />}
+                            <motion.button key={opt.type} whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }}
+                              onClick={() => handleTypeChange(opt.type)}
+                              className="relative rounded-xl p-5 text-left transition-all duration-300 overflow-hidden group"
+                              style={{
+                                background: isActive ? `linear-gradient(135deg, ${opt.color}08, transparent)` : 'rgba(255,255,255,0.02)',
+                                border: `1px solid ${isActive ? `${opt.color}40` : 'rgba(255,255,255,0.04)'}`,
+                              }}>
+                              {isActive && <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full blob-morph opacity-30"
+                                style={{ background: `radial-gradient(circle, ${opt.color}25, transparent 70%)` }} />}
+                              <div className="relative">
+                                <div className="relative w-10 h-10 mb-3">
+                                  {isActive && (
+                                    <div className="absolute inset-0 rounded-full orbit-rotate opacity-60" style={{ border: `1px solid ${opt.color}30` }}>
+                                      <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full" style={{ background: opt.color }} />
+                                    </div>
+                                  )}
+                                  <div className="absolute inset-1 rounded-full flex items-center justify-center"
+                                    style={{ background: `${opt.color}${isActive ? '15' : '08'}` }}>
+                                    <Icon className="h-4 w-4" style={{ color: isActive ? opt.color : '#6b7280' }} />
+                                  </div>
+                                </div>
+                                <p className="text-sm font-medium mb-0.5" style={{ color: isActive ? opt.color : '#9ca3af' }}>{opt.label}</p>
+                                <p className="text-[11px] text-gray-600 leading-relaxed">{opt.desc}</p>
+                                <p className="mono-ui text-[7px] mt-2" style={{ color: `${opt.color}${isActive ? '80' : '40'}` }}>{opt.agents}</p>
                               </div>
-                              <span className={cn('text-xs', isSelected ? 'text-gray-200' : 'text-gray-400')}>{lang.label}</span>
-                              <span className="text-[10px] text-gray-600 ml-auto">{lang.code.toUpperCase()}</span>
-                            </button>
+                            </motion.button>
                           );
                         })}
                       </div>
                     </div>
-                  )}
-                </div>
 
-                {/* Type selector — artistic */}
-                <div>
-                  <label className="mono-ui text-[8px] text-gray-500 block mb-2">Mission Type</label>
-                  <div className="grid grid-cols-2 gap-4">
-                    {[
-                      { type: 'internal' as const, icon: Building2, color: '#f59e0b', label: 'Internal', desc: 'Skips discovery. Use for existing offers.', agents: '9 agents' },
-                      { type: 'external' as const, icon: Globe, color: '#00f2ff', label: 'External', desc: 'Full pipeline with all 13 agents.', agents: '13 agents' },
-                    ].map(opt => {
-                      const Icon = opt.icon;
-                      const isActive = newType === opt.type;
-                      return (
-                        <motion.button key={opt.type} whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }}
-                          onClick={() => handleTypeChange(opt.type)}
-                          className="relative rounded-xl p-5 text-left transition-all duration-300 overflow-hidden group"
-                          style={{
-                            background: isActive ? `linear-gradient(135deg, ${opt.color}08, transparent)` : 'rgba(255,255,255,0.02)',
-                            border: `1px solid ${isActive ? `${opt.color}40` : 'rgba(255,255,255,0.04)'}`,
-                          }}>
-                          {/* Blob bg */}
-                          {isActive && <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full blob-morph opacity-30"
-                            style={{ background: `radial-gradient(circle, ${opt.color}25, transparent 70%)` }} />}
-                          <div className="relative">
-                            <div className="relative w-10 h-10 mb-3">
-                              {isActive && (
-                                <div className="absolute inset-0 rounded-full orbit-rotate opacity-60" style={{ border: `1px solid ${opt.color}30` }}>
-                                  <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full" style={{ background: opt.color }} />
-                                </div>
-                              )}
-                              <div className="absolute inset-1 rounded-full flex items-center justify-center"
-                                style={{ background: `${opt.color}${isActive ? '15' : '08'}` }}>
-                                <Icon className="h-4 w-4" style={{ color: isActive ? opt.color : '#6b7280' }} />
-                              </div>
-                            </div>
-                            <p className="text-sm font-medium mb-0.5" style={{ color: isActive ? opt.color : '#9ca3af' }}>{opt.label}</p>
-                            <p className="text-[11px] text-gray-600 leading-relaxed">{opt.desc}</p>
-                            <p className="mono-ui text-[7px] mt-2" style={{ color: `${opt.color}${isActive ? '80' : '40'}` }}>{opt.agents}</p>
-                          </div>
-                        </motion.button>
-                      );
-                    })}
+                    <div className="flex gap-3 pt-2">
+                      <button onClick={() => { resetCreateForm(); setShowCreate(false); }}
+                        className="flex-1 rounded-xl px-4 py-2.5 text-sm text-gray-400 transition-colors hover:text-white"
+                        style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+                        Cancel
+                      </button>
+                      <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
+                        onClick={handleStep1Continue} disabled={!newName.trim() || !!urlError}
+                        className="flex-1 flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-cyan-400 transition-all disabled:opacity-40"
+                        style={{ background: 'linear-gradient(135deg, rgba(0,242,255,0.1), rgba(139,92,246,0.05))', border: '1px solid rgba(0,242,255,0.25)' }}>
+                        Continue <ChevronRight className="h-4 w-4" />
+                      </motion.button>
+                    </div>
                   </div>
-                </div>
+                </motion.div>
+              )}
 
-                <div className="flex gap-3 pt-2">
-                  <button onClick={() => setShowCreate(false)}
-                    className="flex-1 rounded-xl px-4 py-2.5 text-sm text-gray-400 transition-colors hover:text-white"
-                    style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
-                    Cancel
-                  </button>
-                  <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
-                    onClick={handleCreate} disabled={!newName.trim() || !!urlError}
-                    className="flex-1 rounded-xl px-4 py-2.5 text-sm font-medium text-cyan-400 transition-all disabled:opacity-40"
-                    style={{ background: 'linear-gradient(135deg, rgba(0,242,255,0.1), rgba(139,92,246,0.05))', border: '1px solid rgba(0,242,255,0.25)' }}>
-                    Create Mission
-                  </motion.button>
-                </div>
-              </div>
+              {/* ── STEP 2: Meta Ad Platform Keys ── */}
+              {createStep === 2 && (
+                <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.2 }}>
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: 'rgba(251,146,60,0.1)', border: '1px solid rgba(251,146,60,0.2)' }}>
+                      <Megaphone className="h-5 w-5 text-orange-400" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-medium text-white">Ad Platforms</h3>
+                        <span className="rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-orange-400"
+                          style={{ background: 'rgba(251,146,60,0.15)', border: '1px solid rgba(251,146,60,0.3)' }}>Optional</span>
+                      </div>
+                      <p className="text-xs text-gray-500">Connect to auto-deploy campaigns</p>
+                    </div>
+                  </div>
+
+                  <p className="text-sm text-gray-400 mb-6">
+                    Connect ad platforms to auto-deploy campaigns after the pipeline completes. You can skip this and do it later.
+                  </p>
+
+                  {/* Meta Ads Section */}
+                  <div className="rounded-xl p-5 mb-6" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <h4 className="mono-ui text-[9px] text-orange-400 font-semibold mb-4 tracking-wider">META ADS</h4>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="mono-ui text-[8px] text-gray-500 block mb-1.5">App ID</label>
+                          <div className="relative">
+                            <Key className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-600" />
+                            <input type="text" value={metaAppId} onChange={(e) => setMetaAppId(e.target.value)}
+                              placeholder="123456789..."
+                              className="w-full rounded-xl pl-10 pr-4 py-2.5 text-sm cosmic-input" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="mono-ui text-[8px] text-gray-500 block mb-1.5">App Secret</label>
+                          <div className="relative">
+                            <Key className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-600" />
+                            <input type={showMetaSecret ? 'text' : 'password'} value={metaAppSecret} onChange={(e) => setMetaAppSecret(e.target.value)}
+                              placeholder="abc123def456..."
+                              className="w-full rounded-xl pl-10 pr-10 py-2.5 text-sm cosmic-input" />
+                            <button type="button" onClick={() => setShowMetaSecret(!showMetaSecret)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-400 transition-colors">
+                              {showMetaSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="mono-ui text-[8px] text-gray-500 block mb-1.5">Access Token</label>
+                          <div className="relative">
+                            <Key className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-600" />
+                            <input type={showMetaToken ? 'text' : 'password'} value={metaAccessToken} onChange={(e) => setMetaAccessToken(e.target.value)}
+                              placeholder="EAABsbCS1..."
+                              className="w-full rounded-xl pl-10 pr-10 py-2.5 text-sm cosmic-input" />
+                            <button type="button" onClick={() => setShowMetaToken(!showMetaToken)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-400 transition-colors">
+                              {showMetaToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </button>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="mono-ui text-[8px] text-gray-500 block mb-1.5">Ad Account ID</label>
+                          <div className="relative">
+                            <Key className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-600" />
+                            <input type="text" value={metaAdAccountId} onChange={(e) => setMetaAdAccountId(e.target.value)}
+                              placeholder="act_123..."
+                              className="w-full rounded-xl pl-10 pr-4 py-2.5 text-sm cosmic-input" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button onClick={() => setCreateStep(1)}
+                      className="flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm text-gray-400 transition-colors hover:text-white"
+                      style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+                      <ArrowRight className="h-3.5 w-3.5 rotate-180" /> Back
+                    </button>
+                    <button onClick={() => handleCreate(true)}
+                      className="flex-1 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-sm text-gray-400 transition-colors hover:text-white"
+                      style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+                      <SkipForward className="h-3.5 w-3.5" /> Skip
+                    </button>
+                    <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
+                      onClick={() => handleCreate(false)}
+                      className="flex-1 flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all"
+                      style={{ background: 'linear-gradient(135deg, rgba(139,92,246,0.15), rgba(0,242,255,0.08))', border: '1px solid rgba(139,92,246,0.3)', color: '#a78bfa' }}>
+                      <Zap className="h-3.5 w-3.5" /> Create Mission
+                    </motion.button>
+                  </div>
+                </motion.div>
+              )}
+              </AnimatePresence>
             </div>
-          </div>
+          </motion.div>
         </motion.div>
       )}
       </AnimatePresence>
