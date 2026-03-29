@@ -65,7 +65,7 @@ export function Sidebar() {
   };
 
   const completedAgents = pipeline.agents.filter(a => a.status === 'done').length;
-  const totalAgents = 13;
+  const totalAgents = pipeline.agents.length || 13;
   const pipelineProgress = completedAgents / totalAgents;
   const selectedProject = projects.find(p => p.id === selectedProjectId);
 
