@@ -292,18 +292,7 @@ export function Sidebar() {
                             )}
                           </AnimatePresence>
 
-                          {/* Badge */}
-                          {sidebarOpen && item.badge && (
-                            <span className="text-[8px] font-bold rounded-full px-1.5 py-0.5 shrink-0"
-                              style={{
-                                color: item.badge === 'LIVE' ? '#10b981' : '#f59e0b',
-                                background: item.badge === 'LIVE' ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.12)',
-                                border: `1px solid ${item.badge === 'LIVE' ? 'rgba(16,185,129,0.2)' : 'rgba(245,158,11,0.2)'}`,
-                              }}
-                            >
-                              {item.badge}
-                            </span>
-                          )}
+
                         </Link>
                       );
                     })}
