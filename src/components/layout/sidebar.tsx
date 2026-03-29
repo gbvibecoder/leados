@@ -160,7 +160,7 @@ export function Sidebar() {
           >
             <div className="relative w-2 h-2 shrink-0">
               <div className="absolute inset-0 rounded-full" style={{ background: statusColor, boxShadow: `0 0 6px ${statusColor}` }} />
-              {(pipelineStatus === 'Running' || pipelineStatus === 'LIVE') && (
+              {pipelineStatus === 'Running' && (
                 <div className="absolute inset-0 rounded-full animate-ping" style={{ background: `${statusColor}40` }} />
               )}
             </div>
