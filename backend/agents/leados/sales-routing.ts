@@ -249,28 +249,59 @@ export class SalesRoutingAgent extends BaseAgent {
       };
 
       // Build scopedCallResults: prefer DB data (real outcomes) and enrich with
-      // transcript/BANT details from upstream output where available
-      const upstreamCallResults = (qualificationData.callResults || []).filter(isUserLead);
-      const upstreamByEmail = new Map(upstreamCallResults.map((r: any) => [r.leadEmail, r]));
+      // transcript/BANT details from upstream output where available.
+      // FALLBACK: if DB query returned no leads (e.g. connection error, cold start),
+      // use upstream AI Qualification output directly so leads aren't silently dropped.
+      const allUpstreamCallResults = qualificationData.callResults || [];
+      let scopedCallResults: any[];
 
-      const scopedCallResults = dbQualifiedLeads.map((dbLead: any) => {
-        const upstream: any = upstreamByEmail.get(dbLead.email) || {};
-        return {
-          leadName: dbLead.name,
-          leadEmail: dbLead.email,
-          company: dbLead.company,
-          phone: dbLead.phone,
-          score: dbLead.qualificationScore || dbLead.score || upstream.score || 0,
-          outcome: dbLead.qualificationOutcome || upstream.outcome || null,
-          callStatus: upstream.callStatus || (dbLead.qualificationOutcome ? 'completed' : 'contacted'),
-          bantBreakdown: upstream.bantBreakdown || { budget: 0, authority: 0, need: 0, timeline: 0 },
-          transcript: upstream.transcript || '',
-          budgetConfirmed: upstream.budgetConfirmed || false,
-        };
-      });
+      if (dbQualifiedLeads.length > 0) {
+        // DB path: use DB as source of truth, enrich with upstream transcript/BANT
+        const upstreamCallResults = allUpstreamCallResults.filter(isUserLead);
+        const upstreamByEmail = new Map(upstreamCallResults.map((r: any) => [r.leadEmail, r]));
+
+        scopedCallResults = dbQualifiedLeads.map((dbLead: any) => {
+          const upstream: any = upstreamByEmail.get(dbLead.email) || {};
+          return {
+            leadName: dbLead.name,
+            leadEmail: dbLead.email,
+            company: dbLead.company,
+            phone: dbLead.phone,
+            score: dbLead.qualificationScore || dbLead.score || upstream.score || 0,
+            outcome: dbLead.qualificationOutcome || upstream.outcome || null,
+            callStatus: upstream.callStatus || (dbLead.qualificationOutcome ? 'completed' : 'contacted'),
+            bantBreakdown: upstream.bantBreakdown || { budget: 0, authority: 0, need: 0, timeline: 0 },
+            transcript: upstream.transcript || '',
+            budgetConfirmed: upstream.budgetConfirmed || false,
+          };
+        });
+      } else if (allUpstreamCallResults.length > 0) {
+        // Fallback: DB returned nothing — use upstream AI Qualification data directly
+        await this.log('db_empty_using_upstream_fallback', {
+          upstreamCount: allUpstreamCallResults.length,
+          reason: 'DB query returned no qualified leads — using upstream agent output as fallback',
+        });
+        scopedCallResults = allUpstreamCallResults.map((r: any) => ({
+          leadName: r.leadName || r.name || '',
+          leadEmail: r.leadEmail || r.email || '',
+          company: r.company || '',
+          phone: r.phone || '',
+          score: r.score || 0,
+          outcome: r.outcome || null,
+          callStatus: r.callStatus || 'contacted',
+          bantBreakdown: r.bantBreakdown || { budget: 0, authority: 0, need: 0, timeline: 0 },
+          transcript: r.transcript || '',
+          budgetConfirmed: r.budgetConfirmed || false,
+        }));
+      } else {
+        scopedCallResults = [];
+      }
 
       // Also include inbound leads scoped to this user (for leads that bypassed calling)
-      const scopedInboundLeads = (inboundData.leadsProcessed || []).filter(isUserLead);
+      const allUpstreamInbound = inboundData.leadsProcessed || [];
+      const scopedInboundLeads = dbQualifiedLeads.length > 0
+        ? allUpstreamInbound.filter(isUserLead)
+        : allUpstreamInbound;
 
       const userMessage = JSON.stringify({
         serviceNiche: inputs.config?.niche || inputs.config?.serviceNiche || 'B2B SaaS Lead Generation',

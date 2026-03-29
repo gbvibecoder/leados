@@ -259,7 +259,18 @@ export class AIQualificationAgent extends BaseAgent {
       }
 
       // Execute real AI voice calls via Bland AI when API key is configured
-      let realCallResults: any[] = [];
+      // Pre-populate with email-only leads so they flow through to Sales Routing
+      let realCallResults: any[] = emailOnlyLeads.map((l: any) => ({
+        leadName: l.name,
+        leadEmail: l.email,
+        company: l.company,
+        phone: l.phone,
+        callStatus: 'no_valid_phone',
+        duration: 0,
+        transcript: '',
+        recordingUrl: '',
+        callId: null,
+      }));
       const blandAvailable = blandAI.isBlandAIAvailable();
 
       if (blandAvailable && callableLeads.length > 0) {
@@ -303,11 +314,24 @@ export class AIQualificationAgent extends BaseAgent {
               });
             } catch { /* non-fatal — call is already queued */ }
           } catch (err: any) {
-            await this.log('bland_ai_call_error', { lead: lead.name, error: err.message });
+            await this.log('bland_ai_call_error', { lead: lead.name, phone: lead.phone, error: err.message });
+            // Track failed calls so they appear in output and flow to Sales Routing
+            realCallResults.push({
+              leadName: lead.name,
+              leadEmail: lead.email,
+              company: lead.company,
+              phone: lead.phone,
+              callStatus: 'call_failed',
+              duration: 0,
+              transcript: '',
+              recordingUrl: '',
+              callId: null,
+              error: err.message,
+            });
           }
         }
 
-        await this.log('bland_ai_all_initiated', { total: initiatedCalls.length });
+        await this.log('bland_ai_all_initiated', { total: initiatedCalls.length, failed: realCallResults.filter((r: any) => r.callStatus === 'call_failed').length });
 
         // Step 2: Wait for all calls to complete in parallel.
         // Cap at 280s — calls are max 300s, so most will finish; any still in progress
