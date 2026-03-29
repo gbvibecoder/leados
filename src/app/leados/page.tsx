@@ -1153,7 +1153,50 @@ export default function LeadOSPage() {
 
   return (
     <ErrorBoundary>
-      <div className="max-w-4xl mx-auto">
+      {/* ══ Animated flowing cross-grid background ══ */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10">
+
+        {/* ── Layer 1: Cross/plus mark grid with flowing wave ── */}
+        <svg className="absolute inset-0 w-full h-full" style={{ animation: 'grid-drift 30s linear infinite' }}>
+          <defs>
+            <pattern id="cross-grid" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
+              {/* Horizontal tick */}
+              <line x1="16" y1="20" x2="24" y2="20" stroke="rgba(120,130,180,0.18)" strokeWidth="0.8" strokeLinecap="round" />
+              {/* Vertical tick */}
+              <line x1="20" y1="16" x2="20" y2="24" stroke="rgba(120,130,180,0.18)" strokeWidth="0.8" strokeLinecap="round" />
+            </pattern>
+            {/* Radial mask to fade edges */}
+            <radialGradient id="grid-fade" cx="50%" cy="50%" r="55%">
+              <stop offset="0%" stopColor="white" stopOpacity="1" />
+              <stop offset="70%" stopColor="white" stopOpacity="0.6" />
+              <stop offset="100%" stopColor="white" stopOpacity="0.1" />
+            </radialGradient>
+            <mask id="grid-mask">
+              <rect width="100%" height="100%" fill="url(#grid-fade)" />
+            </mask>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#cross-grid)" mask="url(#grid-mask)" />
+        </svg>
+
+        {/* ── Layer 2: Flowing wave overlay that sweeps across the grid ── */}
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, transparent 0%, rgba(99,102,241,0.04) 25%, transparent 50%, rgba(0,242,255,0.03) 75%, transparent 100%)', backgroundSize: '400% 400%', animation: 'wave-flow 12s ease-in-out infinite' }} />
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(225deg, transparent 0%, rgba(139,92,246,0.03) 30%, transparent 55%, rgba(99,102,241,0.04) 80%, transparent 100%)', backgroundSize: '400% 400%', animation: 'wave-flow 16s ease-in-out infinite 4s' }} />
+
+        {/* ── Layer 3: Soft aurora glow spots ── */}
+        <div className="absolute rounded-full"
+          style={{ width: '600px', height: '600px', top: '5%', left: '-5%', background: 'radial-gradient(circle, rgba(99,102,241,0.06) 0%, transparent 60%)', filter: 'blur(80px)', animation: 'aurora-drift-1 25s ease-in-out infinite' }} />
+        <div className="absolute rounded-full"
+          style={{ width: '500px', height: '500px', top: '40%', right: '-8%', background: 'radial-gradient(circle, rgba(0,242,255,0.05) 0%, transparent 60%)', filter: 'blur(80px)', animation: 'aurora-drift-2 30s ease-in-out infinite' }} />
+        <div className="absolute rounded-full"
+          style={{ width: '450px', height: '450px', bottom: '5%', left: '25%', background: 'radial-gradient(circle, rgba(139,92,246,0.05) 0%, transparent 60%)', filter: 'blur(80px)', animation: 'aurora-drift-3 28s ease-in-out infinite' }} />
+
+        {/* ── Layer 4: Glowing node spots ── */}
+        <div className="absolute w-2 h-2 rounded-full" style={{ top: '22%', left: '38%', background: 'rgba(120,130,200,0.5)', boxShadow: '0 0 15px 6px rgba(99,102,241,0.15)', animation: 'node-pulse 5s ease-in-out infinite' }} />
+        <div className="absolute w-1.5 h-1.5 rounded-full" style={{ top: '55%', left: '68%', background: 'rgba(120,130,200,0.4)', boxShadow: '0 0 12px 5px rgba(99,102,241,0.12)', animation: 'node-pulse 6s ease-in-out infinite 2s' }} />
+        <div className="absolute w-1.5 h-1.5 rounded-full" style={{ top: '75%', left: '25%', background: 'rgba(120,130,200,0.35)', boxShadow: '0 0 10px 4px rgba(99,102,241,0.10)', animation: 'node-pulse 7s ease-in-out infinite 4s' }} />
+      </div>
+
+      <div className="max-w-4xl mx-auto relative z-0">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
@@ -1516,7 +1559,14 @@ export default function LeadOSPage() {
               >
                 {/* ════ PLANET — Phase Card ════ */}
                 <div className={cn('relative rounded-2xl overflow-hidden transition-all duration-500', isSkipped && 'opacity-30')}
-                  style={{ background: 'rgba(2,2,5,0.5)', border: `1px solid ${isSkipped ? 'rgba(255,255,255,0.02)' : phaseStatus === 'running' ? `${phaseAccent}20` : phaseStatus === 'done' ? `${phaseAccent}15` : 'rgba(255,255,255,0.04)'}` }}>
+                  style={{
+                    background: `linear-gradient(145deg, rgba(12,14,22,0.9), rgba(6,8,14,0.95))`,
+                    border: `1px solid ${isSkipped ? 'rgba(255,255,255,0.03)' : phaseStatus === 'running' ? `${phaseAccent}50` : phaseStatus === 'done' ? `${phaseAccent}35` : 'rgba(255,255,255,0.10)'}`,
+                    boxShadow: isSkipped ? 'none'
+                      : phaseStatus === 'running' ? `0 4px 24px ${phaseAccent}12, 0 0 0 1px ${phaseAccent}08, inset 0 1px 0 rgba(255,255,255,0.04)`
+                      : phaseStatus === 'done' ? `0 4px 20px ${phaseAccent}10, 0 0 0 1px ${phaseAccent}06, inset 0 1px 0 rgba(255,255,255,0.03)`
+                      : '0 4px 16px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.04)',
+                  }}>
 
                   {/* Running aurora */}
                   {phaseStatus === 'running' && (
@@ -1606,12 +1656,8 @@ export default function LeadOSPage() {
                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
                       transition={{ duration: 0.3 }} className="overflow-hidden">
                       <div className="px-4 pb-4">
-                        {/* Connector line from planet to moons */}
-                        <div className="flex items-center gap-3 mb-3 ml-5">
-                          <div className="flex-1 h-px" style={{ background: `linear-gradient(90deg, ${phaseAccent}20, ${phaseAccent}08)` }} />
-                          <span className="mono-ui text-[7px] shrink-0" style={{ color: `${phaseAccent}50` }}>Moons</span>
-                          <div className="flex-1 h-px" style={{ background: `linear-gradient(90deg, ${phaseAccent}08, ${phaseAccent}20)` }} />
-                        </div>
+                        {/* Subtle separator between header and agent cards */}
+                        <div className="mb-3 ml-5 mr-5 h-px" style={{ background: `linear-gradient(90deg, transparent, ${phaseAccent}15, transparent)` }} />
 
                         <div className="grid gap-3 sm:grid-cols-2">
                           {phaseAgents.map((agent, agentIdx) => {
@@ -1632,7 +1678,13 @@ export default function LeadOSPage() {
                                 onClick={() => setSelectedAgent(agent.id)}
                                 whileHover={{ y: -3, transition: { duration: 0.25 } }}
                                 className="group relative rounded-xl cursor-pointer transition-all duration-500 overflow-hidden"
-                                style={{ background: 'rgba(2,2,5,0.5)', border: `1px solid ${status === 'idle' ? 'rgba(255,255,255,0.04)' : `${sc}18`}` }}>
+                                style={{
+                                  background: status === 'idle' ? 'rgba(4,6,12,0.7)' : `linear-gradient(145deg, rgba(4,6,12,0.8), rgba(2,3,8,0.9))`,
+                                  border: `1px solid ${status === 'idle' ? 'rgba(255,255,255,0.07)' : `${sc}30`}`,
+                                  boxShadow: status === 'idle'
+                                    ? '0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.03)'
+                                    : `0 2px 12px ${sc}10, inset 0 1px 0 ${sc}06`,
+                                }}>
 
                                 {/* Running top aurora */}
                                 {status === 'running' && (
@@ -1644,7 +1696,7 @@ export default function LeadOSPage() {
                                     {/* Moon orb */}
                                     <div className="relative w-10 h-10 shrink-0">
                                       <div className="absolute inset-0 rounded-full transition-all duration-500"
-                                        style={{ border: `1.5px solid ${status === 'idle' ? 'rgba(255,255,255,0.06)' : `${sc}30`}`, boxShadow: status === 'running' ? `0 0 15px ${sc}15` : undefined }}>
+                                        style={{ border: `1.5px solid ${status === 'idle' ? 'rgba(255,255,255,0.1)' : `${sc}35`}`, boxShadow: status === 'running' ? `0 0 15px ${sc}15` : status === 'done' ? `0 0 8px ${sc}10` : undefined }}>
                                         {status === 'running' && (
                                           <div className="absolute -top-[2px] -right-[2px] w-2 h-2 rounded-full" style={{ background: sc, boxShadow: `0 0 6px ${sc}`, animation: 'pulse-ring 2s ease-out infinite' }} />
                                         )}
@@ -1872,6 +1924,37 @@ export default function LeadOSPage() {
           0% { transform: translateX(-100%); }
           50% { transform: translateX(200%); }
           100% { transform: translateX(-100%); }
+        }
+      `}</style>
+
+      {/* Pipeline background animations */}
+      <style>{`
+        @keyframes grid-drift {
+          0% { transform: translate(0, 0); }
+          100% { transform: translate(-40px, -40px); }
+        }
+        @keyframes wave-flow {
+          0% { background-position: 0% 0%; }
+          50% { background-position: 100% 100%; }
+          100% { background-position: 0% 0%; }
+        }
+        @keyframes aurora-drift-1 {
+          0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.6; }
+          33% { transform: translate(80px, 40px) scale(1.1); opacity: 1; }
+          66% { transform: translate(-40px, 80px) scale(0.95); opacity: 0.7; }
+        }
+        @keyframes aurora-drift-2 {
+          0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.5; }
+          33% { transform: translate(-60px, -50px) scale(1.15); opacity: 0.9; }
+          66% { transform: translate(50px, -30px) scale(0.9); opacity: 0.6; }
+        }
+        @keyframes aurora-drift-3 {
+          0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.5; }
+          50% { transform: translate(60px, -60px) scale(1.2); opacity: 1; }
+        }
+        @keyframes node-pulse {
+          0%, 100% { opacity: 0.3; transform: scale(1); }
+          50% { opacity: 0.8; transform: scale(1.5); }
         }
       `}</style>
     </ErrorBoundary>

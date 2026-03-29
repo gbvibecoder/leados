@@ -52,9 +52,9 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning: isR
   const prevRunningRef = useRef(isRunning);
 
   const fetchRuns = () => {
-    // When no project is selected and agent hasn't been run, skip fetching —
-    // otherwise the API returns runs from ALL projects, leaking stale data
-    if (!projectId && agentStatus === 'idle') {
+    // When agent hasn't been run (idle), skip fetching —
+    // otherwise old runs from previous pipeline executions leak through
+    if (agentStatus === 'idle') {
       setRuns([]);
       setSelectedRun(null);
       setLoading(false);
