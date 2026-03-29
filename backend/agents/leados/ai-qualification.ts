@@ -200,6 +200,25 @@ export class AIQualificationAgent extends BaseAgent {
             }));
             await this.log('db_leads_fetched_for_qualification', { count: dbLeads.length });
           }
+
+          // Also fetch already-processed leads so downstream agents (Sales Routing)
+          // receive the complete picture even on re-runs where no NEW leads exist.
+          const alreadyProcessedLeads = await prisma.lead.findMany({
+            where: {
+              AND: [
+                ownershipCondition,
+                projectCondition,
+                { stage: { in: ['contacted', 'qualified', 'nurture', 'disqualified'] } },
+              ],
+            },
+            orderBy: { score: 'desc' },
+            take: 50,
+          });
+          if (alreadyProcessedLeads.length > 0) {
+            await this.log('already_processed_leads_found', { count: alreadyProcessedLeads.length });
+          }
+          // Store for inclusion in output so Sales Routing can route them
+          (this as any)._alreadyProcessedLeads = alreadyProcessedLeads;
         } catch (err: any) {
           await this.log('db_leads_error', { error: err.message });
         }
@@ -599,6 +618,23 @@ For leads in emailOnlyLeads: set callStatus to "no_valid_phone", outcome to "med
         await this.log('db_leads_updated', { count: (parsed.callResults || []).length });
       } catch (err: any) {
         await this.log('db_update_error', { error: err.message });
+      }
+
+      // Include already-processed leads in output so downstream agents (Sales Routing)
+      // can route them even on re-runs where no new calls were made.
+      const alreadyProcessed = (this as any)._alreadyProcessedLeads || [];
+      if (alreadyProcessed.length > 0) {
+        parsed.alreadyProcessedLeads = alreadyProcessed.map((l: any) => ({
+          leadName: l.name,
+          leadEmail: l.email,
+          company: l.company,
+          phone: l.phone,
+          score: l.qualificationScore || l.score || 0,
+          outcome: l.qualificationOutcome || null,
+          callStatus: l.qualificationOutcome ? 'completed' : 'previously_contacted',
+          routingAction: l.routingDecision || null,
+          stage: l.stage,
+        }));
       }
 
       this.status = 'done';
