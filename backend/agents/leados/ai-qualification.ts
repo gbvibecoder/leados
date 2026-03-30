@@ -457,7 +457,14 @@ export class AIQualificationAgent extends BaseAgent {
           }
         }
 
-        await this.log('bland_ai_all_initiated', { total: initiatedCalls.length, failed: realCallResults.filter((r: any) => r.callStatus === 'call_failed').length });
+        const failedCalls = realCallResults.filter((r: any) => r.callStatus === 'call_failed');
+        await this.log('bland_ai_all_initiated', {
+          total: initiatedCalls.length,
+          failed: failedCalls.length,
+          failedErrors: failedCalls.map((r: any) => ({ lead: r.leadName, phone: r.phone, error: r.error })),
+          blandFromNumber: process.env.BLANDAI_FROM_NUMBER || 'NOT SET',
+          blandApiKeySet: !!process.env.BLANDAI_API_KEY,
+        });
 
         // Step 2: Wait for all calls to complete in parallel.
         // Cap at 280s — calls are max 300s, so most will finish; any still in progress
@@ -801,12 +808,29 @@ For leads in emailOnlyLeads: set callStatus to "no_valid_phone", outcome to "med
         await this.log('db_update_error', { error: err.message });
       }
 
+      // Surface Bland AI call errors in output so they're visible in the UI
+      const callFailures = realCallResults.filter((r: any) => r.callStatus === 'call_failed');
+      if (callFailures.length > 0) {
+        parsed.callErrors = callFailures.map((r: any) => ({
+          lead: r.leadName,
+          phone: r.phone,
+          error: r.error || 'Unknown error',
+        }));
+        parsed.blandAIDebug = {
+          apiKeySet: !!process.env.BLANDAI_API_KEY,
+          fromNumber: process.env.BLANDAI_FROM_NUMBER || 'NOT SET',
+          errors: callFailures.map((r: any) => r.error),
+        };
+      }
+
       this.status = 'done';
       await this.log('run_completed', { output: parsed });
       return {
         success: true,
         data: parsed,
-        reasoning: parsed.reasoning || 'AI qualification calls completed and leads routed.',
+        reasoning: callFailures.length > 0
+          ? `Calls failed for ${callFailures.length} lead(s): ${callFailures[0]?.error || 'unknown error'}`
+          : (parsed.reasoning || 'AI qualification calls completed and leads routed.'),
         confidence: parsed.confidence || 85,
       };
     } catch (error: any) {
