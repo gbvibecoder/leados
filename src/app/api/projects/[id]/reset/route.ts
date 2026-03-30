@@ -45,8 +45,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       await prisma.pipeline.deleteMany({ where: { projectId: id } });
     }
 
-    // Delete leads for this project
-    await prisma.lead.deleteMany({ where: { projectId: id } });
+    // Reset lead stages back to 'new' instead of deleting them.
+    // Leads are user data and should NOT be deleted on pipeline reset.
+    await prisma.lead.updateMany({
+      where: { projectId: id },
+      data: {
+        stage: 'new',
+        qualificationScore: null,
+        qualificationOutcome: null,
+        routingDecision: null,
+      },
+    });
 
     return NextResponse.json({ success: true, deletedPipelines: pipelineIds.length });
   } catch (error: any) {
