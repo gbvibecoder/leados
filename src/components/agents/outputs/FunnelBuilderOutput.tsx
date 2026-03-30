@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Globe,
   FileText,
@@ -18,6 +18,9 @@ import {
   Copy,
   Check,
   Loader2,
+  Image as ImageIcon,
+  Sparkles,
+  RefreshCw,
 } from 'lucide-react';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -208,13 +211,18 @@ export function FunnelBuilderOutput({ data }: Props) {
             );
           })()}
 
-          {/* Hero Preview */}
+          {/* Hero Preview with AI Image */}
           <div className="p-3 sm:p-4 bg-gradient-to-r from-blue-500/5 to-purple-500/5 rounded-lg border border-blue-500/20">
-            <div className="text-xs uppercase tracking-wider text-blue-400 mb-1">Hero Headline</div>
-            <div className="text-base sm:text-lg font-bold mb-1 break-words">{funnelData.landingPage.headline}</div>
-            <div className="text-xs sm:text-sm text-muted-foreground break-words">{funnelData.landingPage.subheadline}</div>
-            <div className="mt-3 inline-block px-4 py-2 bg-blue-600 text-white text-xs sm:text-sm rounded-lg font-medium">
-              {funnelData.landingPage.cta}
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex-1">
+                <div className="text-xs uppercase tracking-wider text-blue-400 mb-1">Hero Headline</div>
+                <div className="text-base sm:text-lg font-bold mb-1 break-words">{funnelData.landingPage.headline}</div>
+                <div className="text-xs sm:text-sm text-muted-foreground break-words">{funnelData.landingPage.subheadline}</div>
+                <div className="mt-3 inline-block px-4 py-2 bg-blue-600 text-white text-xs sm:text-sm rounded-lg font-medium">
+                  {funnelData.landingPage.cta}
+                </div>
+              </div>
+              <HeroImagePreview headline={funnelData.landingPage.headline} subheadline={funnelData.landingPage.subheadline} />
             </div>
           </div>
 
@@ -438,6 +446,82 @@ export function FunnelBuilderOutput({ data }: Props) {
           {typeof funnelData.reasoning === 'string' ? funnelData.reasoning : typeof data?.reasoning === 'string' ? data.reasoning : (typeof funnelData.reasoning === 'object' ? JSON.stringify(funnelData.reasoning) : '')}
         </p>
       </div>
+    </div>
+  );
+}
+
+// ─── AI Hero Image Preview ──────────────────────────────────────────────────
+
+function HeroImagePreview({ headline, subheadline }: { headline: string; subheadline: string }) {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+
+  const generateImage = () => {
+    setLoading(true);
+    setError(false);
+
+    const prompt = [
+      'Modern premium SaaS product hero image.',
+      'Abstract 3D visualization with glowing elements, floating geometric shapes,',
+      'holographic UI dashboard mockup, dark background with blue and cyan accents,',
+      `representing: ${headline}.`,
+      subheadline ? `Context: ${subheadline.slice(0, 80)}.` : '',
+      'Ultra-clean, minimal, professional. No text in image.',
+      'Style: Futuristic tech, glass morphism, ambient lighting, depth of field.',
+    ].filter(Boolean).join(' ').slice(0, 990);
+
+    fetch('/api/ads/generate-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, width: 1024, height: 1024, style: 'digital_illustration' }),
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.imageUrl) setImageUrl(data.imageUrl);
+        else setError(true);
+      })
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
+  };
+
+  return (
+    <div className="w-full sm:w-48 shrink-0">
+      <div className="text-xs uppercase tracking-wider text-purple-400 mb-1 flex items-center gap-1.5">
+        <Sparkles className="w-3 h-3" />
+        AI Hero Visual
+      </div>
+      {imageUrl ? (
+        <div className="relative group rounded-lg overflow-hidden border border-purple-500/20">
+          <img src={imageUrl} alt="AI-generated hero visual" className="w-full aspect-square object-cover" />
+          <button
+            onClick={generateImage}
+            className="absolute bottom-1.5 right-1.5 p-1.5 rounded-md bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+            title="Regenerate"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ) : loading ? (
+        <div className="w-full aspect-square rounded-lg border border-purple-500/20 bg-purple-500/5 flex flex-col items-center justify-center gap-2">
+          <Loader2 className="w-5 h-5 text-purple-400 animate-spin" />
+          <span className="text-xs text-muted-foreground">Generating...</span>
+        </div>
+      ) : error ? (
+        <div className="w-full aspect-square rounded-lg border border-red-500/20 bg-red-500/5 flex flex-col items-center justify-center gap-2">
+          <span className="text-xs text-red-400">Failed to generate</span>
+          <button onClick={generateImage} className="text-xs text-blue-400 hover:text-blue-300 underline">Retry</button>
+        </div>
+      ) : (
+        <button
+          onClick={generateImage}
+          className="w-full aspect-square rounded-lg border border-dashed border-purple-500/30 bg-purple-500/5 hover:bg-purple-500/10 transition-colors flex flex-col items-center justify-center gap-2 cursor-pointer"
+        >
+          <ImageIcon className="w-6 h-6 text-purple-400/60" />
+          <span className="text-xs text-purple-400 font-medium">Generate AI Image</span>
+          <span className="text-[10px] text-muted-foreground">Powered by Fal.ai</span>
+        </button>
+      )}
     </div>
   );
 }

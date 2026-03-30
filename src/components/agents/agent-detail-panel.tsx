@@ -25,6 +25,8 @@ interface AgentDetailPanelProps {
   isPipelinePaused?: boolean;
   /** Filter runs to only this project (pass null/undefined for all) */
   projectId?: string | null;
+  /** Fallback agent output from frontend state (used when DB runs are empty) */
+  fallbackOutput?: any;
   onClose: () => void;
   onRun: () => void;
   onPause?: () => void;
@@ -38,7 +40,7 @@ function formatElapsed(seconds: number): string {
   return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
-function AgentDetailPanelInner({ agentId, agentName, description, isRunning: isRunningProp, elapsedTime, agentStatus: agentStatusProp, agentError, prerequisiteAgent, isPipelineRunning, isPipelinePaused, projectId, onClose, onRun, onPause, onReset, onResolved }: AgentDetailPanelProps) {
+function AgentDetailPanelInner({ agentId, agentName, description, isRunning: isRunningProp, elapsedTime, agentStatus: agentStatusProp, agentError, prerequisiteAgent, isPipelineRunning, isPipelinePaused, projectId, fallbackOutput, onClose, onRun, onPause, onReset, onResolved }: AgentDetailPanelProps) {
   // If pipeline is paused, this agent cannot be running — override stale state
   const isRunning = isPipelinePaused ? false : isRunningProp;
   const agentStatus = isPipelinePaused && agentStatusProp === 'running' ? 'idle' : agentStatusProp;
@@ -50,22 +52,78 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning: isR
   const prevRunningRef = useRef(isRunning);
 
   const fetchRuns = () => {
+    // When agent hasn't been run (idle), skip fetching —
+    // otherwise old runs from previous pipeline executions leak through
+    if (agentStatus === 'idle') {
+      setRuns([]);
+      setSelectedRun(null);
+      setLoading(false);
+      return;
+    }
+
     agentsApi.runs(agentId, projectId)
       .then((data) => {
         const runsList = Array.isArray(data) ? data : [];
-        setRuns(runsList);
-        if (runsList.length > 0) setSelectedRun(runsList[0]);
+        if (runsList.length > 0) {
+          setRuns(runsList);
+          setSelectedRun(runsList[0]);
+        } else if (fallbackOutput && (agentStatus === 'done' || agentStatus === 'error')) {
+          // DB returned no runs but frontend has output — use it as fallback
+          const syntheticRun = {
+            id: `fallback-${agentId}`,
+            agentId,
+            agentName,
+            status: fallbackOutput.success === false ? 'error' : 'done',
+            outputsJson: fallbackOutput,
+            error: fallbackOutput.success === false ? (fallbackOutput.error || fallbackOutput.reasoning || 'Agent failed') : null,
+            startedAt: new Date().toISOString(),
+            completedAt: new Date().toISOString(),
+          };
+          setRuns([syntheticRun]);
+          setSelectedRun(syntheticRun);
+        } else {
+          setRuns([]);
+          setSelectedRun(null);
+        }
       })
-      .catch(() => setRuns([]))
+      .catch(() => {
+        // DB unavailable — try fallback output
+        if (fallbackOutput && (agentStatus === 'done' || agentStatus === 'error')) {
+          const syntheticRun = {
+            id: `fallback-${agentId}`,
+            agentId,
+            agentName,
+            status: fallbackOutput.success === false ? 'error' : 'done',
+            outputsJson: fallbackOutput,
+            error: fallbackOutput.success === false ? (fallbackOutput.error || fallbackOutput.reasoning || 'Agent failed') : null,
+            startedAt: new Date().toISOString(),
+            completedAt: new Date().toISOString(),
+          };
+          setRuns([syntheticRun]);
+          setSelectedRun(syntheticRun);
+        } else {
+          setRuns([]);
+        }
+      })
       .finally(() => setLoading(false));
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     setLoading(true);
     setPrompt('');
     setHistoryExpanded(false);
     fetchRuns();
-  }, [agentId]);
+  }, [agentId, projectId]);
+
+  // Clear runs immediately when agent status resets to idle (e.g. pipeline reset)
+  // This prevents showing stale data while the DB delete is still in-flight
+  useEffect(() => {
+    if (agentStatus === 'idle' && !isRunning && !isPipelineRunning && !isPipelinePaused) {
+      setRuns([]);
+      setSelectedRun(null);
+    }
+  }, [agentStatus, isRunning, isPipelineRunning, isPipelinePaused]);
 
   // Auto-refresh runs when agent finishes (running → done/error)
   const prevStatusRef = useRef(agentStatus);
@@ -305,14 +363,14 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning: isR
                       className="flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium bg-red-600/20 border border-red-500/30 text-red-300 hover:bg-red-600/30 transition-all"
                     >
                       <RotateCcw className="h-4 w-4" />
-                      Reset Agent
+                      Reset All Agents
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* Dependency Warning Popup */}
-              {!isRunning && agentStatus !== 'running' && prerequisiteAgent && (
+              {/* Dependency Warning Popup — hide when agent already completed or errored */}
+              {!isRunning && agentStatus !== 'running' && agentStatus !== 'done' && agentStatus !== 'error' && prerequisiteAgent && (
                 <div className="flex items-start gap-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
                   <AlertTriangle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
                   <div>
@@ -341,10 +399,10 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning: isR
               {!isRunning && agentStatus !== 'running' && (
                 <button
                   onClick={handleRunWithPrompt}
-                  disabled={!!prerequisiteAgent || !!isPipelineRunning}
+                  disabled={(!!prerequisiteAgent && agentStatus !== 'done' && agentStatus !== 'error') || !!isPipelineRunning}
                   className={cn(
                     'flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all',
-                    (prerequisiteAgent || isPipelineRunning)
+                    ((prerequisiteAgent && agentStatus !== 'done' && agentStatus !== 'error') || isPipelineRunning)
                       ? 'bg-white/5 border border-white/[0.08] text-gray-500 cursor-not-allowed'
                       : 'bg-cyan-600 text-white hover:bg-cyan-500'
                   )}
@@ -493,31 +551,33 @@ function AgentDetailPanelInner({ agentId, agentName, description, isRunning: isR
                   exit={{ opacity: 0, y: -8 }}
                   transition={{ duration: 0.3, ease: [0.25, 0.4, 0.25, 1] }}
                 >
-                  <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-gray-300">
-                    <FileJson className="h-4 w-4" />
-                    Output
-                  </h4>
-                  <div className="rounded-lg rounded-xl p-4 overflow-x-auto">
-                    <AgentOutput
-                      agentId={agentId}
-                      agentName={agentName}
-                      data={selectedRun.outputsJson || selectedRun.outputs || {}}
-                      isLive={agentId === 'service-research'}
-                      agentRunId={selectedRun.id}
-                      onResolved={onResolved}
-                    />
-                  </div>
-
-                  {selectedRun.error && (
-                    <div className="mt-3">
+                  {selectedRun.status === 'error' || selectedRun.error ? (
+                    <div>
                       <h4 className="mb-2 flex items-center gap-2 text-sm font-medium text-red-400">
-                        <Terminal className="h-4 w-4" />
-                        Error
+                        <AlertCircle className="h-4 w-4" />
+                        Agent Failed
                       </h4>
-                      <div className="rounded-lg border border-red-800/50 bg-red-950/20 p-3 overflow-x-auto">
-                        <pre className="text-xs text-red-300 whitespace-pre-wrap break-words">{selectedRun.error}</pre>
+                      <div className="rounded-lg border border-red-800/50 bg-red-950/20 p-4">
+                        <pre className="text-sm text-red-300 whitespace-pre-wrap break-words">{selectedRun.error || 'Agent execution failed. Check your API credits and try again.'}</pre>
                       </div>
                     </div>
+                  ) : (
+                    <>
+                      <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-gray-300">
+                        <FileJson className="h-4 w-4" />
+                        Output
+                      </h4>
+                      <div className="rounded-lg rounded-xl p-4 overflow-x-auto">
+                        <AgentOutput
+                          agentId={agentId}
+                          agentName={agentName}
+                          data={selectedRun.outputsJson || selectedRun.outputs || {}}
+                          isLive={agentId === 'service-research'}
+                          agentRunId={selectedRun.id}
+                          onResolved={onResolved}
+                        />
+                      </div>
+                    </>
                   )}
                 </motion.div>
               )}

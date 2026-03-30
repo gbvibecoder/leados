@@ -8,12 +8,19 @@ import { useAppStore, DISCOVERY_AGENT_IDS, LEADOS_AGENTS, SUPPORTED_LANGUAGES } 
 import { pipelines as pipelinesApi, agents as agentsApi, apiFetch } from '@/lib/api';
 import { ErrorBoundary } from '@/components/layout/error-boundary';
 import { preTranslateAgent } from '@/components/agents/AgentOutput';
+
+/** Strip JSON objects/arrays from error strings so users see clean messages */
+function cleanErrorMsg(raw: string): string {
+  if (!raw) return 'Agent failed';
+  const cleaned = raw.replace(/\s*\{[\s\S]*\}\s*/g, '').replace(/\s*\[[\s\S]*\]\s*/g, '').trim();
+  return cleaned || 'Agent failed — check your API keys in Settings.';
+}
 import {
   Building2, Pause, Play, RotateCcw, ChevronDown, ChevronUp, ChevronRight,
   Bot, Check, Loader2, AlertCircle, ArrowDown, Settings2,
   Target, Sparkles, ShieldCheck, Globe, Mail, MousePointer,
   Phone, ArrowRight, BarChart3, TrendingUp, RefreshCw,
-  Eye, Zap, Clock, ExternalLink,
+  Eye, Zap, Clock, ExternalLink, Megaphone, CheckCircle2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -106,20 +113,18 @@ export default function LeadOSPage() {
   const isInternal = selectedProject?.type === 'internal';
 
   // Load agent run statuses from DB for a project that was run previously
+  /** Fetch runs from DB for a project and apply them to the current pipeline + page state */
   const loadProjectRunsFromDB = useCallback(async (projectId: string) => {
     try {
-      // Fetch latest pipeline for this project
       const allPipelines = await apiFetch('/api/pipelines').then(r => r.json());
       if (!Array.isArray(allPipelines)) return;
 
-      // Find the most recent pipeline for this project
       const projectPipeline = allPipelines.find((p: any) => p.projectId === projectId);
       if (!projectPipeline || !projectPipeline.agentRuns?.length) return;
 
       // Bail if user already switched away while we were fetching
       if (useAppStore.getState().selectedProjectId !== projectId) return;
 
-      // Update agent statuses in the store pipeline
       const restoredOutputs: Record<string, any> = {};
       let restoredCount = 0;
       for (const run of projectPipeline.agentRuns) {
@@ -131,21 +136,21 @@ export default function LeadOSPage() {
             outputPreview: typeof run.outputsJson?.reasoning === 'string'
               ? run.outputsJson.reasoning.slice(0, 120)
               : run.status === 'done' ? 'Completed successfully' : undefined,
-            error: run.status === 'error' ? (run.error || 'Agent failed') : undefined,
+            error: run.status === 'error' ? cleanErrorMsg(run.error || 'Agent failed') : undefined,
           });
           restoredCount++;
-          if (run.outputsJson) {
+          if (run.status === 'done' && run.outputsJson) {
             restoredOutputs[run.agentId] = run.outputsJson;
+          } else if (run.status === 'error') {
+            delete restoredOutputs[run.agentId];
           }
         }
       }
 
-      // Update page-level outputs
       if (Object.keys(restoredOutputs).length > 0) {
         setAgentOutputs(restoredOutputs);
       }
 
-      // Update pipeline status to reflect the DB state
       if (restoredCount > 0) {
         if (projectPipeline.status === 'completed') {
           updatePipelineStatus('completed');
@@ -156,8 +161,6 @@ export default function LeadOSPage() {
         }
       }
 
-      // Cache the restored state so future switches are instant (no re-fetch)
-      // Defer slightly so updateAgentStatus calls have propagated to the store
       requestAnimationFrame(() => {
         if (useAppStore.getState().selectedProjectId === projectId) {
           cacheProjectPipeline(projectId, restoredOutputs, {});
@@ -168,6 +171,92 @@ export default function LeadOSPage() {
     }
   }, [updateAgentStatus, updatePipelineStatus, cacheProjectPipeline]);
 
+  /**
+   * Pre-fetch project runs from DB and populate the pipeline cache BEFORE
+   * selectProject runs, so the switch is instant with no idle flash.
+   */
+  const prefetchProjectPipeline = useCallback(async (projectId: string) => {
+    try {
+      const allPipelines = await apiFetch('/api/pipelines').then(r => r.json());
+      if (!Array.isArray(allPipelines)) return;
+
+      const projectPipeline = allPipelines.find((p: any) => p.projectId === projectId);
+      if (!projectPipeline || !projectPipeline.agentRuns?.length) return;
+
+      // Build agent states from DB runs
+      const state = useAppStore.getState();
+      const project = state.projects.find(p => p.id === projectId);
+      const baseAgents = LEADOS_AGENTS.map(a => ({
+        ...a,
+        status: 'idle' as const,
+        lastRunTime: undefined as string | undefined,
+        outputPreview: undefined as string | undefined,
+        progress: undefined as number | undefined,
+        error: undefined as string | undefined,
+      }));
+
+      const restoredOutputs: Record<string, any> = {};
+      let restoredCount = 0;
+
+      for (const run of projectPipeline.agentRuns) {
+        if (run.status === 'done' || run.status === 'error') {
+          const agent = baseAgents.find(a => a.id === run.agentId);
+          if (agent) {
+            agent.status = run.status;
+            agent.progress = run.status === 'done' ? 100 : 0;
+            agent.lastRunTime = run.completedAt || run.startedAt;
+            agent.outputPreview = typeof run.outputsJson?.reasoning === 'string'
+              ? run.outputsJson.reasoning.slice(0, 120)
+              : run.status === 'done' ? 'Completed successfully' : undefined;
+            agent.error = run.status === 'error' ? cleanErrorMsg(run.error || 'Agent failed') : undefined;
+          }
+          restoredCount++;
+          if (run.status === 'done' && run.outputsJson) {
+            restoredOutputs[run.agentId] = run.outputsJson;
+          }
+        }
+      }
+
+      if (restoredCount > 0) {
+        // Filter agents for the project type (internal projects skip discovery)
+        const enabledIds = project?.config?.enabledAgentIds;
+        const isInternal = project?.type === 'internal';
+        let filteredAgents = baseAgents;
+        if (enabledIds) {
+          const enabledSet = new Set(enabledIds);
+          filteredAgents = baseAgents.filter(a => enabledSet.has(a.id));
+        } else if (isInternal) {
+          const discoveryIds = new Set(['service-research', 'offer-engineering', 'validation', 'funnel-builder']);
+          filteredAgents = baseAgents.filter(a => !discoveryIds.has(a.id));
+        }
+
+        const pipelineStatus = projectPipeline.status === 'completed' ? 'completed'
+          : projectPipeline.status === 'error' ? 'error'
+          : projectPipeline.status === 'paused' ? 'paused' : 'idle';
+
+        cacheProjectPipeline(projectId, restoredOutputs, {});
+        // Also cache the pipeline state directly in the store
+        useAppStore.setState((prev) => ({
+          projectPipelineCache: {
+            ...prev.projectPipelineCache,
+            [projectId]: {
+              pipeline: {
+                id: projectPipeline.id,
+                status: pipelineStatus as any,
+                agents: filteredAgents,
+                currentAgentIndex: 0,
+              },
+              agentOutputs: restoredOutputs,
+              elapsedTimes: {},
+            },
+          },
+        }));
+      }
+    } catch {
+      // DB unavailable — will fall back to idle pipeline
+    }
+  }, [cacheProjectPipeline]);
+
   // Keep a ref to agentOutputs/elapsedTimes so the project-switch effect
   // can cache them without stale closures
   const agentOutputsRef = useRef(agentOutputs);
@@ -175,62 +264,68 @@ export default function LeadOSPage() {
   const elapsedTimesRef = useRef(elapsedTimes);
   elapsedTimesRef.current = elapsedTimes;
 
-  // React to selectedProjectId changes — works whether triggered from page or navbar
+  // React to selectedProjectId changes — works on mount AND when triggered from page or navbar
   const prevProjectIdRef = useRef<string | null | undefined>(undefined);
   useEffect(() => {
-    // Skip first mount
-    if (prevProjectIdRef.current === undefined) {
-      prevProjectIdRef.current = selectedProjectId;
-      return;
-    }
-    if (prevProjectIdRef.current === selectedProjectId) return;
+    const isMount = prevProjectIdRef.current === undefined;
+    if (!isMount && prevProjectIdRef.current === selectedProjectId) return;
 
     const prevId = prevProjectIdRef.current;
     prevProjectIdRef.current = selectedProjectId;
 
-    // Close any open agent detail panel — it shows project-specific data
-    setSelectedAgent(null);
-
-    // Cache outgoing project's agentOutputs into the store cache
-    // (pipeline state is already cached by store.selectProject)
-    if (prevId) {
-      cacheProjectPipeline(prevId, agentOutputsRef.current, elapsedTimesRef.current);
+    // On project switch (not mount), close panels and clear stale context
+    if (!isMount) {
+      setSelectedAgent(null);
+      setPipelineError(null);
+      pausedPipelineRef.current = null;
+      activePipelineCtxRef.current = null;
     }
 
-    // Restore incoming project's cached outputs, or load from DB
-    if (selectedProjectId) {
-      const cached = getProjectPipelineCache(selectedProjectId);
-      // Cache is valid if it has agentOutputs OR if the pipeline has agents with done/error status
-      const cacheHasOutputs = cached && Object.keys(cached.agentOutputs).length > 0;
-      const cacheHasStatuses = cached && cached.pipeline.agents.some(a => a.status === 'done' || a.status === 'error');
-      if (cached && (cacheHasOutputs || cacheHasStatuses)) {
-        setAgentOutputs(cached.agentOutputs);
-        setElapsedTimes(cached.elapsedTimes);
-        // If cache has statuses but no outputs, load outputs from DB in background
-        if (cacheHasStatuses && !cacheHasOutputs) {
-          loadProjectRunsFromDB(selectedProjectId);
+    // Cache outgoing project/default agentOutputs (skip on mount — nothing to cache yet)
+    if (!isMount && prevId !== undefined) {
+      cacheProjectPipeline(prevId || '__default__', agentOutputsRef.current, elapsedTimesRef.current);
+    }
+
+    // Restore incoming project/default cached outputs, or load from DB
+    const cacheKey = selectedProjectId || '__default__';
+    const cached = getProjectPipelineCache(cacheKey);
+    const cacheHasOutputs = cached && Object.keys(cached.agentOutputs).length > 0;
+    const cacheHasStatuses = cached && cached.pipeline.agents.some(a => a.status === 'done' || a.status === 'error');
+    if (cached && (cacheHasOutputs || cacheHasStatuses)) {
+      const cleanOutputs = { ...cached.agentOutputs };
+      for (const agent of cached.pipeline.agents) {
+        if (agent.status === 'error') {
+          delete cleanOutputs[agent.id];
         }
-      } else {
-        setAgentOutputs({});
-        setElapsedTimes({});
+      }
+      setAgentOutputs(cleanOutputs);
+      setElapsedTimes(cached.elapsedTimes);
+      if (cacheHasStatuses && !cacheHasOutputs && selectedProjectId) {
         loadProjectRunsFromDB(selectedProjectId);
       }
     } else {
-      setAgentOutputs({});
-      setElapsedTimes({});
+      if (!isMount) {
+        setAgentOutputs({});
+        setElapsedTimes({});
+      }
+      if (selectedProjectId) {
+        loadProjectRunsFromDB(selectedProjectId);
+      }
     }
   }, [selectedProjectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Wraps selectProject to cache outgoing agentOutputs BEFORE the store replaces pipeline
-  const handleSelectProject = useCallback((projectId: string | null) => {
+  const handleSelectProject = useCallback(async (projectId: string | null) => {
     const currentProjectId = useAppStore.getState().selectedProjectId;
     if (currentProjectId === projectId) return;
-    // Cache agentOutputs for outgoing project before store.selectProject caches pipeline
-    if (currentProjectId) {
-      cacheProjectPipeline(currentProjectId, agentOutputs, elapsedTimes);
+    // Cache agentOutputs for outgoing project/default before store.selectProject caches pipeline
+    cacheProjectPipeline(currentProjectId || '__default__', agentOutputs, elapsedTimes);
+    // Pre-fetch target project's runs from DB if no cache exists — prevents idle flash
+    if (projectId && !getProjectPipelineCache(projectId)) {
+      await prefetchProjectPipeline(projectId);
     }
     selectProject(projectId);
-  }, [selectProject, cacheProjectPipeline, agentOutputs, elapsedTimes]);
+  }, [selectProject, cacheProjectPipeline, getProjectPipelineCache, prefetchProjectPipeline, agentOutputs, elapsedTimes]);
 
   /** Build projectConfig with language/localization from the selected project */
   const buildProjectConfig = useCallback((): Record<string, any> => {
@@ -494,6 +589,29 @@ export default function LeadOSPage() {
             break;
           }
 
+          // Check if agent returned success: false (e.g. JSON parse failure)
+          if (agentResult.output && agentResult.output.success === false) {
+            stopAgentTimer(agentId);
+            const errMsg = cleanErrorMsg(agentResult.output.error || agentResult.output.reasoning || 'Agent failed');
+            updateAgentStatus(agentId, { status: 'error', error: errMsg });
+            setAgentOutputs(prev => ({ ...prev, [agentId]: agentResult.output }));
+            addActivity({ type: 'agent_error', agentId, agentName, message: `${agentName} failed: ${errMsg}` });
+
+            // Stop pipeline on error
+            setPipelineError(`${agentName} failed: ${errMsg}`);
+            updatePipelineStatus('error');
+            setRunningAgentId(null);
+            activePipelineCtxRef.current = null;
+
+            try {
+              await apiFetch(`/api/pipelines/${created.id}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ status: 'error' }),
+              });
+            } catch { /* ignore */ }
+            break;
+          }
+
           // Store output for chaining to next agent
           if (agentResult.output?.success) {
             previousOutputs[agentId] = agentResult.output.data;
@@ -548,7 +666,7 @@ export default function LeadOSPage() {
             break;
           }
           stopAgentTimer(agentId);
-          const errMsg = agentErr.message || 'Agent failed';
+          const errMsg = cleanErrorMsg(agentErr.message || 'Agent failed');
           updateAgentStatus(agentId, { status: 'error', error: errMsg });
           addActivity({ type: 'agent_error', agentId, agentName, message: `${agentName} failed: ${errMsg}` });
 
@@ -585,7 +703,7 @@ export default function LeadOSPage() {
       }
 
     } catch (err: any) {
-      const errorMsg = err.message || 'Failed to start pipeline';
+      const errorMsg = cleanErrorMsg(err.message || 'Failed to start pipeline');
       setPipelineError(errorMsg);
       updatePipelineStatus('error');
       addActivity({
@@ -646,9 +764,23 @@ export default function LeadOSPage() {
               const output = latestRun.outputsJson || latestRun;
               setAgentOutputs(prev => ({ ...prev, [agentId]: output }));
 
+              // Check if agent returned success: false (e.g. JSON parse failure)
+              if (output && output.success === false) {
+                const errMsg = cleanErrorMsg(output.error || output.reasoning || 'Agent failed');
+                updateAgentStatus(agentId, { status: 'error', error: errMsg });
+                addActivity({
+                  type: 'agent_error',
+                  agentId,
+                  agentName: LEADOS_AGENTS.find(a => a.id === agentId)?.name || agentId,
+                  message: `${LEADOS_AGENTS.find(a => a.id === agentId)?.name || agentId} failed: ${errMsg}`,
+                });
+                setRunningAgentId(null);
+                return;
+              }
+
               const preview = output?.reasoning
                 || output?.data?.reasoning
-                || (output?.success ? 'Completed successfully with live data' : 'Completed');
+                || 'Completed successfully with live data';
 
               updateAgentStatus(agentId, {
                 status: 'done',
@@ -693,7 +825,7 @@ export default function LeadOSPage() {
       await pollForCompletion();
     } catch (err: any) {
       stopAgentTimer(agentId);
-      const errorMsg = err.message || 'Agent execution failed';
+      const errorMsg = cleanErrorMsg(err.message || 'Agent execution failed');
 
       updateAgentStatus(agentId, {
         status: 'error',
@@ -780,7 +912,7 @@ export default function LeadOSPage() {
         }
       } catch (err: any) {
         stopAgentTimer(agentId);
-        updateAgentStatus(agentId, { status: 'error', error: err.message || 'Re-run failed' });
+        updateAgentStatus(agentId, { status: 'error', error: cleanErrorMsg(err.message || 'Re-run failed') });
         addActivity({ type: 'agent_error', agentId, agentName, message: `${agentName} re-run failed: ${err.message}` });
       }
     }
@@ -809,22 +941,165 @@ export default function LeadOSPage() {
     });
   }, [stopAgentTimer, updateAgentStatus, addActivity]);
 
-  // Reset a specific agent — clears its status and output, does not affect others
-  const handleResetAgent = useCallback((agentId: string) => {
-    stopAgentTimer(agentId);
-    updateAgentStatus(agentId, { status: 'idle', progress: 0, error: undefined, outputPreview: undefined });
-    setAgentOutputs(prev => {
-      const next = { ...prev };
-      delete next[agentId];
-      return next;
+  // Reset all agents for the current project — wipes all DB data and frontend state
+  const handleResetAgent = useCallback((_agentId: string) => {
+    const pipelineId = pipeline.id;
+    const projectId = selectedProjectId;
+
+    // 1. Abort any in-flight requests FIRST
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    // 2. Stop ALL agent timers
+    Object.keys(timerRef.current).forEach(id => {
+      clearInterval(timerRef.current[id]);
+      delete timerRef.current[id];
     });
-    setElapsedTimes(prev => ({ ...prev, [agentId]: 0 }));
+    if (totalTimerRef.current) { clearInterval(totalTimerRef.current); totalTimerRef.current = null; }
+    // 3. Reset ALL frontend state immediately (synchronous)
     setRunningAgentId(null);
+    activePipelineCtxRef.current = null;
+    pausedPipelineRef.current = null;
+    setPipelineError(null);
+    setAgentOutputs({});
+    setElapsedTimes({});
+    setTotalElapsed(0);
+    setPipelineStartTime(null);
+    clearActivities();
+    // 4. Clear cached pipeline state for this project
+    if (projectId) clearProjectPipelineCache(projectId);
+    // 5. Reset pipeline — clears pipeline.id and resets all agent statuses to idle
+    resetPipeline();
     addActivity({
       type: 'info',
-      message: `${LEADOS_AGENTS.find(a => a.id === agentId)?.name || agentId} reset by user`,
+      message: `All agents reset by user`,
     });
-  }, [stopAgentTimer, updateAgentStatus, addActivity]);
+
+    // 6. Clean up DB in background (fire-and-forget) — cancel pipeline, delete all project data
+    (async () => {
+      if (pipelineId) {
+        try {
+          await apiFetch(`/api/pipelines/${pipelineId}/cancel`, { method: 'POST' });
+        } catch {
+          try { await apiFetch(`/api/pipelines/${pipelineId}/pause`, { method: 'POST' }); } catch {}
+        }
+      }
+      if (projectId) {
+        try {
+          await apiFetch(`/api/projects/${projectId}/reset`, { method: 'POST' });
+        } catch {}
+      }
+    })();
+  }, [pipeline.id, selectedProjectId, resetPipeline, clearActivities, clearProjectPipelineCache, addActivity]);
+
+  // Resume pipeline from paused state (shared by header Resume button and approval gate)
+  const handleResumePipeline = useCallback(async () => {
+    updatePipelineStatus('running');
+    if (pipeline.id) {
+      try {
+        await apiFetch(`/api/pipelines/${pipeline.id}/resume`, { method: 'POST' });
+      } catch { /* ignore */ }
+    }
+
+    const saved = pausedPipelineRef.current;
+    if (saved) {
+      pausedPipelineRef.current = null;
+      const { agentsToRun, projectConfig, previousOutputs, pipelineId, pausedAfterIndex } = saved;
+
+      activePipelineCtxRef.current = {
+        agentsToRun,
+        projectConfig,
+        previousOutputs,
+        pipelineId,
+        currentIndex: pausedAfterIndex + 1,
+      };
+
+      addActivity({ type: 'info', message: 'Pipeline resumed — continuing remaining agents' });
+
+      for (let i = pausedAfterIndex + 1; i < agentsToRun.length; i++) {
+        const agentId = agentsToRun[i];
+        const agentName = LEADOS_AGENTS.find(a => a.id === agentId)?.name || agentId;
+
+        if (activePipelineCtxRef.current) {
+          activePipelineCtxRef.current.currentIndex = i;
+        }
+
+        const currentStatus = useAppStore.getState().pipeline.status;
+        if (currentStatus !== 'running') break;
+
+        setCurrentAgentIndex(i);
+        setRunningAgentId(agentId);
+        updateAgentStatus(agentId, { status: 'running', progress: 0 });
+        startAgentTimer(agentId);
+        addActivity({ type: 'agent_started', agentId, agentName, message: `${agentName} started` });
+
+        try {
+          const controller = new AbortController();
+          abortControllerRef.current = controller;
+          const agentResult = await agentsApi.run(agentId, {
+            pipelineId,
+            config: projectConfig,
+            previousOutputs,
+          }, controller.signal);
+          abortControllerRef.current = null;
+
+          const statusAfterAgent = useAppStore.getState().pipeline.status;
+          if (statusAfterAgent !== 'running') {
+            stopAgentTimer(agentId);
+            break;
+          }
+
+          if (agentResult.output?.success) {
+            previousOutputs[agentId] = agentResult.output.data;
+          }
+
+          stopAgentTimer(agentId);
+          updateAgentStatus(agentId, {
+            status: 'done', progress: 100,
+            lastRunTime: new Date().toISOString(),
+            outputPreview: typeof agentResult.output?.reasoning === 'string' ? agentResult.output.reasoning : 'Completed successfully',
+          });
+          setAgentOutputs(prev => ({ ...prev, [agentId]: agentResult.output }));
+          addActivity({ type: 'agent_completed', agentId, agentName, message: `${agentName} completed` });
+
+          if (selectedProject?.language && selectedProject.language !== 'en') {
+            preTranslateAgent(agentId, selectedProject.language, agentResult.output).catch(() => {});
+          }
+        } catch (agentErr: any) {
+          if (agentErr.name === 'AbortError') { stopAgentTimer(agentId); break; }
+          stopAgentTimer(agentId);
+          const errorMsg = agentErr.message || 'Agent failed';
+          updateAgentStatus(agentId, { status: 'error', error: errorMsg });
+          addActivity({ type: 'agent_error', agentId, agentName, message: `${agentName} failed: ${errorMsg}` });
+        }
+      }
+
+      setRunningAgentId(null);
+      activePipelineCtxRef.current = null;
+      const finalStatus = useAppStore.getState().pipeline.status;
+      if (finalStatus === 'running') {
+        updatePipelineStatus('completed');
+        addActivity({ type: 'info', message: 'Pipeline completed' });
+      }
+    }
+  }, [pipeline.id, updatePipelineStatus, updateAgentStatus, setCurrentAgentIndex, startAgentTimer, stopAgentTimer, addActivity, selectedProject?.language]);
+
+  // Whether the pipeline is paused specifically because paid-traffic just completed (auto-pause for ad review)
+  const isPausedForAdReview = pipeline.status === 'paused'
+    && (agentStatuses['paid-traffic'] === 'done')
+    && !!pausedPipelineRef.current;
+
+  // Auto-resume pipeline when ads are launched (fired from PaidTrafficOutput or useMetaCampaign)
+  useEffect(() => {
+    const onAdsLaunched = () => {
+      if (useAppStore.getState().pipeline.status === 'paused' && pausedPipelineRef.current) {
+        handleResumePipeline();
+      }
+    };
+    window.addEventListener('leados:ads-launched', onAdsLaunched);
+    return () => window.removeEventListener('leados:ads-launched', onAdsLaunched);
+  }, [handleResumePipeline]);
 
   const togglePhase = (phaseId: string) => {
     setExpandedPhases(prev => {
@@ -878,7 +1153,50 @@ export default function LeadOSPage() {
 
   return (
     <ErrorBoundary>
-      <div className="max-w-4xl mx-auto">
+      {/* ══ Animated flowing cross-grid background ══ */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10">
+
+        {/* ── Layer 1: Cross/plus mark grid with flowing wave ── */}
+        <svg className="absolute inset-0 w-full h-full" style={{ animation: 'grid-drift 30s linear infinite' }}>
+          <defs>
+            <pattern id="cross-grid" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
+              {/* Horizontal tick */}
+              <line x1="16" y1="20" x2="24" y2="20" stroke="rgba(120,130,180,0.18)" strokeWidth="0.8" strokeLinecap="round" />
+              {/* Vertical tick */}
+              <line x1="20" y1="16" x2="20" y2="24" stroke="rgba(120,130,180,0.18)" strokeWidth="0.8" strokeLinecap="round" />
+            </pattern>
+            {/* Radial mask to fade edges */}
+            <radialGradient id="grid-fade" cx="50%" cy="50%" r="55%">
+              <stop offset="0%" stopColor="white" stopOpacity="1" />
+              <stop offset="70%" stopColor="white" stopOpacity="0.6" />
+              <stop offset="100%" stopColor="white" stopOpacity="0.1" />
+            </radialGradient>
+            <mask id="grid-mask">
+              <rect width="100%" height="100%" fill="url(#grid-fade)" />
+            </mask>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#cross-grid)" mask="url(#grid-mask)" />
+        </svg>
+
+        {/* ── Layer 2: Flowing wave overlay that sweeps across the grid ── */}
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, transparent 0%, rgba(99,102,241,0.04) 25%, transparent 50%, rgba(0,242,255,0.03) 75%, transparent 100%)', backgroundSize: '400% 400%', animation: 'wave-flow 12s ease-in-out infinite' }} />
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(225deg, transparent 0%, rgba(139,92,246,0.03) 30%, transparent 55%, rgba(99,102,241,0.04) 80%, transparent 100%)', backgroundSize: '400% 400%', animation: 'wave-flow 16s ease-in-out infinite 4s' }} />
+
+        {/* ── Layer 3: Soft aurora glow spots ── */}
+        <div className="absolute rounded-full"
+          style={{ width: '600px', height: '600px', top: '5%', left: '-5%', background: 'radial-gradient(circle, rgba(99,102,241,0.06) 0%, transparent 60%)', filter: 'blur(80px)', animation: 'aurora-drift-1 25s ease-in-out infinite' }} />
+        <div className="absolute rounded-full"
+          style={{ width: '500px', height: '500px', top: '40%', right: '-8%', background: 'radial-gradient(circle, rgba(0,242,255,0.05) 0%, transparent 60%)', filter: 'blur(80px)', animation: 'aurora-drift-2 30s ease-in-out infinite' }} />
+        <div className="absolute rounded-full"
+          style={{ width: '450px', height: '450px', bottom: '5%', left: '25%', background: 'radial-gradient(circle, rgba(139,92,246,0.05) 0%, transparent 60%)', filter: 'blur(80px)', animation: 'aurora-drift-3 28s ease-in-out infinite' }} />
+
+        {/* ── Layer 4: Glowing node spots ── */}
+        <div className="absolute w-2 h-2 rounded-full" style={{ top: '22%', left: '38%', background: 'rgba(120,130,200,0.5)', boxShadow: '0 0 15px 6px rgba(99,102,241,0.15)', animation: 'node-pulse 5s ease-in-out infinite' }} />
+        <div className="absolute w-1.5 h-1.5 rounded-full" style={{ top: '55%', left: '68%', background: 'rgba(120,130,200,0.4)', boxShadow: '0 0 12px 5px rgba(99,102,241,0.12)', animation: 'node-pulse 6s ease-in-out infinite 2s' }} />
+        <div className="absolute w-1.5 h-1.5 rounded-full" style={{ top: '75%', left: '25%', background: 'rgba(120,130,200,0.35)', boxShadow: '0 0 10px 4px rgba(99,102,241,0.10)', animation: 'node-pulse 7s ease-in-out infinite 4s' }} />
+      </div>
+
+      <div className="max-w-4xl mx-auto relative z-0">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
@@ -1068,100 +1386,7 @@ export default function LeadOSPage() {
               )}
               {pipeline.status === 'paused' && (
                 <button
-                  onClick={async () => {
-                    updatePipelineStatus('running');
-                    if (pipeline.id) {
-                      try {
-                        await apiFetch(`/api/pipelines/${pipeline.id}/resume`, { method: 'POST' });
-                      } catch { /* ignore */ }
-                    }
-
-                    // Resume pipeline from where it was paused
-                    const saved = pausedPipelineRef.current;
-                    if (saved) {
-                      pausedPipelineRef.current = null;
-                      const { agentsToRun, projectConfig, previousOutputs, pipelineId, pausedAfterIndex } = saved;
-
-                      // Track live context for re-pause support
-                      activePipelineCtxRef.current = {
-                        agentsToRun,
-                        projectConfig,
-                        previousOutputs,
-                        pipelineId,
-                        currentIndex: pausedAfterIndex + 1,
-                      };
-
-                      addActivity({ type: 'info', message: 'Pipeline resumed — continuing remaining agents' });
-
-                      // Continue from the agent AFTER the paused one
-                      for (let i = pausedAfterIndex + 1; i < agentsToRun.length; i++) {
-                        const agentId = agentsToRun[i];
-                        const agentName = LEADOS_AGENTS.find(a => a.id === agentId)?.name || agentId;
-
-                        // Update live context
-                        if (activePipelineCtxRef.current) {
-                          activePipelineCtxRef.current.currentIndex = i;
-                        }
-
-                        const currentStatus = useAppStore.getState().pipeline.status;
-                        if (currentStatus !== 'running') break;
-
-                        setCurrentAgentIndex(i);
-                        setRunningAgentId(agentId);
-                        updateAgentStatus(agentId, { status: 'running', progress: 0 });
-                        startAgentTimer(agentId);
-                        addActivity({ type: 'agent_started', agentId, agentName, message: `${agentName} started` });
-
-                        try {
-                          const controller = new AbortController();
-                          abortControllerRef.current = controller;
-                          const agentResult = await agentsApi.run(agentId, {
-                            pipelineId,
-                            config: projectConfig,
-                            previousOutputs,
-                          }, controller.signal);
-                          abortControllerRef.current = null;
-
-                          const statusAfterAgent = useAppStore.getState().pipeline.status;
-                          if (statusAfterAgent !== 'running') {
-                            stopAgentTimer(agentId);
-                            break;
-                          }
-
-                          if (agentResult.output?.success) {
-                            previousOutputs[agentId] = agentResult.output.data;
-                          }
-
-                          stopAgentTimer(agentId);
-                          updateAgentStatus(agentId, {
-                            status: 'done', progress: 100,
-                            lastRunTime: new Date().toISOString(),
-                            outputPreview: typeof agentResult.output?.reasoning === 'string' ? agentResult.output.reasoning : 'Completed successfully',
-                          });
-                          setAgentOutputs(prev => ({ ...prev, [agentId]: agentResult.output }));
-                          addActivity({ type: 'agent_completed', agentId, agentName, message: `${agentName} completed` });
-
-                          if (selectedProject?.language && selectedProject.language !== 'en') {
-                            preTranslateAgent(agentId, selectedProject.language, agentResult.output).catch(() => {});
-                          }
-                        } catch (agentErr: any) {
-                          if (agentErr.name === 'AbortError') { stopAgentTimer(agentId); break; }
-                          stopAgentTimer(agentId);
-                          const errorMsg = agentErr.message || 'Agent failed';
-                          updateAgentStatus(agentId, { status: 'error', error: errorMsg });
-                          addActivity({ type: 'agent_error', agentId, agentName, message: `${agentName} failed: ${errorMsg}` });
-                        }
-                      }
-
-                      setRunningAgentId(null);
-                      activePipelineCtxRef.current = null;
-                      const finalStatus = useAppStore.getState().pipeline.status;
-                      if (finalStatus === 'running') {
-                        updatePipelineStatus('completed');
-                        addActivity({ type: 'info', message: 'Pipeline completed' });
-                      }
-                    }
-                  }}
+                  onClick={handleResumePipeline}
                   className="flex items-center gap-1.5 rounded-lg bg-cyan-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-cyan-500 transition-colors"
                 >
                   <Play className="h-3.5 w-3.5" />
@@ -1170,41 +1395,9 @@ export default function LeadOSPage() {
               )}
               {hasRun && (
                 <button
-                  onClick={async () => {
-                    // Cancel old pipeline in backend — set to 'cancelled' so backend loop exits
-                    if (pipeline.id) {
-                      try {
-                        await apiFetch(`/api/pipelines/${pipeline.id}/cancel`, { method: 'POST' });
-                      } catch {
-                        // Fallback: try pause
-                        try { await apiFetch(`/api/pipelines/${pipeline.id}/pause`, { method: 'POST' }); } catch {}
-                      }
-                    }
-                    // Clear agent run history from DB — only for the current pipeline, not all projects
-                    if (pipeline.id) {
-                      apiFetch(`/api/pipelines/${pipeline.id}/runs`, { method: 'DELETE' }).catch(() => {});
-                    }
-                    // Stop ALL timers
-                    Object.keys(timerRef.current).forEach(id => {
-                      clearInterval(timerRef.current[id]);
-                      delete timerRef.current[id];
-                    });
-                    // Reset ALL frontend state
-                    setRunningAgentId(null);
-                    activePipelineCtxRef.current = null;
-                    pausedPipelineRef.current = null;
-                    setPipelineError(null);
-                    setAgentOutputs({});
-                    setElapsedTimes({});
-                    setTotalElapsed(0);
-                    setPipelineStartTime(null);
-                    if (totalTimerRef.current) { clearInterval(totalTimerRef.current); totalTimerRef.current = null; }
-                    clearActivities();
-                    // Clear cached pipeline state for this project
-                    if (selectedProjectId) clearProjectPipelineCache(selectedProjectId);
-                    // Reset pipeline LAST — this clears pipeline.id which blocks further SSE events
-                    resetPipeline();
-                    // Show success snackbar
+                  onClick={() => {
+                    handleResetAgent('');
+                    setSelectedAgent(null);
                     setSnackbar('Pipeline reset successfully');
                     setTimeout(() => setSnackbar(null), 3000);
                   }}
@@ -1366,7 +1559,14 @@ export default function LeadOSPage() {
               >
                 {/* ════ PLANET — Phase Card ════ */}
                 <div className={cn('relative rounded-2xl overflow-hidden transition-all duration-500', isSkipped && 'opacity-30')}
-                  style={{ background: 'rgba(2,2,5,0.5)', border: `1px solid ${isSkipped ? 'rgba(255,255,255,0.02)' : phaseStatus === 'running' ? `${phaseAccent}20` : phaseStatus === 'done' ? `${phaseAccent}15` : 'rgba(255,255,255,0.04)'}` }}>
+                  style={{
+                    background: `linear-gradient(145deg, rgba(12,14,22,0.9), rgba(6,8,14,0.95))`,
+                    border: `1px solid ${isSkipped ? 'rgba(255,255,255,0.03)' : phaseStatus === 'running' ? `${phaseAccent}50` : phaseStatus === 'done' ? `${phaseAccent}35` : 'rgba(255,255,255,0.10)'}`,
+                    boxShadow: isSkipped ? 'none'
+                      : phaseStatus === 'running' ? `0 4px 24px ${phaseAccent}12, 0 0 0 1px ${phaseAccent}08, inset 0 1px 0 rgba(255,255,255,0.04)`
+                      : phaseStatus === 'done' ? `0 4px 20px ${phaseAccent}10, 0 0 0 1px ${phaseAccent}06, inset 0 1px 0 rgba(255,255,255,0.03)`
+                      : '0 4px 16px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.04)',
+                  }}>
 
                   {/* Running aurora */}
                   {phaseStatus === 'running' && (
@@ -1456,12 +1656,8 @@ export default function LeadOSPage() {
                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
                       transition={{ duration: 0.3 }} className="overflow-hidden">
                       <div className="px-4 pb-4">
-                        {/* Connector line from planet to moons */}
-                        <div className="flex items-center gap-3 mb-3 ml-5">
-                          <div className="flex-1 h-px" style={{ background: `linear-gradient(90deg, ${phaseAccent}20, ${phaseAccent}08)` }} />
-                          <span className="mono-ui text-[7px] shrink-0" style={{ color: `${phaseAccent}50` }}>Moons</span>
-                          <div className="flex-1 h-px" style={{ background: `linear-gradient(90deg, ${phaseAccent}08, ${phaseAccent}20)` }} />
-                        </div>
+                        {/* Subtle separator between header and agent cards */}
+                        <div className="mb-3 ml-5 mr-5 h-px" style={{ background: `linear-gradient(90deg, transparent, ${phaseAccent}15, transparent)` }} />
 
                         <div className="grid gap-3 sm:grid-cols-2">
                           {phaseAgents.map((agent, agentIdx) => {
@@ -1482,7 +1678,13 @@ export default function LeadOSPage() {
                                 onClick={() => setSelectedAgent(agent.id)}
                                 whileHover={{ y: -3, transition: { duration: 0.25 } }}
                                 className="group relative rounded-xl cursor-pointer transition-all duration-500 overflow-hidden"
-                                style={{ background: 'rgba(2,2,5,0.5)', border: `1px solid ${status === 'idle' ? 'rgba(255,255,255,0.04)' : `${sc}18`}` }}>
+                                style={{
+                                  background: status === 'idle' ? 'rgba(4,6,12,0.7)' : `linear-gradient(145deg, rgba(4,6,12,0.8), rgba(2,3,8,0.9))`,
+                                  border: `1px solid ${status === 'idle' ? 'rgba(255,255,255,0.07)' : `${sc}30`}`,
+                                  boxShadow: status === 'idle'
+                                    ? '0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.03)'
+                                    : `0 2px 12px ${sc}10, inset 0 1px 0 ${sc}06`,
+                                }}>
 
                                 {/* Running top aurora */}
                                 {status === 'running' && (
@@ -1494,7 +1696,7 @@ export default function LeadOSPage() {
                                     {/* Moon orb */}
                                     <div className="relative w-10 h-10 shrink-0">
                                       <div className="absolute inset-0 rounded-full transition-all duration-500"
-                                        style={{ border: `1.5px solid ${status === 'idle' ? 'rgba(255,255,255,0.06)' : `${sc}30`}`, boxShadow: status === 'running' ? `0 0 15px ${sc}15` : undefined }}>
+                                        style={{ border: `1.5px solid ${status === 'idle' ? 'rgba(255,255,255,0.1)' : `${sc}35`}`, boxShadow: status === 'running' ? `0 0 15px ${sc}15` : status === 'done' ? `0 0 8px ${sc}10` : undefined }}>
                                         {status === 'running' && (
                                           <div className="absolute -top-[2px] -right-[2px] w-2 h-2 rounded-full" style={{ background: sc, boxShadow: `0 0 6px ${sc}`, animation: 'pulse-ring 2s ease-out infinite' }} />
                                         )}
@@ -1586,18 +1788,84 @@ export default function LeadOSPage() {
 
                 {/* ════ Energy Connector between planets ════ */}
                 {phaseIndex < PIPELINE_PHASES.length - 1 && !isSkipped && (
-                  <div className="flex justify-center py-2">
-                    <div className="flex flex-col items-center gap-1">
-                      <div className="w-px h-3" style={{ background: `linear-gradient(to bottom, ${phaseAccent}25, transparent)` }} />
-                      <div className="w-2 h-2 rounded-full" style={{
-                        background: phaseStatus === 'done' ? phaseAccent : 'rgba(255,255,255,0.06)',
-                        boxShadow: phaseStatus === 'done' ? `0 0 8px ${phaseAccent}40` : phaseStatus === 'running' ? `0 0 6px ${phaseAccent}30` : undefined,
-                      }}>
-                        {phaseStatus === 'running' && <div className="w-full h-full rounded-full" style={{ background: phaseAccent, animation: 'pulse-ring 2s ease-out infinite' }} />}
+                  <>
+                    <div className="flex justify-center py-2">
+                      <div className="flex flex-col items-center gap-1">
+                        <div className="w-px h-3" style={{ background: `linear-gradient(to bottom, ${phaseAccent}25, transparent)` }} />
+                        <div className="w-2 h-2 rounded-full" style={{
+                          background: phaseStatus === 'done' ? phaseAccent : 'rgba(255,255,255,0.06)',
+                          boxShadow: phaseStatus === 'done' ? `0 0 8px ${phaseAccent}40` : phaseStatus === 'running' ? `0 0 6px ${phaseAccent}30` : undefined,
+                        }}>
+                          {phaseStatus === 'running' && <div className="w-full h-full rounded-full" style={{ background: phaseAccent, animation: 'pulse-ring 2s ease-out infinite' }} />}
+                        </div>
+                        <div className="w-px h-3" style={{ background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.06))' }} />
                       </div>
-                      <div className="w-px h-3" style={{ background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.06))' }} />
                     </div>
-                  </div>
+
+                    {/* ════ Ad Approval Gate — shown between Content and Lead Gen when paused after paid-traffic ════ */}
+                    {phase.id === 'content' && isPausedForAdReview && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        transition={{ duration: 0.5, ease: [0.25, 0.4, 0.25, 1] }}
+                        className="relative mx-auto mb-3 max-w-md"
+                      >
+                        {/* Glowing border */}
+                        <div className="absolute -inset-px rounded-2xl bg-gradient-to-r from-orange-500/30 via-amber-500/30 to-orange-500/30 blur-sm" />
+                        <div className="relative rounded-2xl overflow-hidden"
+                          style={{ background: 'rgba(2,2,5,0.9)', border: '1px solid rgba(245,158,11,0.25)' }}>
+
+                          {/* Animated top accent */}
+                          <div className="h-0.5 w-full" style={{
+                            background: 'linear-gradient(90deg, transparent, #f59e0b, #f97316, #f59e0b, transparent)',
+                            backgroundSize: '200% 100%',
+                            animation: 'shimmer 3s ease-in-out infinite',
+                          }} />
+
+                          <div className="p-5">
+                            {/* Header */}
+                            <div className="flex items-center gap-3 mb-3">
+                              <div className="relative">
+                                <div className="w-10 h-10 rounded-full flex items-center justify-center"
+                                  style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.25)' }}>
+                                  <Megaphone className="w-5 h-5 text-amber-400" />
+                                </div>
+                                <div className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-amber-500 flex items-center justify-center"
+                                  style={{ boxShadow: '0 0 8px rgba(245,158,11,0.5)' }}>
+                                  <Pause className="w-2 h-2 text-black" />
+                                </div>
+                              </div>
+                              <div>
+                                <h4 className="text-sm font-semibold text-amber-300">Ad Review Required</h4>
+                                <p className="text-[11px] text-gray-500">Pipeline paused for your approval</p>
+                              </div>
+                            </div>
+
+                            {/* Description */}
+                            <p className="text-xs text-gray-400 leading-relaxed mb-4">
+                              Your ad campaigns (Google Ads & Meta Ads) have been generated. Please review the targeting, budgets, and creatives before they go live.
+                            </p>
+
+                            {/* Action button */}
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => setSelectedAgent('paid-traffic')}
+                                className="w-full flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-medium transition-all"
+                                style={{
+                                  background: 'rgba(245,158,11,0.08)',
+                                  border: '1px solid rgba(245,158,11,0.2)',
+                                  color: '#fbbf24',
+                                }}
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                Review Ads
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </>
                 )}
               </motion.div>
             );
@@ -1623,10 +1891,11 @@ export default function LeadOSPage() {
               isPipelineRunning={isRunning || (!!runningAgentId && runningAgentId !== selectedAgent)}
               isPipelinePaused={pipeline.status === 'paused'}
               projectId={selectedProjectId}
+              fallbackOutput={agentOutputs[selectedAgent]}
               onClose={() => setSelectedAgent(null)}
               onRun={() => handleRunAgent(selectedAgent)}
               onPause={() => handlePauseAgent(selectedAgent)}
-              onReset={() => handleResetAgent(selectedAgent)}
+              onReset={() => { handleResetAgent(selectedAgent); setSelectedAgent(null); }}
               onResolved={selectedAgent === 'ai-qualification' ? handleQualificationResolved : undefined}
             />
           )}
@@ -1655,6 +1924,37 @@ export default function LeadOSPage() {
           0% { transform: translateX(-100%); }
           50% { transform: translateX(200%); }
           100% { transform: translateX(-100%); }
+        }
+      `}</style>
+
+      {/* Pipeline background animations */}
+      <style>{`
+        @keyframes grid-drift {
+          0% { transform: translate(0, 0); }
+          100% { transform: translate(-40px, -40px); }
+        }
+        @keyframes wave-flow {
+          0% { background-position: 0% 0%; }
+          50% { background-position: 100% 100%; }
+          100% { background-position: 0% 0%; }
+        }
+        @keyframes aurora-drift-1 {
+          0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.6; }
+          33% { transform: translate(80px, 40px) scale(1.1); opacity: 1; }
+          66% { transform: translate(-40px, 80px) scale(0.95); opacity: 0.7; }
+        }
+        @keyframes aurora-drift-2 {
+          0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.5; }
+          33% { transform: translate(-60px, -50px) scale(1.15); opacity: 0.9; }
+          66% { transform: translate(50px, -30px) scale(0.9); opacity: 0.6; }
+        }
+        @keyframes aurora-drift-3 {
+          0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.5; }
+          50% { transform: translate(60px, -60px) scale(1.2); opacity: 1; }
+        }
+        @keyframes node-pulse {
+          0%, 100% { opacity: 0.3; transform: scale(1); }
+          50% { opacity: 0.8; transform: scale(1.5); }
         }
       `}</style>
     </ErrorBoundary>

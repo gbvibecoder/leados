@@ -71,6 +71,7 @@ export async function GET(req?: Request) {
       agentName: r.agentName,
       status: r.status,
       outputsJson: r.outputsJson ? JSON.parse(r.outputsJson) : null,
+      error: r.error,
       startedAt: r.startedAt,
       completedAt: r.completedAt,
     })),

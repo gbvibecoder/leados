@@ -20,9 +20,17 @@ interface PipelineState {
   currentAgentIndex: number;
 }
 
+export interface MetaAdConfig {
+  appId?: string;
+  appSecret?: string;
+  accessToken?: string;
+  adAccountId?: string;
+}
+
 export interface ProjectConfig {
   enabledAgentIds?: string[];
   startFromAgentId?: string;
+  metaAdConfig?: MetaAdConfig;
 }
 
 export interface Project {
@@ -88,6 +96,9 @@ export const DISCOVERY_AGENT_IDS = [
   'funnel-builder',
 ];
 
+/** Cache key for the "no project" default pipeline */
+const NO_PROJECT_KEY = '__default__';
+
 /** Cached pipeline + outputs for a project so we can restore after switching */
 interface ProjectPipelineCache {
   pipeline: PipelineState;
@@ -117,8 +128,8 @@ interface AppState {
   selectedProjectId: string | null;
   setProjects: (projects: Project[]) => void;
   addProject: (project: Project) => void;
-  createProject: (data: { name: string; description?: string; url?: string; language?: string; type: 'internal' | 'external'; enabledAgentIds?: string[] }) => Project;
-  createProjectAsync: (data: { name: string; description?: string; url?: string; language?: string; type: 'internal' | 'external'; enabledAgentIds?: string[] }) => Promise<Project>;
+  createProject: (data: { name: string; description?: string; url?: string; language?: string; type: 'internal' | 'external'; enabledAgentIds?: string[]; metaAdConfig?: MetaAdConfig }) => Project;
+  createProjectAsync: (data: { name: string; description?: string; url?: string; language?: string; type: 'internal' | 'external'; enabledAgentIds?: string[]; metaAdConfig?: MetaAdConfig }) => Promise<Project>;
   updateProject: (projectId: string, updates: Partial<Project>) => void;
   updateProjectConfig: (projectId: string, config: ProjectConfig) => void;
   removeProject: (projectId: string) => void;
@@ -442,6 +453,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
         config: {
           ...(data.url ? { url: data.url } : {}),
           ...(data.enabledAgentIds ? { enabledAgentIds: data.enabledAgentIds } : {}),
+          ...(data.metaAdConfig ? { metaAdConfig: data.metaAdConfig } : {}),
         },
       }),
     });
@@ -449,6 +461,12 @@ export const useAppStore = create<AppState>()((set, get) => ({
     if (!res.ok || !dbProject?.id) {
       throw new Error(dbProject?.error || 'Failed to create project');
     }
+
+    const configObj: ProjectConfig | null = (data.url || data.enabledAgentIds || data.metaAdConfig) ? {
+      ...(data.url ? { url: data.url } : {}),
+      ...(data.enabledAgentIds ? { enabledAgentIds: data.enabledAgentIds } : {}),
+      ...(data.metaAdConfig ? { metaAdConfig: data.metaAdConfig } : {}),
+    } : null;
 
     const project: Project = {
       id: dbProject.id,
@@ -458,10 +476,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
       language: data.language,
       type: dbProject.type,
       status: dbProject.status || 'active',
-      config: (data.url || data.enabledAgentIds) ? {
-        ...(data.url ? { url: data.url } : {}),
-        ...(data.enabledAgentIds ? { enabledAgentIds: data.enabledAgentIds } : {}),
-      } : null,
+      config: configObj,
       createdAt: dbProject.createdAt,
       updatedAt: dbProject.updatedAt,
     };
@@ -517,10 +532,14 @@ export const useAppStore = create<AppState>()((set, get) => ({
     const patches: any = { projects: updated };
     if (state.selectedProjectId === projectId) {
       patches.selectedProjectId = null;
-      if (!isPipelineActive(state.pipeline)) {
-        patches.pipeline = buildIdlePipeline(undefined, state.disabledAgentIds, state.globalStartFromAgentId);
-      }
+      // Always reset pipeline when removing the selected project — even if paused/active
+      patches.pipeline = buildIdlePipeline(undefined, state.disabledAgentIds, state.globalStartFromAgentId);
+      // Clear localStorage so loadProjects doesn't re-select a removed project
+      try { localStorage.setItem(userKey('leados_selected_project'), ''); } catch {}
     }
+    // Clean up cached pipeline state for the removed project
+    const { [projectId]: _removed, ...remainingCache } = state.projectPipelineCache;
+    patches.projectPipelineCache = remainingCache;
     set(patches);
     saveProjects(updated);
 
@@ -540,27 +559,27 @@ export const useAppStore = create<AppState>()((set, get) => ({
       return;
     }
 
-    // Always cache the outgoing project's pipeline state if it has activity
-    if (state.selectedProjectId) {
-      const hadActivity = state.pipeline.agents.some(a => a.status === 'done' || a.status === 'running');
-      if (hadActivity || state.pipeline.status === 'paused' || state.pipeline.status === 'completed') {
-        // Cache pipeline state (agentOutputs handled separately by the page)
-        const existing = state.projectPipelineCache[state.selectedProjectId];
-        set({
-          projectPipelineCache: {
-            ...state.projectPipelineCache,
-            [state.selectedProjectId]: {
-              pipeline: clonePipeline(state.pipeline),
-              agentOutputs: existing?.agentOutputs || {},
-              elapsedTimes: existing?.elapsedTimes || {},
-            },
+    // Always cache the outgoing project/default pipeline state if it has activity
+    const outgoingKey = state.selectedProjectId || NO_PROJECT_KEY;
+    const hadActivity = state.pipeline.agents.some(a => a.status === 'done' || a.status === 'running');
+    if (hadActivity || state.pipeline.status === 'paused' || state.pipeline.status === 'completed') {
+      // Cache pipeline state (agentOutputs handled separately by the page)
+      const existing = state.projectPipelineCache[outgoingKey];
+      set({
+        projectPipelineCache: {
+          ...state.projectPipelineCache,
+          [outgoingKey]: {
+            pipeline: clonePipeline(state.pipeline),
+            agentOutputs: existing?.agentOutputs || {},
+            elapsedTimes: existing?.elapsedTimes || {},
           },
-        });
-      }
+        },
+      });
     }
 
-    // Restore cached pipeline for the target project, or build idle
-    const cached = projectId ? get().projectPipelineCache[projectId] : undefined;
+    // Restore cached pipeline for the target project/default, or build idle
+    const targetKey = projectId || NO_PROJECT_KEY;
+    const cached = get().projectPipelineCache[targetKey];
     if (cached) {
       set({ selectedProjectId: projectId, pipeline: clonePipeline(cached.pipeline) });
     } else {

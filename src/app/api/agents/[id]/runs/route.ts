@@ -39,8 +39,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       }));
       return NextResponse.json(runs);
     }
-  } catch {
-    // Database not available
+  } catch (err) {
+    console.error(`[agent-runs] Failed to fetch runs for ${id}:`, err);
   }
 
   // No runs found — return empty array (no fake/demo data)

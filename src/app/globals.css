@@ -147,6 +147,11 @@ html {
   animation: orbit-spin 80s linear infinite;
 }
 
+@keyframes grid-drift {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(40px, 40px); }
+}
+
 @keyframes float-particle {
   0%, 100% { transform: translateY(0) translateX(0); opacity: 0; }
   10% { opacity: 1; }

@@ -19,7 +19,7 @@ import { apiFetch } from '@/lib/api';
 import CampaignForm from '@/components/meta/CampaignForm';
 import CampaignProgress from '@/components/meta/CampaignProgress';
 import { useMetaCampaign } from '@/hooks/useMetaCampaign';
-import type { CampaignFormData, CallToAction } from '@/types/meta';
+import type { CampaignFormData, CallToAction, AdCreativeData } from '@/types/meta';
 
 interface Props {
   data?: any;
@@ -111,134 +111,60 @@ function GoogleAdPreview({ adGroup, landingUrl, index }: { adGroup: any; landing
 
 // ── Module-level image cache — persists across re-renders ────────────────────
 const imageCache = new Map<string, string>();
+// Secondary cache keyed by adSet index — guaranteed to match form prefill
+const adSetImageCache = new Map<number, string>();
+// Track which project the cache belongs to — clear when project changes
+let cachedProjectKey = '';
+// Persist launch status across remounts (keyed by project)
+let launchStatusCache: { projectKey: string; result: any } | null = null;
 
-// Generate image via FAL API
-async function generateAdImage(prompt: string): Promise<string | null> {
-  try {
-    const res = await fetch('/api/ads/generate-image', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, width: 1080, height: 1080, style: 'photorealistic' }),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.imageUrl || null;
-  } catch {
-    return null;
+function ensureImageCacheProject(projectKey: string) {
+  if (cachedProjectKey && cachedProjectKey !== projectKey) {
+    imageCache.clear();
+    adSetImageCache.clear();
+    launchStatusCache = null;
   }
+  cachedProjectKey = projectKey;
 }
 
-// ── Industry-specific stock images keyed by category ──
-// Each category has 6+ photos so each ad set gets a unique image
-const INDUSTRY_IMAGES: Record<string, string[]> = {
-  construction: [
-    'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=1080&h=1080&fit=crop&q=80', // construction site crane
-    'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=1080&h=1080&fit=crop&q=80', // building under construction
-    'https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=1080&h=1080&fit=crop&q=80', // architectural blueprints
-    'https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=1080&h=1080&fit=crop&q=80', // hard hat on plans
-    'https://images.unsplash.com/photo-1590644365607-1c5e64071a02?w=1080&h=1080&fit=crop&q=80', // modern building project
-    'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=1080&h=1080&fit=crop&q=80', // glass building exterior
-  ],
-  realestate: [
-    'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=1080&h=1080&fit=crop&q=80', // house keys
-    'https://images.unsplash.com/photo-1582407947304-fd86f028f716?w=1080&h=1080&fit=crop&q=80', // modern apartment
-    'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=1080&h=1080&fit=crop&q=80', // luxury home
-    'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1080&h=1080&fit=crop&q=80', // house exterior
-    'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1080&h=1080&fit=crop&q=80', // property
-    'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=1080&h=1080&fit=crop&q=80', // modern house
-  ],
-  finance: [
-    'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=1080&h=1080&fit=crop&q=80', // stock charts
-    'https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=1080&h=1080&fit=crop&q=80', // financial documents
-    'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1080&h=1080&fit=crop&q=80', // business data
-    'https://images.unsplash.com/photo-1638913662252-70efce1e60a7?w=1080&h=1080&fit=crop&q=80', // calculator & charts
-    'https://images.unsplash.com/photo-1591696205602-2f950c417cb9?w=1080&h=1080&fit=crop&q=80', // banking
-    'https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?w=1080&h=1080&fit=crop&q=80', // money/growth
-  ],
-  health: [
-    'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=1080&h=1080&fit=crop&q=80', // medical tech
-    'https://images.unsplash.com/photo-1631815589968-fdb09a223b1e?w=1080&h=1080&fit=crop&q=80', // healthcare
-    'https://images.unsplash.com/photo-1559757175-5700dde675bc?w=1080&h=1080&fit=crop&q=80', // wellness
-    'https://images.unsplash.com/photo-1532938911079-1b06ac7ceec7?w=1080&h=1080&fit=crop&q=80', // doctor
-    'https://images.unsplash.com/photo-1587854692152-cbe660dbde88?w=1080&h=1080&fit=crop&q=80', // health app
-    'https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=1080&h=1080&fit=crop&q=80', // hospital
-  ],
-  food: [
-    'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=1080&h=1080&fit=crop&q=80', // food plate
-    'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=1080&h=1080&fit=crop&q=80', // restaurant
-    'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=1080&h=1080&fit=crop&q=80', // pizza
-    'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=1080&h=1080&fit=crop&q=80', // food prep
-    'https://images.unsplash.com/photo-1482049016688-2d3e1b311543?w=1080&h=1080&fit=crop&q=80', // gourmet dish
-    'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1080&h=1080&fit=crop&q=80', // fine dining
-  ],
-  education: [
-    'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=1080&h=1080&fit=crop&q=80', // classroom
-    'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=1080&h=1080&fit=crop&q=80', // learning
-    'https://images.unsplash.com/photo-1523050854058-8df90110c476?w=1080&h=1080&fit=crop&q=80', // student
-    'https://images.unsplash.com/photo-1509062522246-3755977927d7?w=1080&h=1080&fit=crop&q=80', // teaching
-    'https://images.unsplash.com/photo-1513258496099-48168024aec0?w=1080&h=1080&fit=crop&q=80', // study
-    'https://images.unsplash.com/photo-1571260899304-425eee4c7efc?w=1080&h=1080&fit=crop&q=80', // online learning
-  ],
-  ecommerce: [
-    'https://images.unsplash.com/photo-1556742111-a301076d9d18?w=1080&h=1080&fit=crop&q=80', // shopping
-    'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=1080&h=1080&fit=crop&q=80', // retail store
-    'https://images.unsplash.com/photo-1607082349566-187342175e2f?w=1080&h=1080&fit=crop&q=80', // online shopping
-    'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1080&h=1080&fit=crop&q=80', // shop
-    'https://images.unsplash.com/photo-1563013544-824ae1b704d3?w=1080&h=1080&fit=crop&q=80', // ecommerce
-    'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=1080&h=1080&fit=crop&q=80', // fashion shopping
-  ],
-  // Default: tech/SaaS — used when no industry match
-  default: [
-    'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1080&h=1080&fit=crop&q=80', // dashboard analytics
-    'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1080&h=1080&fit=crop&q=80', // data on screens
-    'https://images.unsplash.com/photo-1553877522-43269d4ea984?w=1080&h=1080&fit=crop&q=80', // professional at laptop
-    'https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?w=1080&h=1080&fit=crop&q=80', // multi-screen data
-    'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=1080&h=1080&fit=crop&q=80', // team collaboration
-    'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=1080&h=1080&fit=crop&q=80', // code on laptop
-    'https://images.unsplash.com/photo-1600880292203-757bb62b4baf?w=1080&h=1080&fit=crop&q=80', // business meeting
-    'https://images.unsplash.com/photo-1497366216548-37526070297c?w=1080&h=1080&fit=crop&q=80', // modern office
-  ],
-};
+// Generate complete ad creative image with text baked in (uses recraft-v3)
+interface AdImageParams {
+  prompt: string;
+  headline?: string;
+  description?: string;
+  cta?: string;
+  brand?: string;
+  domain?: string;
+}
 
-// Match product description keywords to an industry category
-const INDUSTRY_KEYWORDS: Record<string, string[]> = {
-  construction: ['construction', 'building', 'bauprojekt', 'bauvorhaben', 'bau', 'architect', 'infrastructure', 'contractor', 'municipality', 'municipal', 'kommunal', 'bebauung', 'stadtentwicklung', 'tender', 'blueprint', 'civil engineering', 'renovation', 'permit', 'baugenehmigung'],
-  realestate: ['real estate', 'property', 'immobilien', 'housing', 'apartment', 'rental', 'mortgage', 'realtor', 'makler', 'wohnung', 'haus', 'grundstück'],
-  finance: ['finance', 'banking', 'fintech', 'investment', 'accounting', 'insurance', 'finanz', 'versicherung', 'kredit', 'payment', 'trading', 'tax', 'steuer'],
-  health: ['health', 'medical', 'healthcare', 'wellness', 'fitness', 'pharma', 'clinic', 'hospital', 'gesundheit', 'therapie', 'patient', 'doctor', 'dental'],
-  food: ['food', 'restaurant', 'catering', 'delivery', 'recipe', 'kitchen', 'gastro', 'essen', 'kochen', 'café', 'bakery', 'nutrition'],
-  education: ['education', 'learning', 'training', 'course', 'school', 'university', 'tutoring', 'bildung', 'schule', 'ausbildung', 'e-learning', 'academy'],
-  ecommerce: ['ecommerce', 'e-commerce', 'shop', 'store', 'retail', 'marketplace', 'selling', 'product', 'fashion', 'online shop', 'handel'],
-};
+async function generateAdImage(promptOrParams: string | AdImageParams, retries = 2): Promise<string | null> {
+  const payload = typeof promptOrParams === 'string'
+    ? { prompt: promptOrParams, width: 1080, height: 1080, style: 'digital_illustration' }
+    : { ...promptOrParams, width: 1080, height: 1080, style: 'digital_illustration' };
 
-/** Detect the best industry category from product name + description */
-function detectIndustry(productName: string, productDescription: string): string {
-  const text = `${productName} ${productDescription}`.toLowerCase();
-  let bestMatch = 'default';
-  let bestScore = 0;
-
-  for (const [industry, keywords] of Object.entries(INDUSTRY_KEYWORDS)) {
-    let score = 0;
-    for (const kw of keywords) {
-      if (text.includes(kw)) score++;
-    }
-    if (score > bestScore) {
-      bestScore = score;
-      bestMatch = industry;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch('/api/ads/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        if (attempt < retries) { await new Promise(r => setTimeout(r, 1000 * (attempt + 1))); continue; }
+        return null;
+      }
+      const data = await res.json();
+      return data.imageUrl || null;
+    } catch {
+      if (attempt < retries) { await new Promise(r => setTimeout(r, 1000 * (attempt + 1))); continue; }
+      return null;
     }
   }
-
-  return bestMatch;
+  return null;
 }
 
-/** Get a stock image URL matching the product's industry */
-function getIndustryImage(productName: string, productDescription: string, index: number): string {
-  const industry = detectIndustry(productName, productDescription);
-  const images = INDUSTRY_IMAGES[industry] || INDUSTRY_IMAGES.default;
-  return images[index % images.length];
-}
-
-// Build a rich, project-aware image prompt from all available creative data
+// Build the visual scene prompt for the center of the ad image.
+// The headline, description, CTA, and brand text are added separately by the API route.
 function buildAdImagePrompt(
   brand: string,
   desc: string,
@@ -246,44 +172,18 @@ function buildAdImagePrompt(
   creative?: any,
   audienceType?: string,
 ): string {
-  const hook = creative?.hook || creative?.headline || '';
-  const format = creative?.format || 'image';
-  const cta = creative?.callToAction?.replace(/_/g, ' ') || '';
+  const AD_STYLES = [
+    // Style 0: Product hero — laptop + phone centered on dark background
+    `MIDDLE SECTION: A photorealistic MacBook laptop and iPhone side by side, both showing the "${brand}" app. The laptop screen displays a dark-themed dashboard with a city map, orange location pins, data cards with statistics, and a notification popup. The phone shows a push notification alert. Small floating semi-transparent icons (bell, checkmark, map pin) in orange glow around the devices.${desc ? ` Context: ${desc}.` : ''}`,
 
-  // Core visual themes inspired by professional ad creatives:
-  // dark backgrounds, product mockups, bold typography, accent colors
-  const STYLE_TEMPLATES = [
-    // Style 0: Product mockup on dark background (like NeoSearch phone mockup ads)
-    `Professional social media advertisement for "${brand}". Show a smartphone or laptop displaying the "${brand}" app/dashboard with realistic UI elements. Dark navy-blue background with subtle orange accent lighting. Product mockup centered, clean composition. ${desc ? `The product: ${desc}.` : ''} Photorealistic, high-end marketing photography, no text overlay, sharp details.`,
+    // Style 1: Before/after — manual chaos vs digital solution
+    `MIDDLE SECTION: Split composition. LEFT: A frustrated person at a messy desk overflowing with printed documents, open browser tabs on an old monitor, sticky notes everywhere — dim cold lighting. RIGHT: A sleek MacBook showing the "${brand}" dashboard with organized data, map view, and alert notifications — bright warm lighting with orange glow. A clear visual divider between the two sides.${desc ? ` The product solves: ${desc}.` : ''}`,
 
-    // Style 1: Professional at work with product (like NeoSearch office ads)
-    `Professional person using "${brand}" on a modern laptop in a bright contemporary office. Screen shows the product dashboard/interface. ${desc ? `Context: ${desc}.` : ''} Warm natural lighting, shallow depth of field on the person, the screen is clearly visible. Corporate photography style, candid feel, no text overlay.`,
-
-    // Style 2: Before/after split-screen concept (manual process vs automated)
-    `Split-screen advertisement concept. Left side: cluttered desk with papers, documents, stress, dim lighting. Right side: clean modern workspace with a laptop showing "${brand}" dashboard, organized, bright. ${desc ? `Product solves: ${desc}.` : ''} Professional advertising photography, high contrast, no text overlay.`,
-
-    // Style 3: Data visualization / dashboard hero (like tech SaaS ads)
-    `Hero image for "${brand}" showing a floating holographic-style dashboard with charts, maps, and notification alerts. Dark blue-black background with glowing orange and white UI elements. ${desc ? `Dashboard context: ${desc}.` : ''} Futuristic but professional, cinematic lighting, 3D render style, no text overlay.`,
-
-    // Style 4: Team/business impact scene
-    `Business professionals in a modern conference room looking at a large screen displaying "${brand}" analytics dashboard. ${desc ? `The product: ${desc}.` : ''} Collaborative atmosphere, warm office lighting, glass walls, urban view outside. Corporate photography, natural poses, no text overlay.`,
-
-    // Style 5: Mobile-first product showcase
-    `Close-up product photography of a smartphone displaying "${brand}" app with notification alerts and real-time updates. Phone floating at slight angle against a dark gradient background with subtle orange glow. ${desc ? `App purpose: ${desc}.` : ''} Premium product photography, reflections on glass, no text overlay.`,
+    // Style 2: Over-the-shoulder professional workspace
+    `MIDDLE SECTION: Over-the-shoulder view of a professional at a clean modern desk. Their MacBook screen clearly shows the "${brand}" app dashboard with a regional map, filter tags, and real-time data cards. A smartphone next to the laptop displays a push notification. A coffee cup sits on the desk. Subtle floating orange location pins and document icons hover above the screen.${desc ? ` Product: ${desc}.` : ''}`,
   ];
 
-  let base = STYLE_TEMPLATES[styleIndex % STYLE_TEMPLATES.length];
-
-  // Enrich with audience context
-  if (audienceType === 'cold') {
-    base += ' Eye-catching, awareness-focused composition, bold visual impact.';
-  } else if (audienceType === 'warm') {
-    base += ' Trust-building, show social proof elements, professional credibility.';
-  } else if (audienceType === 'hot') {
-    base += ' Action-oriented, urgency feel, conversion-focused framing.';
-  }
-
-  return base;
+  return AD_STYLES[styleIndex % AD_STYLES.length];
 }
 
 // ── Favicon Avatar — shows website favicon with letter-initial fallback ──────
@@ -337,7 +237,9 @@ function translateCTA(cta: string, lang: string): string {
   return CTA_TRANSLATIONS[langKey]?.[normalized] || normalized;
 }
 
-// ── Meta/Instagram Ad Preview (realistic feed style with AI image) ──────────
+// ── Meta/Instagram Ad Preview — FAL AI image with text + CTA overlay ─────────
+// Inspired by professional ad creatives: bold headline at top, description in
+// middle, orange CTA button + brand logo at bottom, all over the AI image.
 
 function MetaAdPreview({ adSet, campaignName, productName, productDescription, landingUrl, index, language }: {
   adSet: any; campaignName?: string; productName?: string; productDescription?: string; landingUrl?: string; index: number; language?: string;
@@ -356,146 +258,113 @@ function MetaAdPreview({ adSet, campaignName, productName, productDescription, l
   const styleIndex = index % 6;
   const audienceType = adSet.audience || adSet.type || '';
   const imagePrompt = creative.imagePrompt || buildAdImagePrompt(brand, desc, styleIndex, creative, audienceType);
-  const cacheKey = `${brand}:${index}:${styleIndex}`;
-  const stockUrl = getIndustryImage(brand, desc, index);
+  // Stable cache key — uses only index so translation/re-renders never change it
+  const cacheKey = `adslot:${index}:${styleIndex}`;
 
-  const [imageUrl, setImageUrl] = useState<string | null>(() => imageCache.get(cacheKey) || null);
-  const [imageLoading, setImageLoading] = useState(!imageCache.has(cacheKey));
+  // Compute text fields BEFORE hooks so they're available in useEffect
+  const primaryText = safeText(creative.primaryText) || safeText(creative.description) || safeText(adSet.name);
+  const headline = safeText(creative.hook) || safeText(creative.headline) || safeText(creative.name);
+
+  const [imageUrl, setImageUrl] = useState<string | null>(() => imageCache.get(cacheKey) || adSetImageCache.get(index) || null);
+  const [imageLoading, setImageLoading] = useState(!imageCache.has(cacheKey) && !adSetImageCache.has(index));
+  const [imageFailed, setImageFailed] = useState(false);
   const mountedRef = useRef(true);
+  const generationStartedRef = useRef(false);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
 
+  // Generate image exactly once per ad slot — never re-generate on re-renders
   useEffect(() => {
+    // Already have a cached image — use it
     if (imageCache.has(cacheKey)) {
-      setImageUrl(imageCache.get(cacheKey)!);
+      const cached = imageCache.get(cacheKey)!;
+      adSetImageCache.set(index, cached);
+      setImageUrl(cached);
       setImageLoading(false);
       return;
     }
+    // Already started generation for this slot — don't start again
+    if (generationStartedRef.current) return;
+    generationStartedRef.current = true;
+
     setImageLoading(true);
-    generateAdImage(imagePrompt)
+    setImageFailed(false);
+    generateAdImage({
+      prompt: imagePrompt,
+      headline: headline,
+      description: primaryText.length > 120 ? primaryText.slice(0, 120).replace(/\s+\S*$/, '') + '.' : primaryText,
+      cta: ctaLabel,
+      brand: brand,
+      domain: displayUrl,
+    })
       .then((aiUrl) => {
         if (!mountedRef.current) return;
-        const finalUrl = aiUrl || stockUrl;
-        imageCache.set(cacheKey, finalUrl);
-        setImageUrl(finalUrl);
+        if (aiUrl) {
+          imageCache.set(cacheKey, aiUrl);
+          adSetImageCache.set(index, aiUrl);
+          setImageUrl(aiUrl);
+        } else {
+          setImageFailed(true);
+        }
         setImageLoading(false);
       })
       .catch(() => {
         if (!mountedRef.current) return;
-        imageCache.set(cacheKey, stockUrl);
-        setImageUrl(stockUrl);
+        setImageFailed(true);
         setImageLoading(false);
       });
-  }, [cacheKey, imagePrompt, stockUrl]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cacheKey]);
 
-  const primaryText = safeText(creative.primaryText) || safeText(creative.description) || safeText(adSet.name);
-  const headline = safeText(creative.hook) || safeText(creative.headline) || safeText(creative.name);
+  // Split headline to highlight middle words in orange (like reference images)
+  const renderHeadline = () => {
+    const words = headline.split(' ');
+    if (words.length >= 4) {
+      const mid = Math.floor(words.length / 3);
+      const end = Math.min(mid + Math.ceil(words.length / 3), words.length);
+      return (
+        <>
+          {words.slice(0, mid).join(' ')}{' '}
+          <span className="text-orange-400 italic">{words.slice(mid, end).join(' ')}</span>
+          {end < words.length ? ` ${words.slice(end).join(' ')}` : ''}
+        </>
+      );
+    }
+    return headline;
+  };
 
   return (
-    <div className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm max-w-sm">
+    <div className="rounded-xl overflow-hidden border border-border/50 shadow-sm max-w-sm bg-gray-950">
 
-      {/* ── Page header ── */}
-      <div className="flex items-center gap-2.5 p-3">
-        <FaviconAvatar domain={displayUrl} brand={brand} />
-        <div className="min-w-0 flex-1">
-          <div className="text-[13px] font-semibold text-gray-900 truncate">{brand}</div>
-          <div className="text-[11px] text-gray-500 flex items-center gap-1">
-            Sponsored · <Eye className="w-3 h-3 inline" />
-          </div>
-        </div>
-      </div>
+      {/* ── Image section: headline overlay on FAL AI image ── */}
+      <div className="relative overflow-hidden" style={{ aspectRatio: '1/1' }}>
 
-      {/* ── Ad creative image with text + CTA overlay ── */}
-      <div className="relative overflow-hidden bg-gray-900" style={{ aspectRatio: '4/5' }}>
-        {/* Background image */}
+        {/* Background: FAL AI generated image */}
         {imageUrl ? (
           <img src={imageUrl} alt={headline}
             className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
         ) : imageLoading ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-            <Loader2 className="w-6 h-6 text-white/30 animate-spin mb-2" />
-            <span className="text-white/40 text-[11px]">Generating…</span>
+            <Loader2 className="w-8 h-8 text-orange-400/40 animate-spin mb-2" />
+            <span className="text-white/40 text-[11px]">Generating with FAL AI…</span>
+          </div>
+        ) : imageFailed ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gray-900 via-orange-950/20 to-gray-900">
+            <Sparkles className="w-8 h-8 text-orange-400/50 mb-2" />
+            <span className="text-white/50 text-[11px]">Image generation failed</span>
           </div>
         ) : (
           <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900" />
         )}
 
-        {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/40 to-black/85" />
-
-        {/* Full-height text layout */}
-        <div className="relative z-10 flex flex-col h-full p-4">
-
-          {/* Top zone: Audience label + bold headline */}
-          <div className="mb-auto">
-            {audienceType && (
-              <div className="text-[9px] text-orange-300 font-bold uppercase tracking-widest mb-2 drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">
-                {audienceType} – {safeText(adSet.name)}
-              </div>
-            )}
-            <h3 className="text-white font-extrabold text-[20px] leading-[1.2] drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]">
-              {(() => {
-                const words = headline.split(' ');
-                if (words.length >= 4) {
-                  const mid = Math.floor(words.length / 3);
-                  const end = Math.min(mid + Math.ceil(words.length / 3), words.length);
-                  return (
-                    <>
-                      {words.slice(0, mid).join(' ')}{' '}
-                      <span className="text-orange-400 italic font-black">{words.slice(mid, end).join(' ')}</span>
-                      {end < words.length ? ` ${words.slice(end).join(' ')}` : ''}
-                    </>
-                  );
-                }
-                return headline;
-              })()}
-            </h3>
-          </div>
-
-          {/* Middle zone: Description text with frosted glass backdrop */}
-          <div className="my-3 bg-black/50 backdrop-blur-md rounded-lg p-3 border border-white/10">
-            <p className="text-white text-[13px] leading-relaxed line-clamp-5 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">
-              {primaryText}
-            </p>
-          </div>
-
-          {/* Bottom zone: CTA + brand */}
-          <div className="mt-auto flex items-end justify-between">
-            <div>
-              <div className="inline-block px-5 py-2 bg-orange-500 text-white text-[12px] font-bold rounded cursor-pointer uppercase tracking-wide shadow-[0_2px_12px_rgba(249,115,22,0.4)]">
-                {ctaLabel}
-              </div>
-              {displayUrl && (
-                <div className="text-white/50 text-[10px] mt-1.5 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">{displayUrl}</div>
-              )}
-            </div>
-            {/* Brand mark in bottom-right */}
-            <div className="flex items-center gap-1.5 bg-black/50 backdrop-blur-sm rounded px-2 py-1 border border-white/10">
-              <FaviconAvatar domain={displayUrl} brand={brand} size="sm" />
-              <span className="text-white/90 text-[10px] font-semibold">{brand.split(' ')[0]}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Bottom bar: URL + headline + CTA ── */}
-      <div className="p-3 flex items-center justify-between border-t border-gray-100">
-        <div className="min-w-0 mr-3">
-          <div className="text-[10px] text-gray-500 truncate">{displayUrl}</div>
-          <div className="text-[12px] font-semibold text-gray-900 truncate">{safeText(creative.headline) || safeText(creative.name)}</div>
-        </div>
-        <a href={landingUrl} target="_blank" rel="noopener noreferrer"
-          className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold rounded flex-shrink-0 transition-colors cursor-pointer">
-          {ctaLabel}
-        </a>
       </div>
 
       {/* ── Creative label ── */}
-      <div className="px-3 py-1.5 border-t border-gray-100 flex items-center justify-between">
-        <span className="text-[9px] text-gray-400 uppercase tracking-wider">
+      <div className="px-3 py-1.5 border-t border-white/5 flex items-center justify-between">
+        <span className="text-[9px] text-white/25 uppercase tracking-wider">
           Creative {index + 1}: {safeText(adSet.audience) || safeText(adSet.name)}
         </span>
         <CopyButton text={`${headline}\n\n${primaryText}\n\nCTA: ${ctaLabel}`} />
@@ -515,15 +384,147 @@ function mapCTA(agentCta?: string): CallToAction {
   return map[agentCta || ''] || 'LEARN_MORE';
 }
 
+// ── Meta Campaign Form Wrapper — generates images for ad creatives ──────────
+function MetaCampaignFormWrapper({ metaAds, d, mapCTA, onCancel, onSubmit }: {
+  metaAds: any; d: any; mapCTA: (cta: string) => any; onCancel: () => void; onSubmit: (data: CampaignFormData) => void;
+}) {
+  const firstAdSet = metaAds.adSets?.[0];
+  const firstCreative = firstAdSet?.creatives?.[0];
+  const brand = d._productName || metaAds.campaignName || 'Brand';
+
+  // Build initial ad creatives (without images)
+  const initialCreatives = (metaAds.adSets?.slice(0, 3) || []).map((adSet: any, idx: number) => {
+    const cr = adSet.creatives?.[0];
+    if (!cr) return null;
+    const cacheKey = `adslot:${idx}:${idx % 6}`;
+    return {
+      headline: cr.headline || cr.name || '',
+      body: cr.primaryText || cr.hook || '',
+      callToAction: mapCTA(cr.callToAction),
+      imageUrl: imageCache.get(cacheKey) || adSetImageCache.get(idx) || '',
+      audienceLabel: `${safeText(adSet.audience || adSet.type || '')} — ${safeText(adSet.name)}`.replace(/^\s*—\s*/, ''),
+    };
+  }).filter(Boolean) as AdCreativeData[];
+
+  const [adCreatives, setAdCreatives] = useState<AdCreativeData[]>(initialCreatives);
+
+  // Generate images for creatives that don't have one yet
+  useEffect(() => {
+    let cancelled = false;
+    const missingIndices = adCreatives.map((cr, idx) => cr.imageUrl ? null : idx).filter((i) => i !== null) as number[];
+    if (missingIndices.length === 0) return;
+
+    Promise.all(
+      missingIndices.map(async (idx) => {
+        const adSet = metaAds.adSets?.[idx];
+        const cr = adSet?.creatives?.[0];
+        if (!cr) return;
+        const styleIndex = idx % 6;
+        const cacheKey = `adslot:${idx}:${styleIndex}`;
+
+        // Check cache again (may have been populated by MetaAdPreview in the meantime)
+        if (imageCache.has(cacheKey)) {
+          return { idx, url: imageCache.get(cacheKey)! };
+        }
+
+        const rawDesc = d._productDescription || cr.description || '';
+        const desc = typeof rawDesc === 'string' ? rawDesc : String(rawDesc ?? '');
+        const audienceType = adSet.audience || adSet.type || '';
+        const prompt = cr.imagePrompt || buildAdImagePrompt(brand, desc, styleIndex, cr, audienceType);
+        const headline = safeText(cr.hook) || safeText(cr.headline) || safeText(cr.name);
+        const primaryText = safeText(cr.primaryText) || safeText(cr.description) || safeText(adSet.name);
+        const displayUrl = (d._landingUrl || '').replace(/^https?:\/\//, '').replace(/\/$/, '').split('/')[0];
+
+        const url = await generateAdImage({
+          prompt,
+          headline,
+          description: primaryText.length > 120 ? primaryText.slice(0, 120).replace(/\s+\S*$/, '') + '.' : primaryText,
+          cta: 'Learn More',
+          brand,
+          domain: displayUrl,
+        });
+
+        if (url) {
+          imageCache.set(cacheKey, url);
+          adSetImageCache.set(idx, url);
+          return { idx, url };
+        }
+        return null;
+      })
+    ).then((results) => {
+      if (cancelled) return;
+      const updates = results.filter(Boolean) as { idx: number; url: string }[];
+      if (updates.length === 0) return;
+      setAdCreatives((prev) => {
+        const next = [...prev];
+        for (const { idx, url } of updates) {
+          if (next[idx]) next[idx] = { ...next[idx], imageUrl: url };
+        }
+        return next;
+      });
+    });
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const prefill: Partial<CampaignFormData> = {
+    campaignName: metaAds.campaignName || d._productName || '',
+    objective: 'OUTCOME_LEADS',
+    adHeadline: firstCreative?.headline || firstCreative?.name || '',
+    adBody: firstCreative?.primaryText || firstCreative?.hook || '',
+    destinationUrl: d._landingUrl || '',
+    callToAction: mapCTA(firstCreative?.callToAction),
+    placements: (metaAds.placements || ['facebook_feed', 'instagram_feed', 'instagram_stories']).map((p: string) =>
+      p.toLowerCase().replace(/\s+/g, '_')
+    ),
+    adCreatives: adCreatives.length > 0 ? adCreatives : undefined,
+  };
+
+  return (
+    <div className="rounded-xl border-2 border-blue-500/30 bg-gradient-to-b from-blue-500/5 to-transparent p-4">
+      <div className="flex items-center gap-2 mb-4">
+        <Eye className="w-5 h-5 text-blue-400" />
+        <h4 className="font-semibold text-blue-300">Configure Meta Ads Campaign</h4>
+      </div>
+      <p className="text-xs text-blue-200/60 mb-4">
+        All {adCreatives.length} ad creatives are pre-filled from the agent. Edit copy, set targeting, budget, and schedule below.
+      </p>
+      <CampaignForm
+        initialData={prefill}
+        submitLabel="Launch Meta Campaign"
+        isLoading={false}
+        onCancel={onCancel}
+        onSubmit={onSubmit}
+      />
+    </div>
+  );
+}
+
 export function PaidTrafficOutput({ data }: Props) {
   const d = data?.data || data;
+
+  // Scope image caches to current project — clear when project changes
+  const projectKey = d?._productName || d?.metaAds?.campaignName || '';
+  ensureImageCacheProject(projectKey);
+
   const [launching, setLaunching] = useState(false);
-  const [launchResult, setLaunchResult] = useState<any>(null);
+  const [launchResult, setLaunchResultState] = useState<any>(
+    () => (launchStatusCache && launchStatusCache.projectKey === projectKey) ? launchStatusCache.result : null
+  );
   const [launchError, setLaunchError] = useState<string | null>(null);
+
+  // Wrap setLaunchResult to also persist to module-level cache
+  const setLaunchResult = (result: any) => {
+    setLaunchResultState(result);
+    if (result) {
+      launchStatusCache = { projectKey, result };
+    }
+  };
 
   // Meta campaign inline form state
   const [showMetaForm, setShowMetaForm] = useState(false);
-  const metaCampaign = useMetaCampaign();
+  const metaCampaign = useMetaCampaign(projectKey);
 
   if (!d || (!d.googleAds && !d.metaAds)) {
     return (
@@ -544,10 +545,11 @@ export function PaidTrafficOutput({ data }: Props) {
   const totalAdSets = metaAds.adSets?.length || 0;
   const totalCreatives = metaAds.adSets?.reduce((sum: number, s: any) => sum + (s.creatives?.length || 0), 0) || 0;
 
-  const isApprovalPending = d._approvalRequired && d._approvalStatus === 'pending' && !launchResult;
-  const isLaunched = launchResult?.success || d._approvalStatus === 'launched';
   const googleLive = launchResult?.results?.google?.launched || !!googleAds._createdInGoogleAds;
-  const metaLive = launchResult?.results?.meta?.launched || !!metaAds._createdInMeta;
+  const metaLive = launchResult?.results?.meta?.launched || !!metaAds._createdInMeta || metaCampaign.step === 'live';
+  const anyAdsLive = googleLive || metaLive;
+  const isLaunched = launchResult?.success || d._approvalStatus === 'launched' || anyAdsLive;
+  const isApprovalPending = d._approvalRequired && d._approvalStatus === 'pending' && !launchResult && !anyAdsLive;
 
   const handleLaunch = async () => {
     setLaunching(true);
@@ -561,6 +563,8 @@ export function PaidTrafficOutput({ data }: Props) {
       const result = await res.json();
       if (result.success) {
         setLaunchResult(result);
+        // Signal pipeline to auto-resume after successful ad launch
+        window.dispatchEvent(new CustomEvent('leados:ads-launched'));
       } else {
         setLaunchError(result.error || 'Launch failed');
       }
@@ -612,41 +616,15 @@ export function PaidTrafficOutput({ data }: Props) {
       )}
 
       {/* ═══ INLINE META CAMPAIGN FORM ═══ */}
-      {showMetaForm && metaCampaign.step === 'idle' && (() => {
-        const firstAdSet = metaAds.adSets?.[0];
-        const firstCreative = firstAdSet?.creatives?.[0];
-        const prefill: Partial<CampaignFormData> = {
-          campaignName: metaAds.campaignName || d._productName || '',
-          objective: 'OUTCOME_LEADS',
-          adHeadline: firstCreative?.headline || firstCreative?.name || '',
-          adBody: firstCreative?.primaryText || firstCreative?.hook || '',
-          destinationUrl: d._landingUrl || '',
-          callToAction: mapCTA(firstCreative?.callToAction),
-          placements: (metaAds.placements || ['facebook_feed', 'instagram_feed', 'instagram_stories']).map((p: string) =>
-            p.toLowerCase().replace(/\s+/g, '_')
-          ),
-        };
-        return (
-          <div className="rounded-xl border-2 border-blue-500/30 bg-gradient-to-b from-blue-500/5 to-transparent p-4">
-            <div className="flex items-center gap-2 mb-4">
-              <Eye className="w-5 h-5 text-blue-400" />
-              <h4 className="font-semibold text-blue-300">Configure Meta Ads Campaign</h4>
-            </div>
-            <p className="text-xs text-blue-200/60 mb-4">
-              Ad creative is pre-filled from the agent. Set your targeting, budget, and schedule below.
-            </p>
-            <CampaignForm
-              initialData={prefill}
-              submitLabel="Launch Meta Campaign"
-              isLoading={false}
-              onCancel={() => setShowMetaForm(false)}
-              onSubmit={(formData) => {
-                metaCampaign.startCampaign(formData);
-              }}
-            />
-          </div>
-        );
-      })()}
+      {showMetaForm && metaCampaign.step === 'idle' && (
+        <MetaCampaignFormWrapper
+          metaAds={metaAds}
+          d={d}
+          mapCTA={mapCTA}
+          onCancel={() => setShowMetaForm(false)}
+          onSubmit={(formData) => metaCampaign.startCampaign(formData)}
+        />
+      )}
 
       {/* ═══ META CAMPAIGN PROGRESS ═══ */}
       {metaCampaign.step !== 'idle' && metaCampaign.step !== 'live' && (
@@ -685,57 +663,12 @@ export function PaidTrafficOutput({ data }: Props) {
         </div>
       )}
 
-      {/* ═══ LAUNCHED SUCCESS BANNER ═══ */}
-      {isLaunched && (
-        <div className="p-4 bg-green-500/10 border-2 border-green-500/30 rounded-xl">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
-            </span>
-            <span className="text-sm font-semibold text-green-400">Campaigns Launched Successfully</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-            {(launchResult?.results?.google?.launched || googleLive) && (
-              <div className="flex items-center gap-2 p-2 bg-green-500/5 rounded border border-green-500/10">
-                <Search className="w-3.5 h-3.5 text-green-400" />
-                <div>
-                  <span className="font-medium text-green-400">Google Ads</span>
-                  <span className="ml-2 px-1.5 py-0.5 text-[10px] bg-green-500/20 text-green-400 rounded">ENABLED</span>
-                  {launchResult?.results?.google?.campaignId && (
-                    <div className="text-muted-foreground mt-0.5">ID: {launchResult.results.google.campaignId}</div>
-                  )}
-                  {launchResult?.results?.google?.adGroups?.length > 0 && (
-                    <div className="text-muted-foreground">{launchResult.results.google.adGroups.length} ad groups live</div>
-                  )}
-                </div>
-              </div>
-            )}
-            {(launchResult?.results?.meta?.launched || metaLive) && (
-              <div className="flex items-center gap-2 p-2 bg-blue-500/5 rounded border border-blue-500/10">
-                <Eye className="w-3.5 h-3.5 text-blue-400" />
-                <div>
-                  <span className="font-medium text-blue-400">Meta Ads</span>
-                  <span className="ml-2 px-1.5 py-0.5 text-[10px] bg-blue-500/20 text-blue-400 rounded">ACTIVE</span>
-                  {launchResult?.results?.meta?.campaignId && (
-                    <div className="text-muted-foreground mt-0.5">ID: {launchResult.results.meta.campaignId}</div>
-                  )}
-                  {launchResult?.results?.meta?.adSets?.length > 0 && (
-                    <div className="text-muted-foreground">{launchResult.results.meta.adSets.length} ad sets live</div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* ═══ AD PREVIEWS (always shown — highlighted when approval pending) ═══ */}
       {(googleAds.adGroups?.length > 0 || metaAds.adSets?.length > 0) && (
-        <Section title={isApprovalPending ? 'Ad Previews — Review Before Launch' : 'Ad Previews'}
+        <Section title={isApprovalPending ? 'Ad Previews — Review Before Launch' : isLaunched ? 'Ad Previews — Live' : 'Ad Previews'}
           icon={<Eye className="w-4 h-4 text-purple-400" />}
-          badge={isApprovalPending ? 'Awaiting approval' : `${totalAdGroups + totalAdSets} ads`}
-          badgeColor={isApprovalPending ? 'bg-amber-500/20 text-amber-400' : 'bg-purple-500/20 text-purple-400'}
+          badge={isApprovalPending ? 'Awaiting approval' : isLaunched ? 'Live' : `${totalAdGroups + totalAdSets} ads`}
+          badgeColor={isApprovalPending ? 'bg-amber-500/20 text-amber-400' : isLaunched ? 'bg-green-500/20 text-green-400' : 'bg-purple-500/20 text-purple-400'}
           defaultOpen={isApprovalPending}>
           <div className="space-y-6 pt-3">
             {/* Google Search Ad Previews */}
@@ -759,7 +692,7 @@ export function PaidTrafficOutput({ data }: Props) {
                   <Eye className="w-3.5 h-3.5" /> Meta / Instagram Ads ({metaAds.adSets.reduce((s: number, as_: any) => s + (as_.creatives?.length || 0), 0)} creatives)
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {metaAds.adSets.map((adSet: any, idx: number) => (
+                  {metaAds.adSets.slice(0, 3).map((adSet: any, idx: number) => (
                     <MetaAdPreview key={idx} adSet={adSet} campaignName={metaAds.campaignName}
                       productName={d._productName} productDescription={d._productDescription} landingUrl={d._landingUrl} index={idx} language={d._language} />
                   ))}

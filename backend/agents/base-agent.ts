@@ -326,6 +326,105 @@ export abstract class BaseAgent {
     throw lastError || new Error('Gemini call failed after retries');
   }
 
+  /**
+   * Walk through a JSON string character-by-character and escape problematic
+   * characters that appear inside string values (unescaped quotes, newlines,
+   * tabs, control chars).  Structural characters outside strings are left alone.
+   */
+  private repairJsonStrings(json: string): string {
+    const out: string[] = [];
+    let i = 0;
+    const len = json.length;
+
+    while (i < len) {
+      const ch = json[i];
+
+      // Outside a string — pass through as-is until we hit an opening quote
+      if (ch !== '"') {
+        out.push(ch);
+        i++;
+        continue;
+      }
+
+      // Opening quote of a string value
+      out.push('"');
+      i++;
+
+      // Scan inside the string
+      while (i < len) {
+        const c = json[i];
+
+        if (c === '\\') {
+          // Proper escape sequence — keep it
+          if (i + 1 < len) {
+            const next = json[i + 1];
+            // Valid JSON escape chars: " \ / b f n r t u
+            if ('"\\bfnrtu/'.includes(next)) {
+              out.push(c, next);
+              i += 2;
+              // For \u, also copy the 4 hex digits
+              if (next === 'u' && i + 4 <= len) {
+                out.push(json.substring(i, i + 4));
+                i += 4;
+              }
+              continue;
+            }
+            // Invalid escape like \' or \x — remove the backslash, keep the char
+            if (next === "'") {
+              out.push("'");
+              i += 2;
+              continue;
+            }
+            if (next === 'x') {
+              // Skip \xNN hex escape entirely
+              i += 2;
+              if (i + 2 <= len && /^[0-9a-fA-F]{2}$/.test(json.substring(i, i + 2))) i += 2;
+              continue;
+            }
+            // Other invalid escapes — drop the backslash
+            out.push(next);
+            i += 2;
+            continue;
+          }
+          out.push(c);
+          i++;
+          continue;
+        }
+
+        if (c === '"') {
+          // This might be the closing quote OR an unescaped quote inside the string.
+          // Heuristic: if the next non-whitespace char is a structural JSON char
+          // ( , : } ] ) or we're at end, treat this as the real closing quote.
+          let j = i + 1;
+          while (j < len && (json[j] === ' ' || json[j] === '\t' || json[j] === '\r' || json[j] === '\n')) j++;
+          const after = j < len ? json[j] : '';
+          if (after === '' || after === ',' || after === ':' || after === '}' || after === ']') {
+            // Real closing quote
+            out.push('"');
+            i++;
+            break;
+          }
+          // Unescaped quote inside the string — escape it
+          out.push('\\"');
+          i++;
+          continue;
+        }
+
+        // Control characters that must be escaped inside JSON strings
+        if (c === '\n') { out.push('\\n'); i++; continue; }
+        if (c === '\r') { out.push('\\r'); i++; continue; }
+        if (c === '\t') { out.push('\\t'); i++; continue; }
+        const code = c.charCodeAt(0);
+        if (code < 0x20) { i++; continue; } // strip other control chars
+
+        out.push(c);
+        i++;
+      }
+    }
+
+    return out.join('');
+  }
+
   protected parseLLMJson<T>(text: string): T {
     // Extract JSON from markdown code blocks if present
     const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -341,27 +440,22 @@ export abstract class BaseAgent {
     try {
       return JSON.parse(jsonStr);
     } catch (firstError: any) {
-      // Fix common LLM JSON issues:
-      // 1. Bad escape characters (e.g., \' or \x or unescaped control chars)
-      // 2. Trailing commas before } or ]
-      // 3. Single quotes instead of double quotes in keys
+      // Phase 1: Quick regex fixes for simple issues
       let fixed = jsonStr
-        .replace(/\\'/g, "'")                           // \' → '
-        .replace(/\\x[0-9a-fA-F]{2}/g, '')             // \x00 hex escapes
-        .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '') // control chars
-        .replace(/,\s*([\]}])/g, '$1')                  // trailing commas
-        .replace(/\n/g, '\\n')                          // unescaped newlines in strings
-        .replace(/\r/g, '\\r')                          // unescaped carriage returns
-        .replace(/\t/g, '\\t');                         // unescaped tabs
+        .replace(/,\s*([\]}])/g, '$1');                  // trailing commas
 
       // Re-extract JSON object after fixing
       const fixedMatch = fixed.match(/\{[\s\S]*\}/);
       if (fixedMatch) fixed = fixedMatch[0];
 
+      // Phase 2: Character-level repair of string values
+      // (handles unescaped quotes, newlines, bad escapes inside strings)
+      fixed = this.repairJsonStrings(fixed);
+
       try {
         return JSON.parse(fixed);
       } catch {
-        // Last resort: repair truncated JSON by closing open brackets/braces
+        // Phase 3: Repair truncated JSON by closing open brackets/braces
         let repaired = fixed;
 
         // Find the last valid position by truncating at last complete value

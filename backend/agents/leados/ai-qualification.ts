@@ -145,6 +145,8 @@ export class AIQualificationAgent extends BaseAgent {
       // ALWAYS fetch leads from database with proper userId scoping
       // Never trust upstream leadsProcessed — it may contain other users' leads
       let qualifiedLeads: any[] = [];
+      let pendingCallLeads: any[] = []; // leads with stage='contacted' that have a call in progress
+      let dbQueryFailed = false;
 
       {
         try {
@@ -174,6 +176,7 @@ export class AIQualificationAgent extends BaseAgent {
             ? { OR: [{ projectId }, { projectId: null }] }
             : {};
 
+          // Step 1: Fetch NEW leads that need calling
           const dbLeads = await prisma.lead.findMany({
             where: {
               AND: [
@@ -200,9 +203,81 @@ export class AIQualificationAgent extends BaseAgent {
             }));
             await this.log('db_leads_fetched_for_qualification', { count: dbLeads.length });
           }
+
+          // Step 2: Find leads with a Bland AI call still in progress
+          // These are leads marked 'contacted' with routingDecision like 'bland_ai_call_initiated:<callId>'
+          // but no qualificationOutcome yet (call hasn't completed).
+          const contactedLeads = await prisma.lead.findMany({
+            where: {
+              AND: [
+                ownershipCondition,
+                projectCondition,
+                { stage: 'contacted' },
+                { qualificationOutcome: null },
+                { routingDecision: { startsWith: 'bland_ai_call_initiated:' } },
+              ],
+            },
+            take: 20,
+          });
+          if (contactedLeads.length > 0) {
+            pendingCallLeads = contactedLeads.map((l: any) => ({
+              name: l.name,
+              email: l.email,
+              company: l.company,
+              phone: l.phone,
+              score: l.score || 0,
+              callId: l.routingDecision?.replace('bland_ai_call_initiated:', '') || null,
+            }));
+            await this.log('pending_call_leads_found', {
+              count: pendingCallLeads.length,
+              leads: pendingCallLeads.map((l: any) => ({ name: l.name, callId: l.callId })),
+            });
+          }
+
+          if (dbLeads.length === 0 && contactedLeads.length === 0) {
+            // Diagnose: count ALL leads for this user/project to understand why
+            const allLeadCount = await prisma.lead.count({
+              where: { AND: [ownershipCondition, projectCondition] },
+            });
+            const stageBreakdown = await prisma.lead.groupBy({
+              by: ['stage'],
+              where: { AND: [ownershipCondition, projectCondition] },
+              _count: true,
+            });
+            await this.log('no_leads_to_process', {
+              userId: inputs.userId || 'none',
+              projectId: inputs.config?.projectId || 'none',
+              totalLeadsForUser: allLeadCount,
+              stageBreakdown: stageBreakdown.map((s: any) => ({ stage: s.stage, count: s._count })),
+            });
+          }
         } catch (err: any) {
+          dbQueryFailed = true;
           await this.log('db_leads_error', { error: err.message });
         }
+      }
+
+      // If no new leads AND no pending calls, stop early — nothing to do.
+      if (qualifiedLeads.length === 0 && pendingCallLeads.length === 0) {
+        this.status = 'done';
+        const reason = dbQueryFailed
+          ? 'Database connection failed — could not fetch leads. Please try again.'
+          : 'No new leads with stage "new" found and no calls in progress. Add new leads and re-run.';
+        await this.log('stopping_no_leads', { reason, dbQueryFailed });
+        return {
+          success: false,
+          data: {
+            callResults: [],
+            summary: {
+              totalCallsAttempted: 0, totalCallsCompleted: 0, totalNoAnswer: 0,
+              avgCallDuration: 0, avgScore: 0, qualificationRate: 0,
+            },
+            reasoning: reason,
+            confidence: 0,
+          },
+          reasoning: reason,
+          confidence: 0,
+        };
       }
 
       // Enrich leads missing phone numbers by looking up from DB (scoped to user)
@@ -259,53 +334,89 @@ export class AIQualificationAgent extends BaseAgent {
       }
 
       // Execute real AI voice calls via Bland AI when API key is configured
-      let realCallResults: any[] = [];
+      // Pre-populate with email-only leads so they flow through to Sales Routing
+      let realCallResults: any[] = emailOnlyLeads.map((l: any) => ({
+        leadName: l.name,
+        leadEmail: l.email,
+        company: l.company,
+        phone: l.phone,
+        callStatus: 'no_valid_phone',
+        duration: 0,
+        transcript: '',
+        recordingUrl: '',
+        callId: null,
+      }));
       const blandAvailable = blandAI.isBlandAIAvailable();
 
       if (blandAvailable && callableLeads.length > 0) {
         const niche = inputs.config?.niche || 'B2B SaaS Lead Generation';
         const leadsToCall = callableLeads.slice(0, 8);
 
-        // Step 1: Initiate ALL calls in parallel (fast — ~1-2s total)
         await this.log('bland_ai_initiating', { count: leadsToCall.length });
         const initiatedCalls: Array<{ lead: any; callId: string }> = [];
 
-        const initPromises = leadsToCall.map(async (lead: any) => {
+        // Step 1: Initiate ALL calls in parallel, then immediately mark each lead
+        // as 'contacted' in the DB. This prevents duplicate calls if the agent
+        // retries (orchestrator retries on error) — leads won't be fetched again
+        // since the stage filter only picks up 'new' leads.
+        for (const lead of leadsToCall) {
           try {
             const callTask = `You are Alex, an AI qualification specialist from LeadOS. You're calling ${lead.name || 'the prospect'} at ${lead.company || 'their company'} to qualify them for ${niche} services. Follow the BANT framework: ask about Budget, Authority, Need, and Timeline. Be warm, consultative, never pushy. Keep the call under 5 minutes. Start by obtaining consent to record.`;
 
+            const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://leados-ten.vercel.app'}/api/webhooks/bland-ai`;
+            const fromNumber = process.env.BLANDAI_FROM_NUMBER || undefined;
             const call = await blandAI.makeCall({
               phone: lead.phone,
               task: callTask,
               firstSentence: `Hi ${lead.name?.split(' ')[0] || 'there'}, this is Alex from LeadOS. Thanks for your interest in our growth services — do you have about 3 minutes for a quick chat?`,
-              maxDuration: 300,
+              maxDuration: 300, // 5 min max — webhook handles scoring for calls that complete after agent timeout
               record: true,
               metadata: { leadEmail: lead.email, leadScore: lead.score },
+              webhook: webhookUrl,
+              from: fromNumber, // international-capable number (set BLANDAI_FROM_NUMBER in env)
             });
 
+            initiatedCalls.push({ lead, callId: call.callId });
             await this.log('bland_ai_call_initiated', { callId: call.callId, lead: lead.name });
-            return { lead, callId: call.callId };
-          } catch (err: any) {
-            await this.log('bland_ai_call_error', { lead: lead.name, error: err.message });
-            return null;
-          }
-        });
 
-        const initResults = await Promise.allSettled(initPromises);
-        for (const r of initResults) {
-          if (r.status === 'fulfilled' && r.value) {
-            initiatedCalls.push(r.value);
+            // Mark lead as 'contacted' immediately so retries don't re-call them
+            try {
+              const { prisma } = await import('@/lib/prisma');
+              const userScope = inputs.userId ? { userId: inputs.userId } : {};
+              await prisma.lead.updateMany({
+                where: { email: lead.email, stage: 'new', ...userScope },
+                data: { stage: 'contacted', routingDecision: `bland_ai_call_initiated:${call.callId}` },
+              });
+            } catch { /* non-fatal — call is already queued */ }
+          } catch (err: any) {
+            await this.log('bland_ai_call_error', { lead: lead.name, phone: lead.phone, error: err.message });
+            // Track failed calls so they appear in output and flow to Sales Routing
+            realCallResults.push({
+              leadName: lead.name,
+              leadEmail: lead.email,
+              company: lead.company,
+              phone: lead.phone,
+              callStatus: 'call_failed',
+              duration: 0,
+              transcript: '',
+              recordingUrl: '',
+              callId: null,
+              error: err.message,
+            });
           }
         }
-        await this.log('bland_ai_all_initiated', { total: initiatedCalls.length });
 
-        // Step 2: Wait for ALL calls to complete in parallel (each polls independently)
+        await this.log('bland_ai_all_initiated', { total: initiatedCalls.length, failed: realCallResults.filter((r: any) => r.callStatus === 'call_failed').length });
+
+        // Step 2: Wait for all calls to complete in parallel.
+        // Cap at 280s — calls are max 300s, so most will finish; any still in progress
+        // will be handled by the Bland AI webhook (/api/webhooks/bland-ai).
         if (initiatedCalls.length > 0) {
           await this.log('bland_ai_waiting', { message: `Waiting for ${initiatedCalls.length} call(s) to complete...` });
 
           const waitPromises = initiatedCalls.map(async ({ lead, callId }) => {
             try {
-              const completed = await blandAI.waitForCall(callId, 480000); // max 8 min per call
+              const completed = await blandAI.waitForCall(callId, 280000); // 280s — calls are max 300s; webhook handles the rest
               await this.log('bland_ai_call_completed', { callId, lead: lead.name, status: completed.status, duration: completed.duration });
               return {
                 leadName: lead.name,
@@ -321,14 +432,14 @@ export class AIQualificationAgent extends BaseAgent {
                 dataSource: 'live_bland_ai',
               };
             } catch (err: any) {
-              await this.log('bland_ai_wait_error', { callId, lead: lead.name, error: err.message });
+              await this.log('bland_ai_wait_timeout', { callId, lead: lead.name, note: 'Call still in progress after 280s — webhook will handle scoring when call completes' });
               return {
                 leadName: lead.name,
                 leadEmail: lead.email,
                 company: lead.company,
                 phone: lead.phone,
                 callId,
-                callStatus: 'error' as const,
+                callStatus: 'in_progress' as any,
                 duration: 0,
                 transcript: '',
                 recordingUrl: '',
@@ -340,18 +451,91 @@ export class AIQualificationAgent extends BaseAgent {
 
           const waitResults = await Promise.allSettled(waitPromises);
           for (const r of waitResults) {
-            if (r.status === 'fulfilled' && r.value) {
-              realCallResults.push(r.value);
-            }
+            if (r.status === 'fulfilled' && r.value) realCallResults.push(r.value);
           }
 
           const completed = realCallResults.filter(r => r.callStatus === 'completed');
-          await this.log('bland_ai_all_completed', {
+          await this.log('bland_ai_all_processed', {
             total: realCallResults.length,
             completed: completed.length,
+            inProgress: realCallResults.filter(r => r.callStatus === 'in_progress').length,
             withTranscript: completed.filter(r => r.transcript.length > 50).length,
           });
         }
+      }
+
+      // Step 3: Wait for calls from PREVIOUS pipeline runs that are still in progress.
+      // These are leads marked 'contacted' with a callId but no qualificationOutcome.
+      if (pendingCallLeads.length > 0 && blandAI.isBlandAIAvailable()) {
+        await this.log('waiting_for_pending_calls', {
+          count: pendingCallLeads.length,
+          leads: pendingCallLeads.map((l: any) => ({ name: l.name, callId: l.callId })),
+        });
+
+        const pendingPromises = pendingCallLeads.map(async (lead: any) => {
+          if (!lead.callId) return null;
+          try {
+            const completed = await blandAI.waitForCall(lead.callId, 280000);
+            await this.log('pending_call_resolved', { callId: lead.callId, lead: lead.name, status: completed.status, duration: completed.duration });
+            return {
+              leadName: lead.name,
+              leadEmail: lead.email,
+              company: lead.company,
+              phone: lead.phone,
+              callId: lead.callId,
+              callStatus: (completed.status === 'completed' || completed.status === 'ended') ? 'completed' as const : completed.status as any,
+              duration: completed.duration || 0,
+              transcript: completed.transcript || '',
+              recordingUrl: completed.recordingUrl || '',
+              analysis: {},
+              dataSource: 'live_bland_ai',
+            };
+          } catch (err: any) {
+            await this.log('pending_call_wait_timeout', { callId: lead.callId, lead: lead.name });
+            return {
+              leadName: lead.name,
+              leadEmail: lead.email,
+              company: lead.company,
+              phone: lead.phone,
+              callId: lead.callId,
+              callStatus: 'in_progress' as any,
+              duration: 0,
+              transcript: '',
+              recordingUrl: '',
+              analysis: {},
+              dataSource: 'live_bland_ai',
+            };
+          }
+        });
+
+        const pendingResults = await Promise.allSettled(pendingPromises);
+        for (const r of pendingResults) {
+          if (r.status === 'fulfilled' && r.value) {
+            realCallResults.push(r.value);
+            // Also add to qualifiedLeads so they're included in LLM context
+            const lead = pendingCallLeads.find((l: any) => l.callId === r.value!.callId);
+            if (lead && !qualifiedLeads.some((q: any) => q.email === lead.email)) {
+              qualifiedLeads.push({
+                name: lead.name,
+                email: lead.email,
+                company: lead.company,
+                phone: lead.phone,
+                source: 'previous_run',
+                channel: 'inbound',
+                score: lead.score || 0,
+                segment: 'unknown',
+                stage: 'contacted',
+              });
+            }
+          }
+        }
+
+        const resolved = realCallResults.filter(r => r.callStatus === 'completed');
+        await this.log('pending_calls_resolved', {
+          total: pendingCallLeads.length,
+          completed: resolved.length,
+          stillInProgress: realCallResults.filter(r => r.callStatus === 'in_progress').length,
+        });
       }
 
       const userMessage = JSON.stringify({
@@ -519,7 +703,10 @@ For leads in emailOnlyLeads: set callStatus to "no_valid_phone", outcome to "med
           for (const result of parsed.callResults || []) {
             if (!result.leadEmail) continue;
             const isNoPhone = result.callStatus === 'no_valid_phone';
-            // Always update stage based on LLM outcome — even if no real call was made.
+            // Skip leads whose call is still in progress — they remain 'contacted'
+            // and will be re-processed on the next pipeline run once the call finishes.
+            // This prevents fake LLM outcomes being written for incomplete calls.
+            if (result.callStatus === 'in_progress') continue;
             // pending_call / missing outcome = no stage change (skip).
             const newStage = isNoPhone ? 'contacted' : (stageMap[result.outcome] || '');
             if (!newStage) continue;

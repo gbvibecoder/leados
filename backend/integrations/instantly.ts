@@ -48,6 +48,15 @@ export interface InstantlyCampaign {
   createdAt: string;
 }
 
+export interface InstantlyLead {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  company: string;
+  status: number;
+}
+
 export interface InstantlyCampaignStats {
   campaign_id: string;
   total_sent: number;
@@ -69,6 +78,16 @@ export async function createCampaign(data: {
     method: 'POST',
     body: {
       name: data.name,
+      campaign_schedule: {
+        schedules: [
+          {
+            name: 'Default',
+            days: { 1: true, 2: true, 3: true, 4: true, 5: false, 6: false, 0: false },
+            timezone: 'America/Detroit',
+            timing: { from: '08:00', to: '11:00' },
+          },
+        ],
+      },
       ...(data.sendingAccount && { from_address: data.sendingAccount }),
       ...(data.dailyLimit && { daily_limit: data.dailyLimit }),
     },
@@ -82,45 +101,71 @@ export async function createCampaign(data: {
   };
 }
 
-/** Add leads to a campaign */
+/** Add leads to a campaign — v2 API uses single lead per request */
 export async function addLeadsToCampaign(
   campaignId: string,
   leads: Array<{ email: string; firstName?: string; lastName?: string; company?: string; variables?: Record<string, string> }>
 ): Promise<{ added: number; campaignId: string }> {
-  const result = await instantlyFetch(`/leads`, {
-    method: 'POST',
-    body: {
-      campaign_id: campaignId,
-      skip_if_in_workspace: true,
-      leads: leads.map((l) => ({
-        email: l.email,
-        first_name: l.firstName || '',
-        last_name: l.lastName || '',
-        company_name: l.company || '',
-        ...(l.variables || {}),
-      })),
-    },
-  });
+  let added = 0;
 
-  return {
-    added: result.leads_added || leads.length,
-    campaignId,
-  };
+  // v2 API: one lead per POST /leads request with email + campaign at top level
+  const BATCH = 5;
+  for (let i = 0; i < leads.length; i += BATCH) {
+    const batch = leads.slice(i, i + BATCH);
+    const results = await Promise.allSettled(
+      batch.map((l) =>
+        instantlyFetch('/leads', {
+          method: 'POST',
+          body: {
+            campaign: campaignId,
+            email: l.email,
+            first_name: l.firstName || '',
+            last_name: l.lastName || '',
+            company_name: l.company || '',
+            ...(l.variables || {}),
+          },
+        })
+      )
+    );
+
+    for (const r of results) {
+      if (r.status === 'fulfilled') added++;
+    }
+  }
+
+  return { added, campaignId };
 }
 
 /** Get campaign analytics/stats */
 export async function getCampaignStats(campaignId: string): Promise<InstantlyCampaignStats> {
-  const result = await instantlyFetch(`/campaigns/${campaignId}/analytics`);
+  // v2 API: analytics via query param, not path param
+  const results = await instantlyFetch('/campaigns/analytics', {
+    query: { campaign_id: campaignId },
+  });
+
+  // v2 returns an array — take first entry or empty
+  const result = Array.isArray(results) && results.length > 0 ? results[0] : {};
 
   return {
     campaign_id: campaignId,
-    total_sent: result.total_sent || 0,
-    total_opened: result.total_opened || 0,
-    total_replied: result.total_replied || 0,
-    total_bounced: result.total_bounced || 0,
+    total_sent: result.sent || result.total_sent || 0,
+    total_opened: result.opened || result.total_opened || 0,
+    total_replied: result.replied || result.total_replied || 0,
+    total_bounced: result.bounced || result.total_bounced || 0,
     open_rate: result.open_rate || 0,
     reply_rate: result.reply_rate || 0,
     bounce_rate: result.bounce_rate || 0,
+  };
+}
+
+/** Get campaign details */
+export async function getCampaign(campaignId: string): Promise<InstantlyCampaign> {
+  const result = await instantlyFetch(`/campaigns/${campaignId}`);
+  return {
+    id: result.id || result.campaign_id,
+    name: result.name,
+    status: result.status === 1 ? 'active' : (result.status === 2 ? 'paused' : 'draft'),
+    createdAt: result.timestamp_created || new Date().toISOString(),
   };
 }
 
@@ -131,8 +176,8 @@ export async function listCampaigns(): Promise<InstantlyCampaign[]> {
   return (Array.isArray(items) ? items : []).map((c: any) => ({
     id: c.id || c.campaign_id,
     name: c.name,
-    status: c.status || 'draft',
-    createdAt: c.created_at || new Date().toISOString(),
+    status: c.status === 1 ? 'active' : (c.status === 2 ? 'paused' : 'draft'),
+    createdAt: c.timestamp_created || new Date().toISOString(),
   }));
 }
 
@@ -142,6 +187,14 @@ export async function launchCampaign(campaignId: string): Promise<{ status: stri
     method: 'POST',
   });
   return { status: 'active' };
+}
+
+/** Pause a campaign */
+export async function pauseCampaign(campaignId: string): Promise<{ status: string }> {
+  await instantlyFetch(`/campaigns/${campaignId}/pause`, {
+    method: 'POST',
+  });
+  return { status: 'paused' };
 }
 
 /** Check if Instantly API is available */

@@ -9,6 +9,17 @@ const SYSTEM_PROMPT = `You are the Funnel Builder Agent for LeadOS. Generate a h
 
 You receive JSON with the validated offer (ICP, pricing, guarantee, positioning) and optionally "productContext" scraped from the client's website. If productContext is provided, use the real product name, features, and value propositions to create landing page copy that accurately represents the actual product/service.
 
+## CRITICAL: Product Name Consistency
+The offer JSON includes a "serviceName" field — this is the OFFICIAL product brand name. You MUST use this EXACT name consistently throughout ALL landing page copy:
+- Hero headline, subheadline, and CTA
+- SEO meta title and description
+- Comparison table column header (use serviceName, NOT generic terms like "Us")
+- Testimonial company references
+- Pricing section
+- Final CTA
+- Every reference to the product/service
+Do NOT invent a different product name, do NOT use generic terms like "our service" or "the platform". Always use the exact serviceName provided.
+
 ## High-Converting Landing Page Structure
 
 Follow this exact section order for maximum conversion:
@@ -340,10 +351,9 @@ export class FunnelBuilderAgent extends BaseAgent {
       if (!parsed.landingPage) {
         const transformationPromise = offerData.transformationPromise || '';
         const serviceName = offerData.serviceName || niche;
-        // Short headline: max ~10 words. Use service name or a punchy version.
-        const shortHeadline = serviceName
-          ? `Get More Leads with ${serviceName}`
-          : 'Double Your Qualified Leads in 90 Days';
+        // Use the EXACT serviceName from offer-engineering for brand consistency
+        const brandName = offerData.serviceName || 'LeadFlow AI';
+        const shortHeadline = `Get More Leads with ${brandName}`;
         const guarantee = offerData.guarantee || '90-Day Money-Back Guarantee';
         const basePrice = offerData.pricingTiers?.[0]?.price || '$2,500/mo';
 
@@ -379,7 +389,7 @@ export class FunnelBuilderAgent extends BaseAgent {
               { icon: 'checkmark', title: 'Full-Funnel Multi-Touch Attribution', description: 'Know exactly which touchpoints drive revenue.' },
               { icon: 'checkmark', title: 'CRM Integration & Data Hygiene', description: 'HubSpot, GoHighLevel, or Salesforce — always clean, always current.' },
             ] } },
-            { type: 'comparisonTable', content: { sectionTitle: 'Why LeadFlow AI vs The Old Way', columns: ['LeadFlow AI', 'Traditional Agencies'], rows: [
+            { type: 'comparisonTable', content: { sectionTitle: `Why ${brandName} vs The Old Way`, columns: [brandName, 'Traditional Agencies'], rows: [
               { feature: 'Fully autonomous — runs 24/7', us: true, them: false },
               { feature: 'AI-qualified leads (not just MQLs)', us: true, them: false },
               { feature: 'Live in 48 hours', us: true, them: false },
@@ -389,7 +399,7 @@ export class FunnelBuilderAgent extends BaseAgent {
             ] } },
             { type: 'testimonials', content: { sectionTitle: 'What Our Clients Say', items: [
               { quote: 'We went from 12 to 47 qualified meetings per month in 60 days.', name: 'Sarah Chen', role: 'VP Marketing', company: 'TechCorp', verified: true, metric: '4x qualified meetings' },
-              { quote: 'LeadFlow replaced our entire outbound team and cut our CPL by 60%.', name: 'Marcus Johnson', role: 'CEO', company: 'GrowthHQ', verified: true, metric: '60% lower CPL' },
+              { quote: `${brandName} replaced our entire outbound team and cut our CPL by 60%.`, name: 'Marcus Johnson', role: 'CEO', company: 'GrowthHQ', verified: true, metric: '60% lower CPL' },
               { quote: 'The AI qualification calls are indistinguishable from our best SDRs.', name: 'Priya Patel', role: 'Head of Sales', company: 'ScaleUp Inc', verified: true, metric: '3x conversion rate' },
             ] } },
             { type: 'mediaFeatures', content: { sectionTitle: 'As Seen In', publications: ['TechCrunch', 'Forbes', 'Business Insider', 'Inc.', 'Entrepreneur'] } },
@@ -414,7 +424,7 @@ export class FunnelBuilderAgent extends BaseAgent {
             { type: 'finalCta', content: { headline: 'Ready to Transform Your Pipeline?', subheadline: 'Book a free 30-minute strategy call with a custom growth projection.', ctaButton: 'Book Your Free Strategy Call', ctaLink: '#lead-form', ctaSubtext: 'Limited spots — we only onboard 10 new clients per month', urgencyMessage: 'Only 10 onboarding spots remaining at this price' } },
           ],
           cta: 'Book Your Free Strategy Call',
-          seoMeta: { title: `LeadFlow AI — ${transformationPromise}`, description: `B2B companies use LeadFlow AI for autonomous, AI-powered ${niche.toLowerCase()}. ${guarantee}.`, ogImage: '/og/leadflow-ai.png' },
+          seoMeta: { title: `${brandName} — ${transformationPromise}`, description: `B2B companies use ${brandName} for autonomous, AI-powered ${niche.toLowerCase()}. ${guarantee}.`, ogImage: '/og/leadflow-ai.png' },
         };
       }
 

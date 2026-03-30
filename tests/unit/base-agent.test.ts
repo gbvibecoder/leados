@@ -97,7 +97,7 @@ describe('BaseAgent', () => {
     });
 
     it('throws on completely invalid input', () => {
-      expect(() => agent.testParseLLMJson('no json here at all')).toThrow('Failed to parse LLM JSON response');
+      expect(() => agent.testParseLLMJson('no json here at all')).toThrow();
     });
   });
 

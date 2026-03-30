@@ -186,7 +186,10 @@ export class SalesRoutingAgent extends BaseAgent {
         };
       }
 
-      // Fetch user's leads from DB to validate upstream data — prevent cross-user leakage
+      // Read qualification outcomes directly from the DB — this is the source of truth.
+      // The AI Qualification Agent updates leads in the DB as calls complete, even if
+      // the agent output (previousOutputs) was incomplete due to call timing/timeouts.
+      let dbQualifiedLeads: any[] = [];
       let userLeadEmails = new Set<string>();
       let userLeadNames = new Set<string>();
       try {
@@ -205,21 +208,34 @@ export class SalesRoutingAgent extends BaseAgent {
             ],
           };
         }
-        // Filter by projectId when running within a project pipeline
         const projectId = inputs.config?.projectId;
-        const projectCondition = projectId ? { projectId } : {};
+        const projectCondition = projectId
+          ? { OR: [{ projectId }, { projectId: null }] }
+          : {};
 
+        // Fetch all leads that have been contacted/qualified — the DB has the real outcomes
         const userDbLeads = await prisma.lead.findMany({
-          where: { AND: [ownershipCondition, projectCondition] },
-          select: { email: true, name: true },
+          where: {
+            AND: [
+              ownershipCondition,
+              projectCondition,
+              { stage: { in: ['contacted', 'nurture', 'qualified', 'disqualified'] } },
+            ],
+          },
+          select: {
+            email: true, name: true, company: true, phone: true, score: true,
+            stage: true, qualificationOutcome: true, qualificationScore: true, routingDecision: true,
+          },
         });
+
         for (const l of userDbLeads) {
           if (l.email) userLeadEmails.add(l.email);
           if (l.name) userLeadNames.add(l.name.toLowerCase());
         }
-        await this.log('user_leads_verified', { count: userDbLeads.length });
+        dbQualifiedLeads = userDbLeads;
+        await this.log('db_qualified_leads_fetched', { count: userDbLeads.length });
       } catch (err: any) {
-        await this.log('user_leads_verify_error', { error: err.message });
+        await this.log('db_leads_fetch_error', { error: err.message });
       }
 
       // Helper: check if a lead belongs to the current user
@@ -232,9 +248,60 @@ export class SalesRoutingAgent extends BaseAgent {
         return false;
       };
 
-      // Filter upstream data to only include this user's leads
-      const scopedCallResults = (qualificationData.callResults || []).filter(isUserLead);
-      const scopedInboundLeads = (inboundData.leadsProcessed || []).filter(isUserLead);
+      // Build scopedCallResults: prefer DB data (real outcomes) and enrich with
+      // transcript/BANT details from upstream output where available.
+      // FALLBACK: if DB query returned no leads (e.g. connection error, cold start),
+      // use upstream AI Qualification output directly so leads aren't silently dropped.
+      const allUpstreamCallResults = qualificationData.callResults || [];
+      let scopedCallResults: any[];
+
+      if (dbQualifiedLeads.length > 0) {
+        // DB path: use DB as source of truth, enrich with upstream transcript/BANT
+        const upstreamCallResults = allUpstreamCallResults.filter(isUserLead);
+        const upstreamByEmail = new Map(upstreamCallResults.map((r: any) => [r.leadEmail, r]));
+
+        scopedCallResults = dbQualifiedLeads.map((dbLead: any) => {
+          const upstream: any = upstreamByEmail.get(dbLead.email) || {};
+          return {
+            leadName: dbLead.name,
+            leadEmail: dbLead.email,
+            company: dbLead.company,
+            phone: dbLead.phone,
+            score: dbLead.qualificationScore || dbLead.score || upstream.score || 0,
+            outcome: dbLead.qualificationOutcome || upstream.outcome || null,
+            callStatus: upstream.callStatus || (dbLead.qualificationOutcome ? 'completed' : 'contacted'),
+            bantBreakdown: upstream.bantBreakdown || { budget: 0, authority: 0, need: 0, timeline: 0 },
+            transcript: upstream.transcript || '',
+            budgetConfirmed: upstream.budgetConfirmed || false,
+          };
+        });
+      } else if (allUpstreamCallResults.length > 0) {
+        // Fallback: DB returned nothing — use upstream AI Qualification call results
+        await this.log('db_empty_using_upstream_fallback', {
+          upstreamCount: allUpstreamCallResults.length,
+          reason: 'DB query returned no qualified leads — using upstream call results as fallback',
+        });
+        scopedCallResults = allUpstreamCallResults.map((r: any) => ({
+          leadName: r.leadName || r.name || '',
+          leadEmail: r.leadEmail || r.email || '',
+          company: r.company || '',
+          phone: r.phone || '',
+          score: r.score || 0,
+          outcome: r.outcome || null,
+          callStatus: r.callStatus || 'contacted',
+          bantBreakdown: r.bantBreakdown || { budget: 0, authority: 0, need: 0, timeline: 0 },
+          transcript: r.transcript || '',
+          budgetConfirmed: r.budgetConfirmed || false,
+        }));
+      } else {
+        scopedCallResults = [];
+      }
+
+      // Also include inbound leads scoped to this user (for leads that bypassed calling)
+      const allUpstreamInbound = inboundData.leadsProcessed || [];
+      const scopedInboundLeads = dbQualifiedLeads.length > 0
+        ? allUpstreamInbound.filter(isUserLead)
+        : allUpstreamInbound;
 
       const userMessage = JSON.stringify({
         serviceNiche: inputs.config?.niche || inputs.config?.serviceNiche || 'B2B SaaS Lead Generation',
@@ -266,7 +333,7 @@ export class SalesRoutingAgent extends BaseAgent {
       const routedLeads: any[] = [];
 
       // Route leads from AI Qualification results (user-scoped, real call outcomes)
-      for (const result of scopedCallResults) {
+      for (const result of scopedCallResults as any[]) {
         if (!result.leadName && !result.leadEmail) continue;
         const outcome = result.outcome || 'pending_call';
         // Check for explicit budget confirmation from qualification call data

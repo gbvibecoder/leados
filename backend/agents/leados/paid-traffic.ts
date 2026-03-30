@@ -11,12 +11,40 @@ RULES:
 - Set ALL projection numbers to 0. Set estimatedCPC/monthlySearchVolume to 0 unless real SerpAPI data exists. Set estimatedSize to 0
 - Keep output concise: 10 keywords max, 2 ad groups, 3 audiences, 3 ad sets with 1 creative each
 
+## STORYTELLING AD FRAMEWORK — MANDATORY FOR ALL AD COPY
+
+You are NOT writing ads. You are writing stories that sell. Follow these rules strictly:
+
+### For Google Ads Headlines & Descriptions:
+- Headlines should feel like a friend's recommendation, NOT a product pitch
+- Use specific outcomes, emotions, and moments — NOT feature lists
+- WEAK: "Best CRM Software" → STRONG: "We Switched. Haven't Looked Back."
+- WEAK: "Try Our Platform Today" → STRONG: "Wish We'd Found This Sooner"
+
+### For Meta Ad Creatives (CRITICAL):
+Every Meta ad creative MUST follow the 4-beat storytelling structure:
+
+1. **Hook (first sentence):** Make them FEEL something before they understand anything. Use one of three hook types:
+   - Gut Punch: specific loss + unexpected outcome ("I paid $2k for a trainer before I found out...")
+   - Open Loop: promise aimed at a specific person ("If you [specific situation], what I'm about to show you...")
+   - Body Memory: visceral, physical ("First morning I woke up before my alarm, I thought something was wrong")
+
+2. **Story (primaryText body):** Tell it like gossip, not a lecture. "So they did this..." not "Studies show..."
+
+3. **Product Reveal:** Introduce the product INSIDE the story. Casually. "It's called..." — NOT "Our product features..."
+
+4. **Identity Close:** Close with WHO the person is, not WHAT the deal is.
+   - GENERIC: "Shop now. Free shipping." → IDENTITY: "If you've been [doing X] and wondering why nothing's changing, this is probably why."
+
+### Creative Diversity — One Product, Many Doors:
+Each Meta ad set creative MUST use a DIFFERENT emotional doorway (guilt, exposé, comparison, rescue story, money angle, friend recommendation, etc.). Do NOT write 3 variations of the same angle.
+
 Return ONLY valid JSON:
 {
   "googleAds": {
     "campaignName": "string",
     "keywords": [{ "keyword": "string", "matchType": "exact|phrase", "estimatedCPC": 0, "monthlySearchVolume": 0, "intent": "high|medium" }],
-    "adGroups": [{ "name": "string", "theme": "string", "keywords": ["string"], "adCopy": { "headlines": ["string ≤30ch"], "descriptions": ["string ≤90ch"] } }],
+    "adGroups": [{ "name": "string", "theme": "string", "keywords": ["string"], "adCopy": { "headlines": ["string ≤30ch — story-driven, NOT feature-driven"], "descriptions": ["string ≤90ch — friend energy, specific outcomes"] } }],
     "negativeKeywords": ["string"],
     "dailyBudget": 0,
     "biddingStrategy": "Maximize Conversions",
@@ -26,7 +54,7 @@ Return ONLY valid JSON:
   "metaAds": {
     "campaignName": "string",
     "audiences": [{ "name": "string", "type": "cold|warm|hot", "targeting": "string", "estimatedSize": 0 }],
-    "adSets": [{ "name": "string", "audience": "string", "dailyBudget": 0, "creatives": [{ "name": "string", "format": "image", "hook": "string", "primaryText": "string (2-3 sentences)", "headline": "string", "description": "string", "callToAction": "LEARN_MORE|SIGN_UP|BOOK_NOW" }] }],
+    "adSets": [{ "name": "string", "audience": "string", "dailyBudget": 0, "creatives": [{ "name": "string", "format": "image", "hook": "string — gut_punch, open_loop, or body_memory hook", "primaryText": "string — 4-beat story structure: hook → gossip-style story → 'It's called...' product reveal → identity close", "headline": "string — emotional, NOT feature-driven", "description": "string", "callToAction": "LEARN_MORE|SIGN_UP|BOOK_NOW", "emotionalDoorway": "string — guilt|expose|comparison|rescue|money|unexpected_benefit|friend_recommendation|skeptic_believer|before_after" }] }],
     "pixelEvents": ["ViewContent","Lead"],
     "placements": ["Feed","Stories","Reels"],
     "dailyBudget": 0
@@ -331,7 +359,14 @@ export class PaidTrafficAgent extends BaseAgent {
         parsed = this.safeParseLLMJson<any>(response, ['googleAds', 'metaAds']);
       } catch (parseErr: any) {
         await this.log('llm_json_parse_error', { error: parseErr.message });
-        parsed = { reasoning: `LLM JSON parse failed: ${parseErr.message}`, confidence: 0 };
+        this.status = 'done';
+        return {
+          success: false,
+          data: { error: parseErr.message, agentId: this.id },
+          reasoning: `Failed to parse campaign data from AI response. Please try running the agent again.`,
+          confidence: 0,
+          error: `LLM JSON parse failed: ${parseErr.message}`,
+        };
       }
 
       // ── BUILD CLEAN OUTPUT — DO NOT trust ANY metric from LLM ──────────
@@ -364,22 +399,28 @@ export class PaidTrafficAgent extends BaseAgent {
           adSets: (parsed.metaAds?.adSets || []).map((adSet: any, setIdx: number) => ({
             ...adSet,
             creatives: (adSet.creatives || []).map((cr: any, crIdx: number) => {
-              // Generate a project-aware image prompt for each creative
+              // Visual scene prompts — the text (headline, CTA, brand) is added
+              // separately by the /api/ads/generate-image endpoint for clean rendering
               const pName = productContext?.title || offerData.serviceName || inputs.config?.projectName || 'Product';
               const pDesc = productContext?.description || offerData.transformationPromise || cr.description || '';
-              const audience = adSet.audience || adSet.type || '';
-              const promptStyles = [
-                `Professional social media ad for "${pName}". Smartphone or laptop showing the "${pName}" app dashboard with realistic UI. Dark navy-blue background, subtle orange accent lighting. ${pDesc ? `Product: ${pDesc}.` : ''} Photorealistic marketing photography, no text overlay, sharp details.`,
-                `Professional person using "${pName}" on a laptop in a modern office. Screen shows product dashboard. ${pDesc ? `Context: ${pDesc}.` : ''} Warm natural lighting, shallow depth of field, corporate photography, no text overlay.`,
-                `Split-screen ad concept. Left: cluttered desk with papers, stress, dim lighting. Right: clean workspace with laptop showing "${pName}" dashboard, organized, bright. ${pDesc ? `Product solves: ${pDesc}.` : ''} Professional photography, high contrast, no text overlay.`,
-                `Hero image for "${pName}" showing floating holographic dashboard with charts, maps, notifications. Dark blue-black background, glowing orange and white UI elements. ${pDesc ? `Dashboard: ${pDesc}.` : ''} Cinematic 3D render, no text overlay.`,
-                `Business professionals in conference room viewing "${pName}" analytics on large screen. ${pDesc ? `Product: ${pDesc}.` : ''} Warm lighting, glass walls, modern office. Corporate photography, no text overlay.`,
-                `Close-up product shot of smartphone displaying "${pName}" app with notification alerts. Phone floating at angle against dark gradient background with subtle orange glow. ${pDesc ? `App: ${pDesc}.` : ''} Premium product photography, no text overlay.`,
+              const keywords = productContext?.keywords?.slice(0, 3)?.join(', ') || '';
+
+              const AD_SCENES = [
+                // Scene 0: Product hero — devices centered
+                `MIDDLE SECTION: A photorealistic MacBook laptop and iPhone side by side, both showing the "${pName}" app. The laptop displays a dark-themed dashboard with a city map, orange location pins, data cards, and a notification popup. The phone shows a push notification alert. Floating semi-transparent icons (bell, checkmark, map pin) in orange glow around the devices.${pDesc ? ` Context: ${pDesc}.` : ''}${keywords ? ` Tags visible on screen: ${keywords}.` : ''}`,
+
+                // Scene 1: Before/after split
+                `MIDDLE SECTION: Split composition. LEFT: Frustrated person at messy desk with printed documents, open browser tabs, sticky notes — dim cold lighting. RIGHT: Sleek MacBook showing "${pName}" dashboard with organized data, map view, alert notifications — bright warm lighting with orange glow.${pDesc ? ` Product solves: ${pDesc}.` : ''}`,
+
+                // Scene 2: Professional workspace
+                `MIDDLE SECTION: Over-the-shoulder view of professional at clean modern desk. MacBook screen shows "${pName}" dashboard with regional map, filter tags, real-time data cards. Smartphone beside laptop shows push notification. Coffee cup on desk. Subtle floating orange location pins and document icons above screen.${pDesc ? ` Product: ${pDesc}.` : ''}`,
               ];
-              const idx = (setIdx * 3 + crIdx) % promptStyles.length;
+
+              const imagePrompt = AD_SCENES[setIdx % AD_SCENES.length];
+
               return {
                 ...cr,
-                imagePrompt: cr.imagePrompt || promptStyles[idx],
+                imagePrompt: cr.imagePrompt || imagePrompt,
               };
             }),
           })),
