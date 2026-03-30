@@ -177,18 +177,54 @@ export class AIQualificationAgent extends BaseAgent {
             : {};
 
           // Step 1: Fetch NEW leads that need calling
-          const dbLeads = await prisma.lead.findMany({
+          let dbLeads = await prisma.lead.findMany({
             where: {
               AND: [
                 ownershipCondition,
                 projectCondition,
-                { stage: 'new' }, // only call leads that haven't been processed yet
-                { score: { gte: 30 } }, // minimum score threshold for qualification
+                { stage: 'new' },
+                { score: { gte: 30 } },
               ],
             },
             orderBy: { score: 'desc' },
             take: 20,
           });
+
+          // FALLBACK: if ownership filter returned 0 leads, try with just projectId.
+          // This handles cases where userId on the lead doesn't match the pipeline userId
+          // (e.g. leads created via webhook, imported, or userId mismatch after re-login).
+          if (dbLeads.length === 0 && projectId) {
+            const projectOnlyLeads = await prisma.lead.findMany({
+              where: {
+                AND: [
+                  { OR: [{ projectId }, { projectId: null }] },
+                  { stage: 'new' },
+                  { score: { gte: 30 } },
+                ],
+              },
+              orderBy: { score: 'desc' },
+              take: 20,
+            });
+            if (projectOnlyLeads.length > 0) {
+              await this.log('ownership_filter_mismatch', {
+                message: 'Ownership filter found 0 leads but project filter found leads — using project filter',
+                pipelineUserId: inputs.userId,
+                sampleLeadUserIds: projectOnlyLeads.slice(0, 3).map((l: any) => ({
+                  name: l.name, leadUserId: l.userId, leadProjectId: l.projectId,
+                })),
+              });
+              dbLeads = projectOnlyLeads;
+              // Also claim these leads for the current user so future queries work
+              await prisma.lead.updateMany({
+                where: {
+                  id: { in: projectOnlyLeads.map((l: any) => l.id) },
+                  userId: null,
+                },
+                data: { userId: inputs.userId },
+              });
+            }
+          }
+
           if (dbLeads.length > 0) {
             qualifiedLeads = dbLeads.map((l: any) => ({
               name: l.name,
@@ -205,9 +241,7 @@ export class AIQualificationAgent extends BaseAgent {
           }
 
           // Step 2: Find leads with a Bland AI call still in progress
-          // These are leads marked 'contacted' with routingDecision like 'bland_ai_call_initiated:<callId>'
-          // but no qualificationOutcome yet (call hasn't completed).
-          const contactedLeads = await prisma.lead.findMany({
+          let contactedLeads = await prisma.lead.findMany({
             where: {
               AND: [
                 ownershipCondition,
@@ -219,6 +253,20 @@ export class AIQualificationAgent extends BaseAgent {
             },
             take: 20,
           });
+          // Same fallback for pending calls
+          if (contactedLeads.length === 0 && projectId) {
+            contactedLeads = await prisma.lead.findMany({
+              where: {
+                AND: [
+                  { OR: [{ projectId }, { projectId: null }] },
+                  { stage: 'contacted' },
+                  { qualificationOutcome: null },
+                  { routingDecision: { startsWith: 'bland_ai_call_initiated:' } },
+                ],
+              },
+              take: 20,
+            });
+          }
           if (contactedLeads.length > 0) {
             pendingCallLeads = contactedLeads.map((l: any) => ({
               name: l.name,
@@ -235,20 +283,23 @@ export class AIQualificationAgent extends BaseAgent {
           }
 
           if (dbLeads.length === 0 && contactedLeads.length === 0) {
-            // Diagnose: count ALL leads for this user/project to understand why
-            const allLeadCount = await prisma.lead.count({
-              where: { AND: [ownershipCondition, projectCondition] },
-            });
-            const stageBreakdown = await prisma.lead.groupBy({
-              by: ['stage'],
-              where: { AND: [ownershipCondition, projectCondition] },
-              _count: true,
+            // Diagnose the mismatch
+            const totalInProject = projectId ? await prisma.lead.count({
+              where: { OR: [{ projectId }, { projectId: null }] },
+            }) : 0;
+            const totalForUser = await prisma.lead.count({
+              where: ownershipCondition,
             });
             await this.log('no_leads_to_process', {
-              userId: inputs.userId || 'none',
-              projectId: inputs.config?.projectId || 'none',
-              totalLeadsForUser: allLeadCount,
-              stageBreakdown: stageBreakdown.map((s: any) => ({ stage: s.stage, count: s._count })),
+              pipelineUserId: inputs.userId || 'none',
+              projectId: projectId || 'none',
+              totalLeadsInProject: totalInProject,
+              totalLeadsForUser: totalForUser,
+              hint: totalInProject > 0 && totalForUser === 0
+                ? 'Leads exist in project but userId mismatch — check lead ownership'
+                : totalInProject === 0
+                ? 'No leads in this project'
+                : 'All leads already processed',
             });
           }
         } catch (err: any) {
