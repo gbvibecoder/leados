@@ -253,8 +253,6 @@ export class SalesRoutingAgent extends BaseAgent {
       // FALLBACK: if DB query returned no leads (e.g. connection error, cold start),
       // use upstream AI Qualification output directly so leads aren't silently dropped.
       const allUpstreamCallResults = qualificationData.callResults || [];
-      // Already-processed leads from AI Qualification (available on re-runs where no new calls were made)
-      const alreadyProcessedLeads = qualificationData.alreadyProcessedLeads || [];
       let scopedCallResults: any[];
 
       if (dbQualifiedLeads.length > 0) {
@@ -278,7 +276,7 @@ export class SalesRoutingAgent extends BaseAgent {
           };
         });
       } else if (allUpstreamCallResults.length > 0) {
-        // Fallback 1: DB returned nothing — use upstream AI Qualification call results
+        // Fallback: DB returned nothing — use upstream AI Qualification call results
         await this.log('db_empty_using_upstream_fallback', {
           upstreamCount: allUpstreamCallResults.length,
           reason: 'DB query returned no qualified leads — using upstream call results as fallback',
@@ -291,25 +289,6 @@ export class SalesRoutingAgent extends BaseAgent {
           score: r.score || 0,
           outcome: r.outcome || null,
           callStatus: r.callStatus || 'contacted',
-          bantBreakdown: r.bantBreakdown || { budget: 0, authority: 0, need: 0, timeline: 0 },
-          transcript: r.transcript || '',
-          budgetConfirmed: r.budgetConfirmed || false,
-        }));
-      } else if (alreadyProcessedLeads.length > 0) {
-        // Fallback 2: No new calls AND no DB results — use already-processed leads
-        // from AI Qualification (re-run scenario where leads were qualified in a prior run)
-        await this.log('using_already_processed_leads', {
-          count: alreadyProcessedLeads.length,
-          reason: 'No new calls made and DB empty — routing previously qualified leads',
-        });
-        scopedCallResults = alreadyProcessedLeads.map((r: any) => ({
-          leadName: r.leadName || r.name || '',
-          leadEmail: r.leadEmail || r.email || '',
-          company: r.company || '',
-          phone: r.phone || '',
-          score: r.score || 0,
-          outcome: r.outcome || null,
-          callStatus: r.callStatus || 'previously_contacted',
           bantBreakdown: r.bantBreakdown || { budget: 0, authority: 0, need: 0, timeline: 0 },
           transcript: r.transcript || '',
           budgetConfirmed: r.budgetConfirmed || false,

@@ -145,6 +145,7 @@ export class AIQualificationAgent extends BaseAgent {
       // ALWAYS fetch leads from database with proper userId scoping
       // Never trust upstream leadsProcessed — it may contain other users' leads
       let qualifiedLeads: any[] = [];
+      let dbQueryFailed = false;
 
       {
         try {
@@ -199,29 +200,54 @@ export class AIQualificationAgent extends BaseAgent {
               stage: l.stage || 'new',
             }));
             await this.log('db_leads_fetched_for_qualification', { count: dbLeads.length });
+          } else {
+            // Diagnose: count ALL leads for this user/project to understand why
+            const allLeadCount = await prisma.lead.count({
+              where: { AND: [ownershipCondition, projectCondition] },
+            });
+            const stageBreakdown = await prisma.lead.groupBy({
+              by: ['stage'],
+              where: { AND: [ownershipCondition, projectCondition] },
+              _count: true,
+            });
+            await this.log('no_new_leads_found', {
+              userId: inputs.userId || 'none',
+              projectId: inputs.config?.projectId || 'none',
+              totalLeadsForUser: allLeadCount,
+              stageBreakdown: stageBreakdown.map((s: any) => ({ stage: s.stage, count: s._count })),
+              hint: allLeadCount === 0
+                ? 'No leads exist for this user/project — add leads first'
+                : 'All leads already processed (stage != new). Reset lead stages or add new leads.',
+            });
           }
-
-          // Also fetch already-processed leads so downstream agents (Sales Routing)
-          // receive the complete picture even on re-runs where no NEW leads exist.
-          const alreadyProcessedLeads = await prisma.lead.findMany({
-            where: {
-              AND: [
-                ownershipCondition,
-                projectCondition,
-                { stage: { in: ['contacted', 'qualified', 'nurture', 'disqualified'] } },
-              ],
-            },
-            orderBy: { score: 'desc' },
-            take: 50,
-          });
-          if (alreadyProcessedLeads.length > 0) {
-            await this.log('already_processed_leads_found', { count: alreadyProcessedLeads.length });
-          }
-          // Store for inclusion in output so Sales Routing can route them
-          (this as any)._alreadyProcessedLeads = alreadyProcessedLeads;
         } catch (err: any) {
+          dbQueryFailed = true;
           await this.log('db_leads_error', { error: err.message });
         }
+      }
+
+      // If no new leads to qualify, stop early — do NOT run the LLM with empty data
+      // and do NOT let downstream agents run with fake/empty results.
+      if (qualifiedLeads.length === 0) {
+        this.status = 'done';
+        const reason = dbQueryFailed
+          ? 'Database connection failed — could not fetch leads. Please try again.'
+          : 'No new leads with stage "new" found. All leads may have been processed already. Add new leads or reset existing lead stages to "new" and re-run.';
+        await this.log('stopping_no_leads', { reason, dbQueryFailed });
+        return {
+          success: false,
+          data: {
+            callResults: [],
+            summary: {
+              totalCallsAttempted: 0, totalCallsCompleted: 0, totalNoAnswer: 0,
+              avgCallDuration: 0, avgScore: 0, qualificationRate: 0,
+            },
+            reasoning: reason,
+            confidence: 0,
+          },
+          reasoning: reason,
+          confidence: 0,
+        };
       }
 
       // Enrich leads missing phone numbers by looking up from DB (scoped to user)
@@ -618,23 +644,6 @@ For leads in emailOnlyLeads: set callStatus to "no_valid_phone", outcome to "med
         await this.log('db_leads_updated', { count: (parsed.callResults || []).length });
       } catch (err: any) {
         await this.log('db_update_error', { error: err.message });
-      }
-
-      // Include already-processed leads in output so downstream agents (Sales Routing)
-      // can route them even on re-runs where no new calls were made.
-      const alreadyProcessed = (this as any)._alreadyProcessedLeads || [];
-      if (alreadyProcessed.length > 0) {
-        parsed.alreadyProcessedLeads = alreadyProcessed.map((l: any) => ({
-          leadName: l.name,
-          leadEmail: l.email,
-          company: l.company,
-          phone: l.phone,
-          score: l.qualificationScore || l.score || 0,
-          outcome: l.qualificationOutcome || null,
-          callStatus: l.qualificationOutcome ? 'completed' : 'previously_contacted',
-          routingAction: l.routingDecision || null,
-          stage: l.stage,
-        }));
       }
 
       this.status = 'done';
