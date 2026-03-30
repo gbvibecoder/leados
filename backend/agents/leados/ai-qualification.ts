@@ -145,6 +145,7 @@ export class AIQualificationAgent extends BaseAgent {
       // ALWAYS fetch leads from database with proper userId scoping
       // Never trust upstream leadsProcessed — it may contain other users' leads
       let qualifiedLeads: any[] = [];
+      let pendingCallLeads: any[] = []; // leads with stage='contacted' that have a call in progress
       let dbQueryFailed = false;
 
       {
@@ -175,6 +176,7 @@ export class AIQualificationAgent extends BaseAgent {
             ? { OR: [{ projectId }, { projectId: null }] }
             : {};
 
+          // Step 1: Fetch NEW leads that need calling
           const dbLeads = await prisma.lead.findMany({
             where: {
               AND: [
@@ -200,7 +202,39 @@ export class AIQualificationAgent extends BaseAgent {
               stage: l.stage || 'new',
             }));
             await this.log('db_leads_fetched_for_qualification', { count: dbLeads.length });
-          } else {
+          }
+
+          // Step 2: Find leads with a Bland AI call still in progress
+          // These are leads marked 'contacted' with routingDecision like 'bland_ai_call_initiated:<callId>'
+          // but no qualificationOutcome yet (call hasn't completed).
+          const contactedLeads = await prisma.lead.findMany({
+            where: {
+              AND: [
+                ownershipCondition,
+                projectCondition,
+                { stage: 'contacted' },
+                { qualificationOutcome: null },
+                { routingDecision: { startsWith: 'bland_ai_call_initiated:' } },
+              ],
+            },
+            take: 20,
+          });
+          if (contactedLeads.length > 0) {
+            pendingCallLeads = contactedLeads.map((l: any) => ({
+              name: l.name,
+              email: l.email,
+              company: l.company,
+              phone: l.phone,
+              score: l.score || 0,
+              callId: l.routingDecision?.replace('bland_ai_call_initiated:', '') || null,
+            }));
+            await this.log('pending_call_leads_found', {
+              count: pendingCallLeads.length,
+              leads: pendingCallLeads.map((l: any) => ({ name: l.name, callId: l.callId })),
+            });
+          }
+
+          if (dbLeads.length === 0 && contactedLeads.length === 0) {
             // Diagnose: count ALL leads for this user/project to understand why
             const allLeadCount = await prisma.lead.count({
               where: { AND: [ownershipCondition, projectCondition] },
@@ -210,14 +244,11 @@ export class AIQualificationAgent extends BaseAgent {
               where: { AND: [ownershipCondition, projectCondition] },
               _count: true,
             });
-            await this.log('no_new_leads_found', {
+            await this.log('no_leads_to_process', {
               userId: inputs.userId || 'none',
               projectId: inputs.config?.projectId || 'none',
               totalLeadsForUser: allLeadCount,
               stageBreakdown: stageBreakdown.map((s: any) => ({ stage: s.stage, count: s._count })),
-              hint: allLeadCount === 0
-                ? 'No leads exist for this user/project — add leads first'
-                : 'All leads already processed (stage != new). Reset lead stages or add new leads.',
             });
           }
         } catch (err: any) {
@@ -226,13 +257,12 @@ export class AIQualificationAgent extends BaseAgent {
         }
       }
 
-      // If no new leads to qualify, stop early — do NOT run the LLM with empty data
-      // and do NOT let downstream agents run with fake/empty results.
-      if (qualifiedLeads.length === 0) {
+      // If no new leads AND no pending calls, stop early — nothing to do.
+      if (qualifiedLeads.length === 0 && pendingCallLeads.length === 0) {
         this.status = 'done';
         const reason = dbQueryFailed
           ? 'Database connection failed — could not fetch leads. Please try again.'
-          : 'No new leads with stage "new" found. All leads may have been processed already. Add new leads or reset existing lead stages to "new" and re-run.';
+          : 'No new leads with stage "new" found and no calls in progress. Add new leads and re-run.';
         await this.log('stopping_no_leads', { reason, dbQueryFailed });
         return {
           success: false,
@@ -432,6 +462,80 @@ export class AIQualificationAgent extends BaseAgent {
             withTranscript: completed.filter(r => r.transcript.length > 50).length,
           });
         }
+      }
+
+      // Step 3: Wait for calls from PREVIOUS pipeline runs that are still in progress.
+      // These are leads marked 'contacted' with a callId but no qualificationOutcome.
+      if (pendingCallLeads.length > 0 && blandAI.isBlandAIAvailable()) {
+        await this.log('waiting_for_pending_calls', {
+          count: pendingCallLeads.length,
+          leads: pendingCallLeads.map((l: any) => ({ name: l.name, callId: l.callId })),
+        });
+
+        const pendingPromises = pendingCallLeads.map(async (lead: any) => {
+          if (!lead.callId) return null;
+          try {
+            const completed = await blandAI.waitForCall(lead.callId, 280000);
+            await this.log('pending_call_resolved', { callId: lead.callId, lead: lead.name, status: completed.status, duration: completed.duration });
+            return {
+              leadName: lead.name,
+              leadEmail: lead.email,
+              company: lead.company,
+              phone: lead.phone,
+              callId: lead.callId,
+              callStatus: (completed.status === 'completed' || completed.status === 'ended') ? 'completed' as const : completed.status as any,
+              duration: completed.duration || 0,
+              transcript: completed.transcript || '',
+              recordingUrl: completed.recordingUrl || '',
+              analysis: {},
+              dataSource: 'live_bland_ai',
+            };
+          } catch (err: any) {
+            await this.log('pending_call_wait_timeout', { callId: lead.callId, lead: lead.name });
+            return {
+              leadName: lead.name,
+              leadEmail: lead.email,
+              company: lead.company,
+              phone: lead.phone,
+              callId: lead.callId,
+              callStatus: 'in_progress' as any,
+              duration: 0,
+              transcript: '',
+              recordingUrl: '',
+              analysis: {},
+              dataSource: 'live_bland_ai',
+            };
+          }
+        });
+
+        const pendingResults = await Promise.allSettled(pendingPromises);
+        for (const r of pendingResults) {
+          if (r.status === 'fulfilled' && r.value) {
+            realCallResults.push(r.value);
+            // Also add to qualifiedLeads so they're included in LLM context
+            const lead = pendingCallLeads.find((l: any) => l.callId === r.value!.callId);
+            if (lead && !qualifiedLeads.some((q: any) => q.email === lead.email)) {
+              qualifiedLeads.push({
+                name: lead.name,
+                email: lead.email,
+                company: lead.company,
+                phone: lead.phone,
+                source: 'previous_run',
+                channel: 'inbound',
+                score: lead.score || 0,
+                segment: 'unknown',
+                stage: 'contacted',
+              });
+            }
+          }
+        }
+
+        const resolved = realCallResults.filter(r => r.callStatus === 'completed');
+        await this.log('pending_calls_resolved', {
+          total: pendingCallLeads.length,
+          completed: resolved.length,
+          stillInProgress: realCallResults.filter(r => r.callStatus === 'in_progress').length,
+        });
       }
 
       const userMessage = JSON.stringify({
